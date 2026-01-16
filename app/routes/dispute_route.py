@@ -7,7 +7,6 @@ from app.schemas.dispute_schema import (
     DisputeMessageCreate,
     DisputeResolve,
     DisputeResponse,
-
 )
 from app.dependencies.auth import get_current_profile, require_user_type
 from app.schemas.user_schemas import UserType
@@ -19,8 +18,9 @@ router = APIRouter(prefix="/api/v1/disputes", tags=["Disputes"])
 
 @router.post("/", response_model=DisputeResponse)
 async def create_dispute(
-    data: DisputeCreate, current_profile: dict = Depends(get_current_profile),
-        supabase: AsyncClient = Depends(get_supabase_client)
+    data: DisputeCreate,
+    current_profile: dict = Depends(get_current_profile),
+    supabase: AsyncClient = Depends(get_supabase_client),
 ):
     return await dispute_service.create_dispute(data, current_profile["id"], supabase)
 
@@ -63,5 +63,9 @@ async def resolve_dispute(
     ),
     supabase: AsyncClient = Depends(get_supabase_client),
 ):
-
-    return await dispute_service.resolve_dispute(dispute_id=dispute_id, data=data, admin_id=current_profile["id"], supabase=supabase)
+    return await dispute_service.resolve_dispute(
+        dispute_id=dispute_id,
+        data=data,
+        admin_id=current_profile["id"],
+        supabase=supabase,
+    )

@@ -46,7 +46,7 @@ async def get_current_profile(
     resp = (
         await supabase_client.table("profiles")
         .select("*")
-        .eq("id", current_user.id)
+        .eq("id", current_user["id"])
         .execute()
     )
 
@@ -133,3 +133,11 @@ async def get_customer_contact_info(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to fetch user contact info: {str(e)}",
         )
+
+
+def is_admin_user(current_profile: dict = Depends(get_current_profile)) -> bool:
+    return current_profile.get("user_type") in [
+        UserType.ADMIN.value,
+        UserType.SUPER_ADMIN.value,
+        UserType.MODERATOR.value,
+    ]

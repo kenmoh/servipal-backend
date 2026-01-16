@@ -13,7 +13,7 @@ from app.routes import (
     wallet_route,
     admin_router,
     product_route,
-dispute_route
+    dispute_route,
 )
 from app.config.logging import logger
 

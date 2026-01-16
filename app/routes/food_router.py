@@ -11,7 +11,11 @@ from app.schemas.food_schemas import (
     FoodItemUpdate,
     CheckoutRequest,
 )
-from app.dependencies.auth import get_current_profile, require_user_type, get_customer_contact_info
+from app.dependencies.auth import (
+    get_current_profile,
+    require_user_type,
+    get_customer_contact_info,
+)
 from app.schemas.user_schemas import UserType
 from app.services import food_service
 from app.database.supabase import get_supabase_client
@@ -143,7 +147,9 @@ async def initiate_food_payment_endpoint(
         customer_id=current_profile["id"],
         vendor_id=str(data.vendor_id),
     )
-    return await food_service.initiate_food_payment(data, current_profile["id"], supabase, request)
+    return await food_service.initiate_food_payment(
+        data, current_profile["id"], supabase, request
+    )
 
 
 @router.post("/orders/{order_id}/action")

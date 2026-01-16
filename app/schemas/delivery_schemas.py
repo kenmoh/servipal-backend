@@ -1,14 +1,20 @@
 from pydantic import BaseModel, Field
-from typing import Optional, Literal
+from typing import Optional, List
 from uuid import UUID
 from datetime import datetime
+from decimal import Decimal
 from enum import Enum
 
 
-class DeliveryType(str, Enum):
-    STANDARD = "STANDARD"
-    EXPRESS = "EXPRESS"
-    SCHEDULED = "SCHEDULED"
+class DeliveryStatus(str, Enum):
+    PENDING = "PENDING"
+    PAID_NEEDS_RIDER = "PAID_NEEDS_RIDER"
+    ASSIGNED = "ASSIGNED"
+    PICKED_UP = "PICKED_UP"
+    IN_TRANSIT = "IN_TRANSIT"
+    DELIVERED = "DELIVERED"
+    COMPLETED = "COMPLETED"
+    CANCELLED = "CANCELLED"
 
 
 class PackageDeliveryCreate(BaseModel):
@@ -18,8 +24,8 @@ class PackageDeliveryCreate(BaseModel):
     pickup_coordinates: tuple[float, float]
     dropoff_coordinates: tuple[float, float]
     additional_info: Optional[str] = None
-    delivery_type: DeliveryType = DeliveryType.STANDARD
-    package_image_url: Optional[str] = Field(None, description="URL of uploaded package photo (optional)")
+    delivery_type: str = "STANDARD"
+    package_image_url: Optional[str] = None
 
 
 class AssignRiderRequest(BaseModel):
@@ -29,28 +35,13 @@ class AssignRiderRequest(BaseModel):
 class AssignRiderResponse(BaseModel):
     success: bool
     message: str
-    delivery_status: str = "ASSIGNED"
-    rider_name: Optional[str] = None
-
-
-class DeliveryOrderResponse(BaseModel):
-    id: UUID
-    order_number: int
-    sender_id: UUID
-    rider_id: Optional[UUID]
-    dispatch_id: Optional[UUID]
-    receiver_phone: str
-    pickup_location: str
-    destination: str
-    delivery_fee: float
     delivery_status: str
-    delivery_type: DeliveryType
-    created_at: datetime
+    rider_name: Optional[str]
 
 
-class DeliveryAction(BaseModel):
-    action: Literal["accept", "decline"]
-    reason: Optional[str] = None
+class DeliveryAction(str, Enum):
+    accept = "accept"
+    decline = "decline"
 
 
 class DeliveryActionResponse(BaseModel):
@@ -58,15 +49,47 @@ class DeliveryActionResponse(BaseModel):
     order_id: UUID
     delivery_status: str
     message: str
-    rider_freed: Optional[bool] = None
 
 
 class DeliveryCancelRequest(BaseModel):
-    reason: Optional[str] = None
+    reason: str
 
 
 class DeliveryCancelResponse(BaseModel):
     order_id: UUID
     delivery_status: str
-    refunded: bool = False
+    refunded: bool
     message: str
+
+
+class DeliveryOrderListItem(BaseModel):
+    id: UUID
+    order_number: Optional[int]
+    sender_id: UUID
+    receiver_phone: str
+    pickup_location: str
+    destination: str
+    delivery_fee: Decimal
+    total_price: Decimal
+    status: DeliveryStatus
+    payment_status: str
+    escrow_status: str
+    rider_id: Optional[UUID]
+    rider_name: Optional[str]
+    dispatch_id: Optional[UUID]
+    dispatch_name: Optional[str]
+    created_at: datetime
+    updated_at: datetime
+    package_image_url: Optional[str]
+    image_url: Optional[str]  # proof of delivery
+
+
+class DeliveryOrdersResponse(BaseModel):
+    orders: List[DeliveryOrderListItem]
+    total_count: int
+    has_more: bool
+
+
+class DeliveryType(str, Enum):
+    STANDARD = "STANDARD"
+    SCHEDULED = "SCHEDULED"

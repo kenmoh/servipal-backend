@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import List
 from app.schemas.user_schemas import *
 from fastapi import HTTPException, status, UploadFile, Request
 from uuid import UUID
@@ -16,7 +16,7 @@ from decimal import Decimal
 async def create_user_account(
     data: UserCreate, supabase: AsyncClient, request: Optional[Request] = None
 ) -> TokenResponse:
-    logger.info("user_signup_attempt", email=data.email, user_type=data.user_type.value)
+    logger.info("user_signup_attempt", email=data.email, user_type=data.user_type)
     try:
         # Sign up with Supabase Auth
         auth_resp = await supabase.auth.sign_up(
@@ -78,10 +78,10 @@ async def create_user_account(
             entity_type="USER",
             entity_id=auth_resp.user.id,
             action="SIGNUP",
-            new_value={"user_type": data.user_type.value, "email": data.email},
+            new_value={"user_type": data.user_type, "email": data.email},
             actor_id=auth_resp.user.id,
             actor_type="USER",
-            notes=f"New user account created: {data.user_type.value}",
+            notes=f"New user account created: {data.user_type}",
             request=request,
         )
 
@@ -89,7 +89,7 @@ async def create_user_account(
             "user_signup_success",
             user_id=auth_resp.user.id,
             email=data.email,
-            user_type=data.user_type.value,
+            user_type=data.user_type,
         )
         return user_response
 
@@ -440,22 +440,61 @@ async def get_available_riders(
 
 
 async def get_rider_details(
-    rider_id: UUID, supabase: AsyncClient
-) -> RiderDetailResponse:
+    rider_id: UUID,
+    supabase: AsyncClient 
+) -> DetailedRiderResponse:
+    """
+    Get full rider profile + stats + dispatch-level aggregated stats.
+    """
     try:
-        resp = await supabase.rpc(
-            "get_rider_details", {"rider_user_id": str(rider_id)}
-        ).execute()
+        rider = (
+            await supabase.table("profiles")
+            .select("""
+                id,
+                full_name,
+                phone_number,
+                profile_image_url,
+                bike_number,
+                average_rating,
+                review_count,
+                is_online,
+                dispatch_id,
+                dispatch:profiles!profiles_dispatch_id_fkey(full_name as dispatch_name),
+                total_deliveries:count(delivery_orders!delivery_orders_rider_id_fkey.id)
+            """)
+            .eq("id", str(rider_id))
+            .eq("user_type", "RIDER")
+            .single()
+            .execute()
+        )
 
-        if not resp.data:
-            raise HTTPException(status_code=404, detail="Rider not found")
+        if not rider.data:
+            raise HTTPException(404, "Rider not found")
 
-        return RiderDetailResponse(**resp.data[0])
+        # Get dispatch aggregated stats if rider has a dispatch
+        dispatch_stats = None
+        if rider.data.get("dispatch_id"):
+            dispatch = (
+                await supabase.table("profiles")
+                .select("""
+                    dispatch_average_rating,
+                    dispatch_review_count,
+                    dispatch_total_riders
+                """)
+                .eq("id", rider.data["dispatch_id"])
+                .single()
+                .execute()
+            )
+            dispatch_stats = dispatch.data
+
+        return DetailedRiderResponse(
+            **rider.data,
+            dispatch_stats=dispatch_stats
+        )
 
     except Exception as e:
-        if "not found" in str(e).lower():
-            raise HTTPException(status_code=404, detail="Rider not found")
-        raise HTTPException(status_code=500, detail="Failed to fetch rider details")
+        logger.error("get_rider_details failed", rider_id=str(rider_id), error=str(e))
+        raise HTTPException(500, "Failed to fetch rider details")
 
 
 async def get_my_riders(
@@ -721,3 +760,106 @@ async def upload_profile_image(
             exc_info=True,
         )
         raise
+
+
+async def update_user_location(
+    user_id: UUID,
+    data: UserLocationUpdate,
+    supabase: AsyncClient,
+) -> dict:
+    """
+    Update user's current location (stored as PostGIS geography point).
+    Used for rider/driver proximity matching, nearby vendors, etc.
+    """
+    try:
+        # Basic validation (already done by Pydantic, but extra safety)
+        if not (-90 <= data.latitude <= 90) or not (-180 <= data.longitude <= 180):
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST, "Invalid latitude/longitude values"
+            )
+
+        # Convert to PostGIS point string: POINT(long lat)
+        point_str = f"POINT({data.longitude} {data.latitude})"
+
+        # Update location
+        await (
+            supabase.table("profiles")
+            .update(
+                {
+                    "location_coordinates": point_str,
+                    "updated_at": datetime.now().isoformat(),
+                }
+            )
+            .eq("id", str(user_id))
+            .execute()
+        )
+
+        return {
+            "success": True,
+            "message": "Location updated successfully",
+            "latitude": data.latitude,
+            "longitude": data.longitude,
+        }
+
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        raise HTTPException(
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+            f"Failed to update location: {str(e)}",
+        )
+
+
+
+
+async def toggle_online_status(
+    user_id: UUID,
+    supabase: AsyncClient,
+) -> dict:
+    """
+    Automatically toggle the user's online status:
+    - If currently online → set to offline
+    - If currently offline → set to online
+    Returns the new status.
+    """
+    try:
+        # 1. Read current status
+        current = (
+            await supabase.table("profiles")
+            .select("is_online")
+            .eq("id", str(user_id))
+            .single()
+            .execute()
+        )
+
+        if not current.data:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "User profile not found")
+
+        old_status = current.data["is_online"]
+        new_status = not old_status  # flip it!
+
+        # 2. Update
+        await (
+            supabase.table("profiles")
+            .update({"is_online": new_status, "updated_at": datetime.now().isoformat()})
+            .eq("id", str(user_id))
+            .execute()
+        )
+
+        return {
+            "success": True,
+            "message": f"You are now {'online' if new_status else 'offline'}",
+            "is_online": new_status,
+        }
+
+    except Exception as e:
+        logger.error(
+            "Toggle online status failed",
+            user_id=str(user_id),
+            error=str(e),
+            exc_info=True,
+        )
+        raise HTTPException(
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+            f"Failed to toggle online status: {str(e)}",
+        )

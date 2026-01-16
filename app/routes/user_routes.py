@@ -1,5 +1,13 @@
-from fastapi import APIRouter, Depends, Query, File, UploadFile, Request
+from fastapi import APIRouter, Depends, Query, File
 from app.services.user_service import *
+from typing import List, Optional
+from app.schemas.user_schemas import (
+    UserType,
+    ProfileUpdate,
+    UserLocationUpdate,
+    DetailedRiderResponse,
+)
+from app.services import user_service
 from app.dependencies.auth import get_current_profile, require_user_type
 from app.database.supabase import get_supabase_client, get_supabase_admin_client
 from app.config.logging import logger
@@ -13,7 +21,7 @@ async def create_rider(
     data: RiderCreateByDispatch,
     request: Request,
     current_user: dict = Depends(get_current_profile),
-    superuser=Depends(require_user_type([UserType.DISPATCH])),
+    dispatch_user=Depends(require_user_type([UserType.DISPATCH])),
     supabase: AsyncClient = Depends(get_supabase_admin_client),
 ):
     logger.info(
@@ -73,15 +81,6 @@ async def list_available_riders(
     If no lat/lng is provided, returns all available riders nationwide.
     """
     return await get_available_riders(supabase, lat, lng, max_km)
-
-
-@router.get("/riders/{rider_id}", response_model=RiderDetailResponse)
-async def get_single_rider(rider_id: UUID, supabase=Depends(get_supabase_client)):
-    """
-    Get a detailed profile of a specific rider.
-    Used when a customer taps on a rider from the available list.
-    """
-    return await get_rider_details(rider_id, supabase)
 
 
 @router.get("/my-riders", response_model=List[DispatchRiderResponse])
@@ -192,3 +191,35 @@ async def upload_backdrop(
         url=url,
     )
     return {"success": True, "url": url}
+
+
+# ───────────────────────────────────────────────
+# 4. Get Rider Details
+# ───────────────────────────────────────────────
+@router.get("/riders/{rider_id}", response_model=DetailedRiderResponse)
+async def get_rider_details(
+    rider_id: UUID,
+    supabase: AsyncClient = Depends(get_supabase_client)
+):
+    """
+    Get full rider profile + stats + dispatch-level aggregated stats.
+    """
+    return await user_service.get_rider_details(rider_id, supabase)
+
+
+@router.post("/set-online")
+async def set_online_status(
+    current_profile: dict = Depends(get_current_profile),
+    supabase: AsyncClient = Depends(get_supabase_client),
+):
+    return await toggle_online_status(current_profile["id"], supabase)
+
+
+@router.post("/update-location")
+async def update_location_endpoint(
+    data: UserLocationUpdate,
+    current_profile: dict = Depends(get_current_profile),
+    supabase: AsyncClient = Depends(get_supabase_client),
+):
+    """Update your current location (used for nearby matching, rider assignment, etc.)"""
+    return await update_user_location(current_profile["id"], data, supabase)

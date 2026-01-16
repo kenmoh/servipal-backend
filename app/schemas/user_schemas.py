@@ -186,3 +186,50 @@ class RiderEarningsResponse(BaseModel):
     pending_earnings: Decimal = Decimal("0.00")  # In escrow, not released yet
     total_distance: Decimal = Decimal("0.00")
     period: str = "all_time"  # Can extend to weekly/monthly later
+
+
+class OnlineStatusToggle(BaseModel):
+    is_online: bool = Field(
+        ..., description="True = online / available, False = offline"
+    )
+
+
+class UserLocationUpdate(BaseModel):
+    latitude: float = Field(
+        ..., ge=-90, le=90, description="Latitude in decimal degrees"
+    )
+    longitude: float = Field(
+        ..., ge=-180, le=180, description="Longitude in decimal degrees"
+    )
+    accuracy: Optional[float] = Field(
+        None, description="Location accuracy in meters (optional)"
+    )
+
+
+class DispatchInfo(BaseModel):
+    dispatch_name: Optional[str]
+
+
+class DispatchStats(BaseModel):
+    dispatch_average_rating: Optional[Decimal] = 0.0
+    dispatch_review_count: int = 0
+    dispatch_total_riders: int = 0
+
+
+class DetailedRiderResponse(BaseModel):
+    id: UUID
+    full_name: Optional[str]
+    phone_number: str
+    profile_image_url: Optional[str]
+    bike_number: Optional[str]
+    average_rating: Optional[Decimal] = 0.0
+    review_count: int = 0
+    is_online: bool
+    dispatch_id: Optional[UUID]
+    dispatch: Optional[DispatchInfo]
+    total_deliveries: int = 0
+    dispatch_stats: Optional[DispatchStats]
+
+    class Config:
+        from_attributes = True
+        json_encoders = {Decimal: lambda v: float(v) if v is not None else None}

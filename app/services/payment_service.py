@@ -52,42 +52,21 @@ async def process_successful_delivery_payment(
                     "additional_info": delivery_data.get("additional_info"),
                     "delivery_type": delivery_data["delivery_type"],
                     "total_price": expected_fee,
-                    "package_image_url": pending.get("package_image_url"),
+                    "delivery_fee": expected_fee,
                     "grand_total": expected_fee,
                     "amount_due_dispatch": expected_fee
                     * await get_commission_rate("DELIVERY", supabase),
-                    "order_status": "PAID_NEEDS_RIDER",
+                    "status": "PAID_NEEDS_RIDER",
                     "payment_status": "PAID",
                     "escrow_status": "HELD",
+                    "package_image_url": pending.get("package_image_url"),
+                    "distance": pending.get("distance_km", 0),
                 }
             )
             .execute()
         )
 
         order_id = order_resp.data[0]["id"]
-
-        # Create an initial deliveries record
-        await (
-            supabase.table("deliveries")
-            .insert(
-                {
-                    "order_id": order_id,
-                    "order_type": "DELIVERY",
-                    "sender_id": sender_id,
-                    "pickup_coordinates": f"POINT({delivery_data['pickup_coordinates'][1]} {delivery_data['pickup_coordinates'][0]})",
-                    "dropoff_coordinates": f"POINT({delivery_data['dropoff_coordinates'][1]} {delivery_data['dropoff_coordinates'][0]})",
-                    "origin": delivery_data["pickup_location"],
-                    "destination": delivery_data["destination"],
-                    "delivery_fee": expected_fee,
-                    "distance": pending.get("distance_km", 0),
-                    "delivery_status": "PAID_NEEDS_RIDER",
-                    "delivery_type": delivery_data["delivery_type"],
-                    "amount_due_dispatch": expected_fee
-                    * await get_commission_rate("DELIVERY", supabase),
-                }
-            )
-            .execute()
-        )
 
         # Hold fee in sender escrow
         await supabase.rpc(
@@ -148,6 +127,148 @@ async def process_successful_delivery_payment(
         )
         await delete_pending(pending_key)
         raise
+
+
+# async def process_successful_delivery_payment(
+#     tx_ref: str,
+#     paid_amount: float,
+#     flw_ref: str,
+#     supabase: AsyncClient,
+#     request: Optional[Request] = None,
+# ):
+#     logger.info("processing_delivery_payment", tx_ref=tx_ref, paid_amount=paid_amount)
+#     pending_key = f"pending_delivery_{tx_ref}"
+#     pending = await get_pending(pending_key)
+#
+#     if not pending:
+#         logger.warning("delivery_payment_pending_not_found", tx_ref=tx_ref)
+#         return  # already processed or expired
+#
+#     expected_fee = pending["delivery_fee"]
+#     sender_id = pending["sender_id"]
+#     delivery_data = pending["delivery_data"]
+#
+#     if paid_amount != expected_fee:
+#         logger.warning(
+#             "delivery_payment_amount_mismatch",
+#             tx_ref=tx_ref,
+#             expected=expected_fee,
+#             paid=paid_amount,
+#         )
+#         await delete_pending(pending_key)
+#         return
+#
+#     try:
+#         # Create delivery_order (no rider yet)
+#         order_resp = (
+#             await supabase.table("delivery_orders")
+#             .insert(
+#                 {
+#                     "sender_id": sender_id,
+#                     "receiver_phone": delivery_data["receiver_phone"],
+#                     "pickup_location": delivery_data["pickup_location"],
+#                     "destination": delivery_data["destination"],
+#                     "pickup_coordinates": f"POINT({delivery_data['pickup_coordinates'][1]} {delivery_data['pickup_coordinates'][0]})",
+#                     "dropoff_coordinates": f"POINT({delivery_data['dropoff_coordinates'][1]} {delivery_data['dropoff_coordinates'][0]})",
+#                     "additional_info": delivery_data.get("additional_info"),
+#                     "delivery_type": delivery_data["delivery_type"],
+#                     "total_price": expected_fee,
+#                     "package_image_url": pending.get("package_image_url"),
+#                     "grand_total": expected_fee,
+#                     "amount_due_dispatch": expected_fee
+#                     * await get_commission_rate("DELIVERY", supabase),
+#                     "order_status": "PAID_NEEDS_RIDER",
+#                     "payment_status": "PAID",
+#                     "escrow_status": "HELD",
+#                 }
+#             )
+#             .execute()
+#         )
+#
+#         order_id = order_resp.data[0]["id"]
+#
+#         # Create an initial deliveries record
+#         await (
+#             supabase.table("deliveries")
+#             .insert(
+#                 {
+#                     "order_id": order_id,
+#                     "order_type": "DELIVERY",
+#                     "sender_id": sender_id,
+#                     "pickup_coordinates": f"POINT({delivery_data['pickup_coordinates'][1]} {delivery_data['pickup_coordinates'][0]})",
+#                     "dropoff_coordinates": f"POINT({delivery_data['dropoff_coordinates'][1]} {delivery_data['dropoff_coordinates'][0]})",
+#                     "origin": delivery_data["pickup_location"],
+#                     "destination": delivery_data["destination"],
+#                     "delivery_fee": expected_fee,
+#                     "distance": pending.get("distance_km", 0),
+#                     "delivery_status": "PAID_NEEDS_RIDER",
+#                     "delivery_type": delivery_data["delivery_type"],
+#                     "amount_due_dispatch": expected_fee
+#                     * await get_commission_rate("DELIVERY", supabase),
+#                 }
+#             )
+#             .execute()
+#         )
+#
+#         # Hold fee in sender escrow
+#         await supabase.rpc(
+#             "update_wallet_balance",
+#             {
+#                 "p_user_id": sender_id,
+#                 "p_delta": expected_fee,
+#                 "p_field": "escrow_balance",
+#             },
+#         ).execute()
+#
+#         # Create transaction
+#         await (
+#             supabase.table("transactions")
+#             .insert(
+#                 {
+#                     "tx_ref": tx_ref,
+#                     "amount": expected_fee,
+#                     "from_user_id": sender_id,
+#                     "to_user_id": None,
+#                     "order_id": order_id,
+#                     "transaction_type": "DELIVERY_FEE",
+#                     "status": "HELD",
+#                     "payment_status": "PAID",
+#                     "payment_method": "FLUTTERWAVE",
+#                     "details": {"flw_ref": flw_ref},
+#                 }
+#             )
+#             .execute()
+#         )
+#
+#         await delete_pending(pending_key)
+#
+#         # Audit log
+#         await log_audit_event(
+#             supabase,
+#             entity_type="DELIVERY_ORDER",
+#             entity_id=str(order_id),
+#             action="PAYMENT_RECEIVED",
+#             new_value={"payment_status": "PAID", "amount": expected_fee},
+#             actor_id=sender_id,
+#             actor_type="USER",
+#             change_amount=Decimal(str(expected_fee)),
+#             notes=f"Delivery payment received via Flutterwave: {tx_ref}",
+#             request=request,
+#         )
+#
+#         logger.info(
+#             "delivery_payment_processed_success", tx_ref=tx_ref, order_id=str(order_id)
+#         )
+#
+#     except Exception as e:
+#         logger.error(
+#             "delivery_payment_processing_error",
+#             tx_ref=tx_ref,
+#             error=str(e),
+#             exc_info=True,
+#         )
+#         await delete_pending(pending_key)
+#         raise
 
 
 async def process_successful_food_payment(
@@ -412,7 +533,7 @@ async def process_successful_topup_payment(
 
 
 async def process_successful_product_payment(
-    tx_ref: str, paid_amount: float, flw_ref: str
+    tx_ref: str, paid_amount: float, flw_ref: str, supabase: AsyncClient
 ):
     pending_key = f"pending_product_{tx_ref}"
     pending = await get_pending(pending_key)
@@ -449,7 +570,7 @@ async def process_successful_product_payment(
                     "seller_id": seller_id,
                     "subtotal": pending["subtotal"],
                     "delivery_fee": pending["delivery_fee"],
-                    "grand_total": grand_total,
+                    "grand_total": pending["grand_total"],
                     "delivery_option": pending["delivery_option"],
                     "delivery_address": pending["delivery_address"],
                     "additional_info": pending["additional_info"],
