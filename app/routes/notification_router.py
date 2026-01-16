@@ -6,11 +6,12 @@ from app.database.supabase import get_supabase_client
 
 router = APIRouter(prefix="/api/v1/notifications", tags=["notifications"])
 
+
 @router.post("/register-token")
 async def register_push_token(
     data: FCMTokenRegister,
     current_profile: dict = Depends(get_current_profile),
-        supabase=Depends(get_supabase_client)
+    supabase=Depends(get_supabase_client),
 ) -> FCMTokenResponse:
     """
     Register or update device push token for notifications
@@ -22,7 +23,7 @@ async def register_push_token(
 @router.get("/register-token")
 async def register_push_token(
     current_profile: dict = Depends(get_current_profile),
-    supabase=Depends(get_supabase_client)
+    supabase=Depends(get_supabase_client),
 ) -> FCMTokenResponse:
     """
 

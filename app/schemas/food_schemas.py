@@ -5,6 +5,7 @@ from decimal import Decimal
 from datetime import datetime
 from enum import Enum
 
+
 class FoodGroup(str, Enum):
     PROTEIN = "PROTEIN"
     CARB = "CARB"
@@ -27,6 +28,7 @@ class FoodOrderItemCreate(BaseModel):
     sizes: Optional[list[str]] = []
     colors: Optional[list[str]] = []
 
+
 class FoodOrderCreate(BaseModel):
     vendor_id: UUID
     items: list[FoodOrderItemCreate]
@@ -38,6 +40,7 @@ class FoodOrderCreate(BaseModel):
     pickup_coordinates: Optional[tuple[float, float]] = None
     dropoff_coordinates: Optional[tuple[float, float]] = None
     delivery_type: Literal["PICKUP", "APP_DELIVERY", "VENDOR_DELIVERY"] = "PICKUP"
+
 
 class FoodOrderResponse(BaseModel):
     order_id: UUID
@@ -67,6 +70,7 @@ class FoodItemResponse(BaseModel):
     images: List[str] = []
     category: Optional[FoodCategoryResponse]
 
+
 class VendorCardResponse(BaseModel):
     id: UUID
     store_name: str
@@ -81,6 +85,7 @@ class VendorCardResponse(BaseModel):
     total_items: int = 0
     can_pickup_and_dropoff: bool = False
     pickup_and_delivery_charge: Decimal = Decimal("0.00")
+
 
 class VendorDetailResponse(BaseModel):
     id: UUID
@@ -100,7 +105,6 @@ class VendorDetailResponse(BaseModel):
     menu: List[FoodItemResponse] = []  # Grouped by category in frontend
 
 
-
 class VendorOrderItemResponse(BaseModel):
     item_id: UUID
     name: str
@@ -109,6 +113,7 @@ class VendorOrderItemResponse(BaseModel):
     total: Decimal
     sizes: List[str] = []
     colors: List[str] = []
+
 
 class VendorOrderResponse(BaseModel):
     order_id: UUID
@@ -126,7 +131,7 @@ class VendorOrderResponse(BaseModel):
     delivery_option: str = "PICKUP"  # PICKUP or VENDOR_DELIVERY
 
     class Config:
-        from_attributes = True   
+        from_attributes = True
 
 
 class FoodItemCreate(BaseModel):
@@ -140,6 +145,7 @@ class FoodItemCreate(BaseModel):
     category_id: Optional[UUID] = None
     food_group: Optional[FoodGroup] = None  # From your enum
 
+
 class FoodItemUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
@@ -151,6 +157,7 @@ class FoodItemUpdate(BaseModel):
     in_stock: Optional[bool] = None
     category_id: Optional[UUID] = None
     food_group: Optional[FoodGroup] = None
+
 
 class FoodItemDetailResponse(FoodItemResponse):
     vendor_id: UUID
@@ -165,11 +172,13 @@ class CartItem(BaseModel):
     sizes: List[str] = []
     colors: List[str] = []
 
+
 class CheckoutRequest(BaseModel):
     vendor_id: UUID
     items: List[CartItem]
     delivery_option: Literal["PICKUP", "VENDOR_DELIVERY"] = "PICKUP"
     cooking_instructions: Optional[str] = None
+
 
 class CheckoutResponse(BaseModel):
     order_preview_id: str  # temporary ID or tx_ref
@@ -186,6 +195,7 @@ class VendorMarkReadyResponse(BaseModel):
     order_id: UUID
     order_status: str = "READY"
     message: str = "Order marked as ready for pickup/delivery"
+
 
 class CustomerConfirmResponse(BaseModel):
     order_id: UUID

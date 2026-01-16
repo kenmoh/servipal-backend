@@ -3,6 +3,7 @@ from typing import Optional
 from pydantic_settings import BaseSettings
 from redis import asyncio as aioredis
 
+
 class Settings(BaseSettings):
     """
     Application settings loaded from environment variables.
@@ -26,7 +27,7 @@ class Settings(BaseSettings):
     # SUPABASE
     SUPABASE_URL: str = os.getenv("SUPABASE_URL")
     SUPABASE_PUBLISHABLE_KEY: str = os.getenv("SUPABASE_PUBLISHABLE_KEY")
-    SUPABASE_SECRET_KEY: str= os.getenv("SUPABASE_SECRET_KEY")
+    SUPABASE_SECRET_KEY: str = os.getenv("SUPABASE_SECRET_KEY")
 
     # REDIS
     REDIS_URL: str = "redis://localhost:6379/0"
@@ -36,6 +37,7 @@ class Settings(BaseSettings):
         env_file_encoding = "utf-8"
         case_sensitive = True
         extra = "ignore"
+
 
 settings = Settings()
 

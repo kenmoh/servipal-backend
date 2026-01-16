@@ -1,7 +1,9 @@
-from fastapi import APIRouter, Depends, Query, File, UploadFile
+from fastapi import APIRouter, Depends, Query, File, UploadFile, Request
 from app.services.user_service import *
 from app.dependencies.auth import get_current_profile, require_user_type
 from app.database.supabase import get_supabase_client, get_supabase_admin_client
+from app.config.logging import logger
+from supabase import AsyncClient
 
 router = APIRouter(prefix="/api/v1/users", tags=["Users"])
 
@@ -9,39 +11,62 @@ router = APIRouter(prefix="/api/v1/users", tags=["Users"])
 @router.post("/riders", response_model=UserProfileResponse)
 async def create_rider(
     data: RiderCreateByDispatch,
+    request: Request,
     current_user: dict = Depends(get_current_profile),
-        superuser=Depends(require_user_type([UserType.DISPATCH])),
-        supabase: AsyncClient =Depends(get_supabase_admin_client)
+    superuser=Depends(require_user_type([UserType.DISPATCH])),
+    supabase: AsyncClient = Depends(get_supabase_admin_client),
 ):
-    return await create_rider_by_dispatch(data, current_user, supabase)
+    logger.info(
+        "create_rider_requested", dispatch_id=current_user["id"], rider_phone=data.phone
+    )
+    result = await create_rider_by_dispatch(data, current_user, supabase, request)
+    logger.info("rider_created", dispatch_id=current_user["id"], rider_id=result.id)
+    return result
+
 
 @router.get("/me", response_model=UserProfileResponse)
-async def get_my_profile(profile: dict = Depends(get_current_profile),
-                         supabase: AsyncClient = Depends(get_supabase_client)):
-
+async def get_my_profile(
+    profile: dict = Depends(get_current_profile),
+    supabase: AsyncClient = Depends(get_supabase_client),
+):
+    logger.debug("get_profile_requested", user_id=profile["id"])
     return await get_user_profile(profile["id"], supabase)
 
 
 @router.patch("/me", response_model=UserProfileResponse)
 async def update_profile(
     data: ProfileUpdate,
+    request: Request,
     profile: dict = Depends(get_current_profile),
-supabase: AsyncClient = Depends(get_supabase_client)
+    supabase: AsyncClient = Depends(get_supabase_client),
 ):
-    return await update_user_profile(profile["id"], data, supabase)
+    logger.info(
+        "update_profile_requested",
+        user_id=profile["id"],
+        updates=data.model_dump(exclude_unset=True),
+    )
+    result = await update_user_profile(profile["id"], data, supabase, request)
+    logger.info("profile_updated", user_id=profile["id"])
+    return result
+
 
 @router.get("/my-riders")
-async def get_my_riders(current_profile: dict = Depends(require_user_type([UserType.DISPATCH])),
-                        supabase=Depends(get_supabase_client)):
-    resp = await supabase.rpc("get_my_riders", {"dispatch_user_id": current_profile["id"]}).execute()
+async def get_my_riders(
+    current_profile: dict = Depends(require_user_type([UserType.DISPATCH])),
+    supabase=Depends(get_supabase_client),
+):
+    resp = await supabase.rpc(
+        "get_my_riders", {"dispatch_user_id": current_profile["id"]}
+    ).execute()
     return resp.data
+
 
 @router.get("/available-riders", response_model=List[AvailableRiderResponse])
 async def list_available_riders(
     lat: Optional[float] = Query(None, description="Pickup latitude"),
     lng: Optional[float] = Query(None, description="Pickup longitude"),
     max_km: int = Query(20, description="Max distance in KM"),
-supabase=Depends(get_supabase_client)
+    supabase=Depends(get_supabase_client),
 ):
     """
     Get a list of available riders near a pickup point.
@@ -51,10 +76,7 @@ supabase=Depends(get_supabase_client)
 
 
 @router.get("/riders/{rider_id}", response_model=RiderDetailResponse)
-async def get_single_rider(
-    rider_id: UUID,
-        supabase=Depends(get_supabase_client)
-):
+async def get_single_rider(rider_id: UUID, supabase=Depends(get_supabase_client)):
     """
     Get a detailed profile of a specific rider.
     Used when a customer taps on a rider from the available list.
@@ -65,7 +87,7 @@ async def get_single_rider(
 @router.get("/my-riders", response_model=List[DispatchRiderResponse])
 async def get_dispatch_riders(
     current_profile: dict = Depends(require_user_type([UserType.DISPATCH])),
-        supabase=Depends(get_supabase_client)
+    supabase=Depends(get_supabase_client),
 ):
     """
     Dispatch owner gets a list of all their riders
@@ -77,29 +99,49 @@ async def get_dispatch_riders(
 @router.post("/riders/suspend", response_model=RiderSuspensionResponse)
 async def suspend_rider(
     data: RiderSuspensionRequest,
+    request: Request,
     current_profile: dict = Depends(require_user_type([UserType.DISPATCH])),
-        supabase=Depends(get_supabase_admin_client)
+    supabase=Depends(get_supabase_admin_client),
 ):
     """
     Dispatch can suspend or unsuspend their riders
     Optional: temporary suspension with end date
     """
-    return await suspend_or_unsuspend_rider(data, current_profile["id"], supabase)
+    logger.info(
+        "rider_suspension_requested",
+        dispatch_id=current_profile["id"],
+        rider_id=data.rider_id,
+        suspend=data.suspend,
+    )
+    result = await suspend_or_unsuspend_rider(
+        data, current_profile["id"], supabase, request
+    )
+    logger.info(
+        "rider_suspension_completed",
+        dispatch_id=current_profile["id"],
+        rider_id=data.rider_id,
+        suspended=data.suspend,
+    )
+    return result
 
 
 @router.get("/riders/{rider_id}/earnings", response_model=RiderEarningsResponse)
 async def view_rider_earnings(
     rider_id: UUID,
     current_profile: dict = Depends(require_user_type([UserType.DISPATCH])),
-        supabase=Depends(get_supabase_client)
+    supabase=Depends(get_supabase_client),
 ):
     return await get_rider_earnings(rider_id, current_profile["id"], supabase)
 
 
 @router.get("/earnings")
 async def vendor_earnings_dashboard(
-    current_profile: dict = Depends(require_user_type([UserType.RESTAURANT_VENDOR, UserType.LAUNDRY_VENDOR, UserType.DISPATCH])),
-        supabase=Depends(get_supabase_client)
+    current_profile: dict = Depends(
+        require_user_type(
+            [UserType.RESTAURANT_VENDOR, UserType.LAUNDRY_VENDOR, UserType.DISPATCH]
+        )
+    ),
+    supabase=Depends(get_supabase_client),
 ):
     return await get_vendor_earnings(current_profile["id"], supabase)
 
@@ -107,15 +149,46 @@ async def vendor_earnings_dashboard(
 @router.post("/profile/image")
 async def upload_profile_pic(
     file: UploadFile = File(...),
-    current_profile: dict = Depends(get_current_profile)
+    request: Request = None,
+    current_profile: dict = Depends(get_current_profile),
+    supabase: AsyncClient = Depends(get_supabase_client),
 ):
-    url = await upload_profile_image(file, current_profile["id"], "profile")
+    logger.info(
+        "profile_image_upload_requested",
+        user_id=current_profile["id"],
+        image_type="profile",
+    )
+    url = await upload_profile_image(
+        file, current_profile["id"], "profile", supabase, request
+    )
+    logger.info(
+        "profile_image_uploaded",
+        user_id=current_profile["id"],
+        image_type="profile",
+        url=url,
+    )
     return {"success": True, "url": url}
+
 
 @router.post("/profile/backdrop")
 async def upload_backdrop(
     file: UploadFile = File(...),
-    current_profile: dict = Depends(get_current_profile)
+    request: Request = None,
+    current_profile: dict = Depends(get_current_profile),
+    supabase: AsyncClient = Depends(get_supabase_client),
 ):
-    url = await upload_profile_image(file, current_profile["id"], "backdrop")
+    logger.info(
+        "backdrop_image_upload_requested",
+        user_id=current_profile["id"],
+        image_type="backdrop",
+    )
+    url = await upload_profile_image(
+        file, current_profile["id"], "backdrop", supabase, request
+    )
+    logger.info(
+        "backdrop_image_uploaded",
+        user_id=current_profile["id"],
+        image_type="backdrop",
+        url=url,
+    )
     return {"success": True, "url": url}

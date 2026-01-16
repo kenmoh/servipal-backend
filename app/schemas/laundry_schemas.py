@@ -4,13 +4,16 @@ from uuid import UUID
 from decimal import Decimal
 from datetime import datetime
 
+
 class LaundryCategoryResponse(BaseModel):
     id: UUID
     name: str
 
+
 class LaundryOrderItemCreate(BaseModel):
     item_id: UUID
     quantity: int = 1
+
 
 class LaundryOrderResponse(BaseModel):
     order_id: UUID
@@ -21,6 +24,7 @@ class LaundryOrderResponse(BaseModel):
     grand_total: Decimal
     status: str
     payment_status: str
+
 
 class LaundryItemResponse(BaseModel):
     id: UUID
@@ -34,6 +38,7 @@ class LaundryItemResponse(BaseModel):
     review_count: int = 0
     images: List[str] = []
     category: Optional[LaundryCategoryResponse]
+
 
 class LaundryVendorCardResponse(BaseModel):
     id: UUID
@@ -49,6 +54,7 @@ class LaundryVendorCardResponse(BaseModel):
     total_items: int = 0
     can_pickup_and_dropoff: bool = False
     pickup_and_delivery_charge: Decimal = Decimal("0.00")
+
 
 class LaundryVendorDetailResponse(BaseModel):
     id: UUID
@@ -67,12 +73,14 @@ class LaundryVendorDetailResponse(BaseModel):
     categories: List[LaundryCategoryResponse] = []
     menu: List[LaundryItemResponse] = []
 
+
 class LaundryVendorOrderItemResponse(BaseModel):
     item_id: UUID
     name: str
     quantity: int
     price: Decimal
     total: Decimal
+
 
 class LaundryVendorOrderResponse(BaseModel):
     order_id: UUID
@@ -100,6 +108,7 @@ class LaundryItemCreate(BaseModel):
     stock: Optional[int] = None
     category_id: Optional[UUID] = None
 
+
 class LaundryItemUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
@@ -108,9 +117,11 @@ class LaundryItemUpdate(BaseModel):
     in_stock: Optional[bool] = None
     category_id: Optional[UUID] = None
 
+
 class LaundryItemDetailResponse(LaundryItemResponse):
     vendor_id: UUID
     is_deleted: bool = False
+
 
 class LaundryCartItem(BaseModel):
     item_id: UUID
@@ -124,17 +135,22 @@ class LaundryVendorMarkReadyResponse(BaseModel):
     order_status: str = "READY"
     message: str = "Order marked as ready for pickup/delivery"
 
+
 class LaundryCustomerConfirmResponse(BaseModel):
     order_id: UUID
     order_status: str = "COMPLETED"
     amount_released: Decimal
     message: str = "Order confirmed! Payment released to vendor"
 
+
 class LaundryItemOrder(BaseModel):
     item_id: UUID = Field(..., description="ID of the laundry item")
     quantity: int = Field(..., gt=0, description="Number of units (e.g., shirts, kg)")
     sizes: Optional[List[str]] = Field(None, description="Selected sizes if applicable")
-    colors: Optional[List[str]] = Field(None, description="Selected colors if applicable")
+    colors: Optional[List[str]] = Field(
+        None, description="Selected colors if applicable"
+    )
+
 
 class LaundryOrderCreate(BaseModel):
     vendor_id: UUID = Field(..., description="ID of the laundry vendor")
@@ -142,4 +158,6 @@ class LaundryOrderCreate(BaseModel):
     delivery_option: Literal["PICKUP", "VENDOR_DELIVERY"] = Field(
         ..., description="Pickup at shop or vendor delivers"
     )
-    washing_instructions: Optional[str] = Field(None, description="Special instructions for washing")
+    washing_instructions: Optional[str] = Field(
+        None, description="Special instructions for washing"
+    )

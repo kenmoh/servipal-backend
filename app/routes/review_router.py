@@ -6,12 +6,13 @@ from app.dependencies.auth import get_current_profile
 
 router = APIRouter(prefix="/api/v1/reviews", tags=["reviews"])
 
+
 @router.post("/orders/{order_id}/{order_type}")
 async def submit_review(
     order_id: UUID,
     order_type: str,
     review_data: ReviewCreate,
-    current_profile: dict = Depends(get_current_profile)
+    current_profile: dict = Depends(get_current_profile),
 ):
     """
     Submit review after order completion
@@ -19,10 +20,11 @@ async def submit_review(
     """
     return await create_review(order_id, order_type, review_data, current_profile["id"])
 
+
 @router.get("/entity/{entity_id}/{entity_type}", response_model=ReviewsListResponse)
 async def get_entity_reviews(
     entity_id: UUID,
-    entity_type: str  # RIDER, VENDOR, DISPATCH
+    entity_type: str,  # RIDER, VENDOR, DISPATCH
 ):
     """
     Get all reviews for a rider, vendor, or dispatch

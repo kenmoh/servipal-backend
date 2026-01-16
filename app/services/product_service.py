@@ -1,12 +1,32 @@
+from uuid import UUID
+import uuid
+from datetime import datetime
+from app.schemas.product_schemas import (
+    ProductItemCreate,
+    ProductItemUpdate,
+    ProductItemResponse,
+    ProductOrderCreate,
+    ProductVendorOrderAction,
+    ProductVendorOrderActionResponse,
+    ProductVendorMarkReadyResponse,
+)
+from fastapi import HTTPException, status
+from supabase import AsyncClient
+from decimal import Decimal
+from typing import List
+from app.utils.redis_utils import save_pending
+from app.config.config import settings
+# from app.utils.commission import get_commission_rate
+
+
 # ───────────────────────────────────────────────
 # CREATE - Any authenticated user can create
 # ───────────────────────────────────────────────
 async def create_product_item(
-    data: ProductItemCreate,
-    seller_id: UUID
+    data: ProductItemCreate, seller_id: UUID, supabase: AsyncClient
 ) -> ProductItemResponse:
     try:
-        item_data = data.dict(exclude_unset=True)
+        item_data = data.model_dump(exclude_unset=True)
         item_data["seller_id"] = str(seller_id)
         item_data["stock"] = data.stock
         item_data["total_sold"] = 0
@@ -14,27 +34,38 @@ async def create_product_item(
         resp = await supabase.table("product_items").insert(item_data).execute()
 
         if not resp.data:
-            raise HTTPException(500, "Failed to create product item")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to create product item",
+            )
 
         return ProductItemResponse(**resp.data[0])
 
     except Exception as e:
-        raise HTTPException(500, f"Create product failed: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Create product failed: {str(e)}",
+        )
 
 
 # ───────────────────────────────────────────────
 # READ - Get single item (public)
 # ───────────────────────────────────────────────
-async def get_product_item(item_id: UUID) -> ProductItemResponse:
-    item = await supabase.table("product_items")\
-        .select("*")\
-        .eq("id", str(item_id))\
-        .eq("is_deleted", False)\
-        .single()\
+async def get_product_item(item_id: UUID, supabase: AsyncClient) -> ProductItemResponse:
+    item = (
+        await supabase.table("product_items")
+        .select("*")
+        .eq("id", str(item_id))
+        .eq("is_deleted", False)
+        .single()
         .execute()
+    )
 
     if not item.data:
-        raise HTTPException(404, "Product item not found or deleted")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Product item not found or deleted",
+        )
 
     return ProductItemResponse(**item.data)
 
@@ -42,13 +73,17 @@ async def get_product_item(item_id: UUID) -> ProductItemResponse:
 # ───────────────────────────────────────────────
 # READ - Seller's own items
 # ───────────────────────────────────────────────
-async def get_my_product_items(seller_id: UUID) -> List[ProductItemResponse]:
-    items = await supabase.table("product_items")\
-        .select("*")\
-        .eq("seller_id", str(seller_id))\
-        .eq("is_deleted", False)\
-        .order("created_at", desc=True)\
+async def get_my_product_items(
+    seller_id: UUID, supabase: AsyncClient
+) -> List[ProductItemResponse]:
+    items = (
+        await supabase.table("product_items")
+        .select("*")
+        .eq("seller_id", str(seller_id))
+        .eq("is_deleted", False)
+        .order("created_at", desc=True)
         .execute()
+    )
 
     return [ProductItemResponse(**item) for item in items.data]
 
@@ -57,28 +92,30 @@ async def get_my_product_items(seller_id: UUID) -> List[ProductItemResponse]:
 # UPDATE - Only owner can update
 # ───────────────────────────────────────────────
 async def update_product_item(
-    item_id: UUID,
-    data: ProductItemUpdate,
-    seller_id: UUID
+    item_id: UUID, data: ProductItemUpdate, seller_id: UUID, supabase: AsyncClient
 ) -> ProductItemResponse:
     # Check ownership
-    item = await supabase.table("product_items")\
-        .select("seller_id")\
-        .eq("id", str(item_id))\
-        .single()\
+    item = (
+        await supabase.table("product_items")
+        .select("seller_id")
+        .eq("id", str(item_id))
+        .single()
         .execute()
+    )
 
     if not item.data or item.data["seller_id"] != str(seller_id):
         raise HTTPException(403, "Not your product item")
 
-    update_data = data.dict(exclude_unset=True)
+    update_data = data.model_dump(exclude_unset=True)
     if not update_data:
         raise HTTPException(400, "No fields to update")
 
-    resp = await supabase.table("product_items")\
-        .update(update_data)\
-        .eq("id", str(item_id))\
+    resp = (
+        await supabase.table("product_items")
+        .update(update_data)
+        .eq("id", str(item_id))
         .execute()
+    )
 
     return ProductItemResponse(**resp.data[0])
 
@@ -86,36 +123,43 @@ async def update_product_item(
 # ───────────────────────────────────────────────
 # DELETE - Soft delete (only owner)
 # ───────────────────────────────────────────────
-async def delete_product_item(item_id: UUID, seller_id: UUID) -> dict:
-    item = await supabase.table("product_items")\
-        .select("seller_id")\
-        .eq("id", str(item_id))\
-        .single()\
+async def delete_product_item(
+    item_id: UUID, seller_id: UUID, supabase: AsyncClient
+) -> dict:
+    item = (
+        await supabase.table("product_items")
+        .select("seller_id")
+        .eq("id", str(item_id))
+        .single()
         .execute()
+    )
 
     if not item.data or item.data["seller_id"] != str(seller_id):
         raise HTTPException(403, "Not your product item")
 
-    await supabase.table("product_items")\
-        .update({"is_deleted": True})\
-        .eq("id", str(item_id))\
+    await (
+        supabase.table("product_items")
+        .update({"is_deleted": True})
+        .eq("id", str(item_id))
         .execute()
+    )
 
     return {"success": True, "message": "Product item deleted (archived)"}
 
 
 # Initiate payment (single item + quantity)
 async def initiate_product_payment(
-    data: ProductOrderCreate,
-    buyer_id: UUID
+    data: ProductOrderCreate, buyer_id: UUID, customer_info: dict, supabase: AsyncClient
 ) -> dict:
     try:
         # Fetch the product
-        item_resp = await supabase.table("product_items")\
-            .select("id, seller_id, price, stock, in_stock, sizes, colors")\
-            .eq("id", str(data.item_id))\
-            .single()\
+        item_resp = (
+            await supabase.table("product_items")
+            .select("id, seller_id, price, stock, in_stock, sizes, colors")
+            .eq("id", str(data.item_id))
+            .single()
             .execute()
+        )
 
         if not item_resp.data or not item_resp.data["in_stock"]:
             raise HTTPException(400, "Product not available or out of stock")
@@ -131,11 +175,13 @@ async def initiate_product_payment(
         # Delivery fee (from seller profile)
         delivery_fee = Decimal("0")
         if data.delivery_option == "VENDOR_DELIVERY":
-            seller = await supabase.table("profiles")\
-                .select("can_pickup_and_dropoff, pickup_and_delivery_charge")\
-                .eq("id", str(item["seller_id"]))\
-                .single()\
+            seller = (
+                await supabase.table("profiles")
+                .select("can_pickup_and_dropoff, pickup_and_delivery_charge")
+                .eq("id", str(item["seller_id"]))
+                .single()
                 .execute()
+            )
 
             if not seller.data or not seller.data["can_pickup_and_dropoff"]:
                 raise HTTPException(400, "Seller does not offer delivery")
@@ -160,12 +206,9 @@ async def initiate_product_payment(
             "delivery_address": data.delivery_address,
             "additional_info": data.additional_info,
             "tx_ref": tx_ref,
-            "created_at": datetime.utcnow().isoformat()
+            "created_at": datetime.now().isoformat(),
         }
         await save_pending(f"pending_product_{tx_ref}", pending_data)
-
-        # Get customer info for SDK
-        customer_info = await get_customer_contact_info()
 
         return {
             "tx_ref": tx_ref,
@@ -175,23 +218,26 @@ async def initiate_product_payment(
             "customer": customer_info,
             "customization": {
                 "title": "Servipal Product Purchase",
-                "description": f"{data.quantity} × product"
+                "description": f"{data.quantity} × product",
             },
-            "message": "Ready for payment — use Flutterwave SDK"
+            "message": "Ready for payment — Pay with Flutterwave",
         }
 
     except Exception as e:
         raise HTTPException(500, f"Product payment initiation failed: {str(e)}")
 
 
-
-async def customer_confirm_product_order(order_id: UUID, customer_id: UUID) -> dict:
+async def customer_confirm_product_order(
+    order_id: UUID, customer_id: UUID, supabase: AsyncClient
+) -> dict:
     try:
-        order = await supabase.table("product_orders")\
-            .select("id, buyer_id, seller_id, grand_total, order_status")\
-            .eq("id", str(order_id))\
-            .single()\
+        order = (
+            await supabase.table("product_orders")
+            .select("id, buyer_id, seller_id, grand_total, order_status")
+            .eq("id", str(order_id))
+            .single()
             .execute()
+        )
 
         if order.data["buyer_id"] != str(customer_id):
             raise HTTPException(403, "Not your order")
@@ -199,11 +245,13 @@ async def customer_confirm_product_order(order_id: UUID, customer_id: UUID) -> d
         if order.data["order_status"] != "READY":
             raise HTTPException(400, "Order not ready for confirmation")
 
-        tx = await supabase.table("transactions")\
-            .select("id, amount, to_user_id, status")\
-            .eq("order_id", str(order_id))\
-            .single()\
+        tx = (
+            await supabase.table("transactions")
+            .select("id, amount, to_user_id, status")
+            .eq("order_id", str(order_id))
+            .single()
             .execute()
+        )
 
         if tx.data["status"] == "RELEASED":
             raise HTTPException(400, "Already confirmed")
@@ -212,27 +260,34 @@ async def customer_confirm_product_order(order_id: UUID, customer_id: UUID) -> d
         seller_id = order.data["seller_id"]
 
         # Get commission rate
-        commission_rate = await get_commission_rate("PRODUCT")
-        seller_amount = full_amount * commission_rate
+        # commission_rate = await get_commission_rate("PRODUCT", supabase)
+        # seller_amount = full_amount * commission_rate
 
-        # Atomic release: escrow → seller balance (use same RPC)
-        await supabase.rpc("release_order_payment", {
-            "p_customer_id": str(customer_id),
-            "p_vendor_id": str(seller_id),
-            "p_full_amount": full_amount
-        }).execute()
+        # Atomic release: escrow → seller balance (use the same RPC)
+        await supabase.rpc(
+            "release_order_payment",
+            {
+                "p_customer_id": str(customer_id),
+                "p_vendor_id": str(seller_id),
+                "p_full_amount": full_amount,
+            },
+        ).execute()
 
         # Update transaction
-        await supabase.table("transactions")\
-            .update({"status": "RELEASED"})\
-            .eq("id", tx.data["id"])\
+        await (
+            supabase.table("transactions")
+            .update({"status": "RELEASED"})
+            .eq("id", tx.data["id"])
             .execute()
+        )
 
         # Update order to COMPLETED
-        await supabase.table("product_orders")\
-            .update({"order_status": "COMPLETED"})\
-            .eq("id", str(order_id))\
+        await (
+            supabase.table("product_orders")
+            .update({"order_status": "COMPLETED"})
+            .eq("id", str(order_id))
             .execute()
+        )
 
         # Stock reduction + total_sold increment happens via trigger (see earlier)
 
@@ -240,7 +295,7 @@ async def customer_confirm_product_order(order_id: UUID, customer_id: UUID) -> d
             "success": True,
             "message": "Order confirmed! Payment released to seller.",
             "order_status": "COMPLETED",
-            "amount_released": float(full_amount)
+            "amount_released": float(full_amount),
         }
 
     except Exception as e:
@@ -251,7 +306,7 @@ async def vendor_product_order_action(
     order_id: UUID,
     data: ProductVendorOrderAction,
     seller_id: UUID,
-    supabase: AsyncClient
+    supabase: AsyncClient,
 ) -> ProductVendorOrderActionResponse:
     """
     Seller accepts or rejects a product order.
@@ -260,11 +315,15 @@ async def vendor_product_order_action(
     """
     try:
         # 1. Fetch order
-        order_resp = await supabase.table("product_orders")\
-            .select("id, seller_id, buyer_id, order_status, payment_status, grand_total")\
-            .eq("id", str(order_id))\
-            .single()\
+        order_resp = (
+            await supabase.table("product_orders")
+            .select(
+                "id, seller_id, buyer_id, order_status, payment_status, grand_total"
+            )
+            .eq("id", str(order_id))
+            .single()
             .execute()
+        )
 
         if not order_resp.data:
             raise HTTPException(404, "Product order not found")
@@ -276,7 +335,9 @@ async def vendor_product_order_action(
             raise HTTPException(403, "This is not your order")
 
         if order["order_status"] != "PENDING":
-            raise HTTPException(400, f"Order already processed (status: {order['order_status']})")
+            raise HTTPException(
+                400, f"Order already processed (status: {order['order_status']})"
+            )
 
         if order["payment_status"] != "PAID":
             raise HTTPException(400, "Payment not completed")
@@ -285,19 +346,21 @@ async def vendor_product_order_action(
         if data.action == "accept":
             new_status = "ACCEPTED"
             message = "Order accepted. Preparing item for delivery/pickup."
-            refund = False
+            # refund = False
 
         else:  # reject
             new_status = "CANCELLED"
             message = "Order rejected."
-            refund = True
+            # refund = True
 
             # Refund escrow → buyer balance
-            tx_resp = await supabase.table("transactions")\
-                .select("id, amount, from_user_id, status")\
-                .eq("order_id", str(order_id))\
-                .single()\
+            tx_resp = (
+                await supabase.table("transactions")
+                .select("id, amount, from_user_id, status")
+                .eq("order_id", str(order_id))
+                .single()
                 .execute()
+            )
 
             if not tx_resp.data:
                 raise HTTPException(404, "Transaction not found")
@@ -306,34 +369,42 @@ async def vendor_product_order_action(
             amount = tx["amount"]
 
             # Atomic refund
-            await supabase.rpc("update_wallet_balance", {
-                "p_user_id": tx["from_user_id"],
-                "p_delta": -amount,
-                "p_field": "escrow_balance"
-            }).execute()
+            await supabase.rpc(
+                "update_wallet_balance",
+                {
+                    "p_user_id": tx["from_user_id"],
+                    "p_delta": -amount,
+                    "p_field": "escrow_balance",
+                },
+            ).execute()
 
-            await supabase.rpc("update_wallet_balance", {
-                "p_user_id": tx["from_user_id"],
-                "p_delta": amount,
-                "p_field": "balance"
-            }).execute()
+            await supabase.rpc(
+                "update_wallet_balance",
+                {
+                    "p_user_id": tx["from_user_id"],
+                    "p_delta": amount,
+                    "p_field": "balance",
+                },
+            ).execute()
 
-            # Mark transaction refunded
-            await supabase.table("transactions")\
-                .update({"status": "REFUNDED"})\
-                .eq("id", tx["id"])\
+            # Marks transaction refunded
+            await (
+                supabase.table("transactions")
+                .update({"status": "REFUNDED"})
+                .eq("id", tx["id"])
                 .execute()
+            )
 
         # 4. Update order status
-        await supabase.table("product_orders")\
-            .update({"order_status": new_status})\
-            .eq("id", str(order_id))\
+        await (
+            supabase.table("product_orders")
+            .update({"order_status": new_status})
+            .eq("id", str(order_id))
             .execute()
+        )
 
         return ProductVendorOrderActionResponse(
-            order_id=order_id,
-            order_status=new_status,
-            message=message
+            order_id=order_id, order_status=new_status, message=message
         )
 
     except HTTPException as he:
@@ -343,20 +414,20 @@ async def vendor_product_order_action(
 
 
 async def vendor_mark_product_ready(
-    order_id: UUID,
-    seller_id: UUID,
-    supabase: AsyncClient
+    order_id: UUID, seller_id: UUID, supabase: AsyncClient
 ) -> ProductVendorMarkReadyResponse:
     """
-    Seller marks product order as ready for pickup or delivery.
+    Seller marks the product order as ready for pickup or delivery.
     """
     try:
         # 1. Fetch order
-        order_resp = await supabase.table("product_orders")\
-            .select("id, seller_id, order_status")\
-            .eq("id", str(order_id))\
-            .single()\
+        order_resp = (
+            await supabase.table("product_orders")
+            .select("id, seller_id, order_status")
+            .eq("id", str(order_id))
+            .single()
             .execute()
+        )
 
         if not order_resp.data:
             raise HTTPException(404, "Product order not found")
@@ -370,18 +441,19 @@ async def vendor_mark_product_ready(
         if order["order_status"] != "ACCEPTED":
             raise HTTPException(
                 status_code=400,
-                detail=f"Cannot mark as ready. Current status: {order['order_status']}"
+                detail=f"Cannot mark as ready. Current status: {order['order_status']}",
             )
 
         # 3. Update to READY
-        await supabase.table("product_orders")\
-            .update({"order_status": "READY"})\
-            .eq("id", str(order_id))\
+        await (
+            supabase.table("product_orders")
+            .update({"order_status": "READY"})
+            .eq("id", str(order_id))
             .execute()
+        )
 
         return ProductVendorMarkReadyResponse(
-            order_id=order_id,
-            message="Order marked as ready for pickup/delivery!"
+            order_id=order_id, message="Order marked as ready for pickup/delivery!"
         )
 
     except HTTPException as he:

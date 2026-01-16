@@ -3,14 +3,17 @@ from uuid import UUID
 from decimal import Decimal
 from typing import Optional, Literal
 
+
 class VendorOrderAction(BaseModel):
     action: Literal["accept", "reject"]
     reason: Optional[str] = None  # if reject
+
 
 class VendorOrderActionResponse(BaseModel):
     order_id: UUID
     order_status: str
     message: str
+
 
 class VendorResponse(BaseModel):
     id: UUID
@@ -26,8 +29,3 @@ class VendorResponse(BaseModel):
     total_items: int = 0
     can_pickup_and_dropoff: bool = False
     pickup_and_delivery_charge: Decimal = Decimal("0.00")
-
-
-
-
-

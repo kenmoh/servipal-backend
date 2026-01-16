@@ -1,94 +1,154 @@
-from typing import  List
+from typing import List, Optional
 from app.schemas.user_schemas import *
-from fastapi import HTTPException, status, UploadFile
+from fastapi import HTTPException, status, UploadFile, Request
 from uuid import UUID
 from datetime import datetime, timedelta
 from supabase.client import AsyncClient
+from app.config.logging import logger
+from app.utils.audit import log_audit_event
+from decimal import Decimal
 
 # ========================
 # 1. Signup (Customer / Vendor / Dispatch)
 # ========================
 
 
-async def create_user_account(data: UserCreate, supabase: AsyncClient) -> TokenResponse:
-
+async def create_user_account(
+    data: UserCreate, supabase: AsyncClient, request: Optional[Request] = None
+) -> TokenResponse:
+    logger.info("user_signup_attempt", email=data.email, user_type=data.user_type.value)
     try:
         # Sign up with Supabase Auth
-        auth_resp = await supabase.auth.sign_up({
-            "email": data.email,
-            "password": data.password,
-            "options": {"data": {"user_type": data.user_type,  "phone": data.phone}}
-        })
+        auth_resp = await supabase.auth.sign_up(
+            {
+                "email": data.email,
+                "password": data.password,
+                "options": {"data": {"user_type": data.user_type, "phone": data.phone}},
+            }
+        )
 
-        
         if auth_resp.user is None:
+            logger.warning(
+                "signup_failed", email=data.email, reason="auth_resp.user_is_none"
+            )
             raise HTTPException(status_code=400, detail="Signup failed")
 
         # Use the session from signup response (no need to login again)
         session = auth_resp.session
-        
+
         # If email confirmation is enabled, session will be None until user confirms
         if session is None:
             # User was created but needs to confirm email
             # Fetch profile to return user info without tokens
-            profile_resp = await supabase.table("profiles")\
-                .select("*")\
-                .eq("id", auth_resp.user.id)\
-                .single()\
+            profile_resp = (
+                await supabase.table("profiles")
+                .select("*")
+                .eq("id", auth_resp.user.id)
+                .single()
                 .execute()
-            
+            )
+
             return TokenResponse(
                 access_token="",
                 refresh_token="",
                 expires_in=0,
                 user=UserProfileResponse(**profile_resp.data),
-                message="Please check your email to confirm your account before logging in."
+                message="Please check your email to confirm your account before logging in.",
             )
 
         # Fetch profile
-        profile_resp = await supabase.table("profiles")\
-            .select("*")\
-            .eq("id", auth_resp.user.id)\
-            .single()\
+        profile_resp = (
+            await supabase.table("profiles")
+            .select("*")
+            .eq("id", auth_resp.user.id)
+            .single()
             .execute()
+        )
 
-        return TokenResponse(
+        user_response = TokenResponse(
             access_token=session.access_token,
             refresh_token=session.refresh_token,
             expires_in=session.expires_in,
-            user=UserProfileResponse(**profile_resp.data)
+            user=UserProfileResponse(**profile_resp.data),
         )
 
+        # Audit log
+        await log_audit_event(
+            supabase,
+            entity_type="USER",
+            entity_id=auth_resp.user.id,
+            action="SIGNUP",
+            new_value={"user_type": data.user_type.value, "email": data.email},
+            actor_id=auth_resp.user.id,
+            actor_type="USER",
+            notes=f"New user account created: {data.user_type.value}",
+            request=request,
+        )
+
+        logger.info(
+            "user_signup_success",
+            user_id=auth_resp.user.id,
+            email=data.email,
+            user_type=data.user_type.value,
+        )
+        return user_response
+
+    except HTTPException:
+        raise
     except Exception as e:
-        print(f"Signup error: {str(e)}")  # Better logging
+        logger.error("signup_error", email=data.email, error=str(e), exc_info=True)
         if "duplicate" in str(e).lower():
-            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Phone or email already exists")
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Phone or email already exists",
+            )
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
 
 # ========================
 # 2. Login
 # ========================
-async def login_user(data: LoginRequest,  supabase: AsyncClient) -> TokenResponse:
+async def login_user(
+    data: LoginRequest, supabase: AsyncClient, request: Optional[Request] = None
+) -> TokenResponse:
+    logger.info("login_attempt", email=data.email)
     try:
         # Try phone first, then email
         credentials = {"password": data.password, "email": data.email}
         session = await supabase.auth.sign_in_with_password(credentials)
 
-        profile_resp = await supabase.table("profiles")\
-            .select("*")\
-            .eq("id", session.user.id)\
-            .single()\
+        profile_resp = (
+            await supabase.table("profiles")
+            .select("*")
+            .eq("id", session.user.id)
+            .single()
             .execute()
+        )
 
+        # Audit log
+        await log_audit_event(
+            supabase,
+            entity_type="USER",
+            entity_id=session.user.id,
+            action="LOGIN",
+            actor_id=session.user.id,
+            actor_type="USER",
+            notes="User logged in successfully",
+            request=request,
+        )
+
+        logger.info("login_success", user_id=session.user.id, email=data.email)
         return TokenResponse(
             access_token=session.session.access_token,
             refresh_token=session.session.refresh_token,
             expires_in=session.session.expires_in,
-            user=UserProfileResponse(**profile_resp.data)
+            user=UserProfileResponse(**profile_resp.data),
         )
 
     except Exception as e:
+        logger.warning("login_failed", email=data.email, error=str(e))
         raise HTTPException(status_code=401, detail=f"Invalid credentials. {e}")
+
 
 # ========================
 # 3. Create Rider (by Dispatch only)
@@ -96,26 +156,33 @@ async def login_user(data: LoginRequest,  supabase: AsyncClient) -> TokenRespons
 async def create_rider_by_dispatch(
     data: RiderCreateByDispatch,
     current_profile: dict,
-    supabase_admin: AsyncClient
+    supabase_admin: AsyncClient,
+    request: Optional[Request] = None,
 ) -> UserProfileResponse:
+    logger.info(
+        "create_rider_attempt",
+        dispatch_id=current_profile["id"],
+        rider_phone=data.phone,
+    )
 
     # Define dispatcher_id for later use
     dispatcher_id = current_profile["id"]
 
     # Fetch the dispatcher profile with required fields
-    dispatch_profile_resp = await supabase_admin.table("profiles")\
-        .select("user_type, business_name, business_address, state")\
-        .eq("id", current_profile["id"])\
-        .single()\
+    dispatch_profile_resp = (
+        await supabase_admin.table("profiles")
+        .select("user_type, business_name, business_address, state")
+        .eq("id", current_profile["id"])
+        .single()
         .execute()
+    )
 
     dispatch_profile = dispatch_profile_resp.data
 
     # Security: Only DISPATCH can create riders
     if dispatch_profile["user_type"] != UserType.DISPATCH.value:
         raise HTTPException(
-            status_code=403,
-            detail="Only dispatch users can create riders"
+            status_code=403, detail="Only dispatch users can create riders"
         )
 
     # Validation: Dispatch must have completed business details
@@ -130,26 +197,28 @@ async def create_rider_by_dispatch(
     if missing_fields:
         raise HTTPException(
             status_code=400,
-            detail=f"Please complete your profile first: {', '.join(missing_fields)} required to create riders."
+            detail=f"Please complete your profile first: {', '.join(missing_fields)} required to create riders.",
         )
 
     try:
         # Create a user in Supabase Auth using an admin client
-        admin_resp = await supabase_admin.auth.admin.create_user({
-            "email": data.email,
-            "phone": data.phone,
-            "password": "TempPass123!",
-            "phone_confirm": True,
-            "user_metadata": {
-                "created_by": "dispatch",
-                "user_type": UserType.RIDER.value,
-                "phone_number": data.phone,
-                "bike_number": data.bike_number,
-                "full_name": data.full_name,
-                "dispatcher_id": str(dispatcher_id)
-            },
-            "email_confirm": True
-        })
+        admin_resp = await supabase_admin.auth.admin.create_user(
+            {
+                "email": data.email,
+                "phone": data.phone,
+                "password": "TempPass123!",
+                "phone_confirm": True,
+                "user_metadata": {
+                    "created_by": "dispatch",
+                    "user_type": UserType.RIDER.value,
+                    "phone_number": data.phone,
+                    "bike_number": data.bike_number,
+                    "full_name": data.full_name,
+                    "dispatcher_id": str(dispatcher_id),
+                },
+                "email_confirm": True,
+            }
+        )
 
         user_id = admin_resp.user.id
 
@@ -169,41 +238,83 @@ async def create_rider_by_dispatch(
             "is_verified": False,
             "account_status": "PENDING",
             "has_delivery": False,
-            "is_online": False
+            "is_online": False,
         }
 
         await supabase_admin.table("profiles").upsert(rider_profile_data).execute()
 
         # Fetch final profile
-        profile_resp = await supabase_admin.table("profiles")\
-            .select("*")\
-            .eq("id", user_id)\
-            .single()\
+        profile_resp = (
+            await supabase_admin.table("profiles")
+            .select("*")
+            .eq("id", user_id)
+            .single()
             .execute()
+        )
 
-        return UserProfileResponse(**profile_resp.data)
+        result = UserProfileResponse(**profile_resp.data)
 
+        # Audit log
+        await log_audit_event(
+            supabase_admin,
+            entity_type="USER",
+            entity_id=str(user_id),
+            action="CREATE_RIDER",
+            new_value={
+                "rider_phone": data.phone,
+                "rider_name": data.full_name,
+                "bike_number": data.bike_number,
+            },
+            actor_id=str(dispatcher_id),
+            actor_type="DISPATCH",
+            notes=f"Rider created by dispatch: {data.full_name}",
+            request=request,
+        )
+
+        logger.info(
+            "rider_created_success",
+            dispatch_id=str(dispatcher_id),
+            rider_id=str(user_id),
+            rider_phone=data.phone,
+        )
+        return result
+
+    except HTTPException:
+        raise
     except Exception as e:
         error_msg = str(e).lower()
+        logger.error(
+            "create_rider_error",
+            dispatch_id=str(dispatcher_id),
+            error=str(e),
+            exc_info=True,
+        )
         if "duplicate" in error_msg or "already registered" in error_msg:
-            raise HTTPException(status_code=409, detail="Phone number already registered")
-        print(f"ERROR Creating Rider: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to create rider account: {str(e)}")
+            raise HTTPException(
+                status_code=409, detail="Phone number already registered"
+            )
+        raise HTTPException(
+            status_code=500, detail=f"Failed to create rider account: {str(e)}"
+        )
+
 
 # ========================
 # 4. Get Current User Profile
 # ========================
-async def get_user_profile(user_id: UUID,  supabase: AsyncClient) -> UserProfileResponse:
-    resp = await supabase.table("profiles")\
-        .select("*")\
-        .eq("id", user_id)\
-        .single()\
+async def get_user_profile(user_id: UUID, supabase: AsyncClient) -> UserProfileResponse:
+    resp = (
+        await supabase.table("profiles")
+        .select("*")
+        .eq("id", user_id)
+        .single()
         .execute()
-    
+    )
+
     if not resp.data:
         raise HTTPException(status_code=404, detail="Profile not found")
-    
+
     return UserProfileResponse(**resp.data)
+
 
 # ========================
 # 5. Update Profile
@@ -211,19 +322,26 @@ async def get_user_profile(user_id: UUID,  supabase: AsyncClient) -> UserProfile
 async def update_user_profile(
     user_id: UUID,
     data: ProfileUpdate,
-        supabase: AsyncClient
+    supabase: AsyncClient,
+    request: Optional[Request] = None,
 ) -> UserProfileResponse:
+    logger.info("update_profile_attempt", user_id=str(user_id))
     update_data = data.model_dump(exclude_unset=True)
     if not update_data:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No data provided")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="No data provided"
+        )
 
     # Get the current profile to check user_type (because user_type might not be in update_data)
-    current_profile = await supabase.table("profiles")\
-        .select("user_type, can_pickup_and_dropoff")\
-        .eq("id", str(user_id))\
-        .single()\
+    current_profile = (
+        await supabase.table("profiles")
+        .select("user_type, can_pickup_and_dropoff")
+        .eq("id", str(user_id))
+        .single()
         .execute()
+    )
 
+    old_value = current_profile.data.copy()
     current_type = current_profile.data["user_type"]
     current_self_delivery = current_profile.data["can_pickup_and_dropoff"]
 
@@ -233,52 +351,75 @@ async def update_user_profile(
     )
 
     # If user is vendor and self-delivery will be enabled
-    if current_type in ["RESTAURANT_VENDOR", "LAUNDRY_VENDOR"] and will_enable_self_delivery:
+    if (
+        current_type in ["RESTAURANT_VENDOR", "LAUNDRY_VENDOR"]
+        and will_enable_self_delivery
+    ):
         new_charge = update_data.get("pickup_and_delivery_charge")
         if new_charge is None or new_charge <= 0:
             raise HTTPException(
                 status_code=400,
-                detail="Delivery charge must be greater than 0 when self-delivery is enabled"
+                detail="Delivery charge must be greater than 0 when self-delivery is enabled",
             )
 
     # Proceed with the update
-    resp = await supabase.table("profiles")\
-        .update(update_data)\
-        .eq("id", str(user_id))\
+    resp = (
+        await supabase.table("profiles")
+        .update(update_data)
+        .eq("id", str(user_id))
         .execute()
+    )
 
     if not resp.data:
         raise HTTPException(status_code=404, detail="Profile not found")
 
-    return UserProfileResponse(**resp.data[0])
+    new_value = resp.data[0]
+
+    # Audit log
+    await log_audit_event(
+        supabase,
+        entity_type="PROFILE",
+        entity_id=str(user_id),
+        action="UPDATE",
+        old_value=old_value,
+        new_value=new_value,
+        actor_id=str(user_id),
+        actor_type="USER",
+        notes="Profile updated",
+        request=request,
+    )
+
+    logger.info("profile_updated_success", user_id=str(user_id))
+    return UserProfileResponse(**new_value)
+
 
 # ========================
 # 6. Refresh Online Status (call on every protected request)
 # ========================
-async def refresh_online_status(user_id: UUID,  supabase: AsyncClient):
-    await supabase.table("profiles")\
-        .update({
-            "is_online": True,
-            "last_seen_at": datetime.now().isoformat()
-        })\
-        .eq("id", user_id)\
+async def refresh_online_status(user_id: UUID, supabase: AsyncClient):
+    await (
+        supabase.table("profiles")
+        .update({"is_online": True, "last_seen_at": datetime.now().isoformat()})
+        .eq("id", user_id)
         .execute()
+    )
+
 
 # ========================
 # 7. Get all available riders
 # ========================
 
+
 async def get_available_riders(
-supabase: AsyncClient,
+    supabase: AsyncClient,
     latitude: Optional[float] = None,
     longitude: Optional[float] = None,
     max_distance_km: int = 20,
-
 ) -> List[AvailableRiderResponse]:
     params = {
         "near_lat": latitude,
         "near_lng": longitude,
-        "max_distance_km": max_distance_km
+        "max_distance_km": max_distance_km,
     }
 
     try:
@@ -293,15 +434,18 @@ supabase: AsyncClient,
         raise HTTPException(status_code=500, detail=f"Failed to fetch riders: {str(e)}")
 
 
-        
-
 # ========================
 # 7. Get rider details
 # ========================
 
-async def get_rider_details(rider_id: UUID,  supabase: AsyncClient) -> RiderDetailResponse:
+
+async def get_rider_details(
+    rider_id: UUID, supabase: AsyncClient
+) -> RiderDetailResponse:
     try:
-        resp = await supabase.rpc("get_rider_details", {"rider_user_id": str(rider_id)}).execute()
+        resp = await supabase.rpc(
+            "get_rider_details", {"rider_user_id": str(rider_id)}
+        ).execute()
 
         if not resp.data:
             raise HTTPException(status_code=404, detail="Rider not found")
@@ -314,13 +458,12 @@ async def get_rider_details(rider_id: UUID,  supabase: AsyncClient) -> RiderDeta
         raise HTTPException(status_code=500, detail="Failed to fetch rider details")
 
 
-
-
-async def get_my_riders(dispatch_user_id: UUID,  supabase: AsyncClient) -> List[DispatchRiderResponse]:
+async def get_my_riders(
+    dispatch_user_id: UUID, supabase: AsyncClient
+) -> List[DispatchRiderResponse]:
     try:
         resp = await supabase.rpc(
-            "get_my_dispatch_riders",
-            {"dispatch_user_id": str(dispatch_user_id)}
+            "get_my_dispatch_riders", {"dispatch_user_id": str(dispatch_user_id)}
         ).execute()
 
         if not resp.data:
@@ -329,25 +472,30 @@ async def get_my_riders(dispatch_user_id: UUID,  supabase: AsyncClient) -> List[
         return [DispatchRiderResponse(**rider) for rider in resp.data]
 
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to fetch riders: {str(e)}"
-        )
-
+        raise HTTPException(status_code=500, detail=f"Failed to fetch riders: {str(e)}")
 
 
 async def suspend_or_unsuspend_rider(
     data: RiderSuspensionRequest,
     dispatcher_id: UUID,
-        supabase: AsyncClient
+    supabase: AsyncClient,
+    request: Optional[Request] = None,
 ) -> RiderSuspensionResponse:
+    logger.info(
+        "rider_suspension_attempt",
+        dispatch_id=str(dispatcher_id),
+        rider_id=str(data.rider_id),
+        suspend=data.suspend,
+    )
     try:
         # 1. Validate rider belongs to this dispatch
-        rider_resp = await supabase.table("profiles")\
-            .select("id, dispatcher_id, full_name")\
-            .eq("id", str(data.rider_id))\
-            .single()\
+        rider_resp = (
+            await supabase.table("profiles")
+            .select("id, dispatcher_id, full_name")
+            .eq("id", str(data.rider_id))
+            .single()
             .execute()
+        )
 
         if not rider_resp.data:
             raise HTTPException(404, "Rider not found")
@@ -365,13 +513,17 @@ async def suspend_or_unsuspend_rider(
         # 3. Update rider status
         update_data = {
             "rider_is_suspended_for_order_cancel": data.suspend,
-            "rider_suspension_until": suspension_until.isoformat() if suspension_until else None
+            "rider_suspension_until": suspension_until.isoformat()
+            if suspension_until
+            else None,
         }
 
-        await supabase.table("profiles")\
-            .update(update_data)\
-            .eq("id", str(data.rider_id))\
+        await (
+            supabase.table("profiles")
+            .update(update_data)
+            .eq("id", str(data.rider_id))
             .execute()
+        )
 
         action = "suspended" if data.suspend else "unsuspended"
         message = f"Rider {rider['full_name']} has been {action}."
@@ -379,32 +531,81 @@ async def suspend_or_unsuspend_rider(
         if data.suspend and data.suspension_days:
             message += f" Suspension ends on {suspension_until.date()}."
 
-        return RiderSuspensionResponse(
+        result = RiderSuspensionResponse(
             rider_id=data.rider_id,
             suspended=data.suspend,
             suspension_until=suspension_until,
-            message=message
+            message=message,
         )
 
+        # Audit log
+        await log_audit_event(
+            supabase,
+            entity_type="RIDER",
+            entity_id=str(data.rider_id),
+            action="SUSPEND" if data.suspend else "UNSUSPEND",
+            old_value={"suspended": not data.suspend},
+            new_value={
+                "suspended": data.suspend,
+                "suspension_until": suspension_until.isoformat()
+                if suspension_until
+                else None,
+            },
+            actor_id=str(dispatcher_id),
+            actor_type="DISPATCH",
+            notes=message,
+            request=request,
+        )
+
+        logger.info(
+            "rider_suspension_completed",
+            dispatch_id=str(dispatcher_id),
+            rider_id=str(data.rider_id),
+            suspended=data.suspend,
+        )
+        return result
+
+    except HTTPException:
+        raise
     except Exception as e:
+        logger.error(
+            "rider_suspension_error",
+            dispatch_id=str(dispatcher_id),
+            rider_id=str(data.rider_id),
+            error=str(e),
+            exc_info=True,
+        )
         raise HTTPException(500, f"Operation failed: {str(e)}")
 
 
-async def get_rider_earnings(rider_id: UUID, dispatcher_id: UUID,  supabase: AsyncClient) -> RiderEarningsResponse:
+async def get_rider_earnings(
+    rider_id: UUID, dispatcher_id: UUID, supabase: AsyncClient
+) -> RiderEarningsResponse:
     # Validates rider belongs to dispatch
-    rider = await supabase.table("profiles")\
-        .select("full_name, dispatcher_id")\
-        .eq("id", str(rider_id))\
-        .single()\
+    rider = (
+        await supabase.table("profiles")
+        .select("full_name, dispatcher_id")
+        .eq("id", str(rider_id))
+        .single()
         .execute()
+    )
 
     if rider.data["dispatcher_id"] != str(dispatcher_id):
         raise HTTPException(403, "Not your rider")
 
-    resp = await supabase.rpc("get_rider_earnings", {"rider_user_id": str(rider_id)}).execute()
-    earnings = resp.data[0] if resp.data else {
-        "total_earnings": 0, "completed_deliveries": 0, "pending_earnings": 0, "total_distance": 0
-    }
+    resp = await supabase.rpc(
+        "get_rider_earnings", {"rider_user_id": str(rider_id)}
+    ).execute()
+    earnings = (
+        resp.data[0]
+        if resp.data
+        else {
+            "total_earnings": 0,
+            "completed_deliveries": 0,
+            "pending_earnings": 0,
+            "total_distance": 0,
+        }
+    )
 
     return RiderEarningsResponse(
         rider_id=rider_id,
@@ -412,15 +613,26 @@ async def get_rider_earnings(rider_id: UUID, dispatcher_id: UUID,  supabase: Asy
         total_earnings=Decimal(earnings["total_earnings"]),
         completed_deliveries=earnings["completed_deliveries"],
         pending_earnings=Decimal(earnings["pending_earnings"]),
-        total_distance=Decimal(earnings["total_distance"])
+        total_distance=Decimal(earnings["total_distance"]),
     )
 
-async def get_vendor_earnings(vendor_id: UUID,  supabase: AsyncClient) -> dict:
-    resp = await supabase.rpc("get_vendor_earnings", {"vendor_user_id": str(vendor_id)}).execute()
-    data = resp.data[0] if resp.data else {
-        "total_earnings": 0, "completed_orders": 0, "pending_earnings": 0, "pending_orders": 0,
-        "todays_earnings": 0, "this_month_earnings": 0
-    }
+
+async def get_vendor_earnings(vendor_id: UUID, supabase: AsyncClient) -> dict:
+    resp = await supabase.rpc(
+        "get_vendor_earnings", {"vendor_user_id": str(vendor_id)}
+    ).execute()
+    data = (
+        resp.data[0]
+        if resp.data
+        else {
+            "total_earnings": 0,
+            "completed_orders": 0,
+            "pending_earnings": 0,
+            "pending_orders": 0,
+            "todays_earnings": 0,
+            "this_month_earnings": 0,
+        }
+    )
 
     return {
         "total_earnings": data["total_earnings"],
@@ -428,38 +640,84 @@ async def get_vendor_earnings(vendor_id: UUID,  supabase: AsyncClient) -> dict:
         "pending_earnings": data["pending_earnings"],
         "pending_orders": data["pending_orders"],
         "today": data["todays_earnings"],
-        "this_month": data["this_month_earnings"]
+        "this_month": data["this_month_earnings"],
     }
 
 
 async def upload_profile_image(
     file: UploadFile,
     user_id: UUID,
-    image_type: Literal["profile", "backdrop"]
+    image_type: Literal["profile", "backdrop"],
+    supabase: AsyncClient,
+    request: Optional[Request] = None,
 ) -> str:
     """Upload image and return public URL"""
-    folder = f"users/{user_id}/{image_type}"
-    url = await upload_to_supabase_storage(
-        file=file,
-        bucket="profile-images",
-        folder=folder
+    from app.utils.storage import upload_to_supabase_storage
+
+    logger.info(
+        "upload_profile_image_started",
+        user_id=str(user_id),
+        image_type=image_type,
+        filename=file.filename,
     )
+    try:
+        folder = f"users/{user_id}/{image_type}"
+        url = await upload_to_supabase_storage(
+            file=file, supabase=supabase, bucket="profile-images", folder=folder
+        )
 
-    # Insert into profile_images table
-    await supabase.table("profile_images").insert({
-        "user_id": str(user_id),
-        "image_type": image_type,
-        "image_url": url,
-        "file_path": f"{folder}/{file.filename}",
-        "file_name": file.filename,
-        "mime_type": file.content_type,
-        "size_bytes": file.size,
-        "metadata": {}
-    }).execute()
+        # Insert into profile_images table
+        await (
+            supabase.table("profile_images")
+            .insert(
+                {
+                    "user_id": str(user_id),
+                    "image_type": image_type,
+                    "image_url": url,
+                    "file_path": f"{folder}/{file.filename}",
+                    "file_name": file.filename,
+                    "mime_type": file.content_type,
+                    "size_bytes": file.size,
+                    "metadata": {},
+                }
+            )
+            .execute()
+        )
 
-    # Update profiles table with latest active URL
-    await supabase.table("profiles").update({
-        f"{image_type}_image_url": url
-    }).eq("id", str(user_id)).execute()
+        # Update profiles table with latest active URL
+        await (
+            supabase.table("profiles")
+            .update({f"{image_type}_image_url": url})
+            .eq("id", str(user_id))
+            .execute()
+        )
 
-    return url
+        # Audit log
+        await log_audit_event(
+            supabase,
+            entity_type="PROFILE",
+            entity_id=str(user_id),
+            action="UPLOAD_IMAGE",
+            new_value={f"{image_type}_image_url": url},
+            actor_id=str(user_id),
+            actor_type="USER",
+            notes=f"Uploaded {image_type} image",
+            request=request,
+        )
+
+        logger.info(
+            "upload_profile_image_success",
+            user_id=str(user_id),
+            image_type=image_type,
+            url=url,
+        )
+        return url
+    except Exception as e:
+        logger.error(
+            "upload_profile_image_error",
+            user_id=str(user_id),
+            image_type=image_type,
+            error=str(e),
+            exc_info=True,
+        )
+        raise

@@ -1,5 +1,5 @@
 from typing import AsyncGenerator
-from supabase import  AsyncClient, acreate_client
+from supabase import AsyncClient, acreate_client
 
 
 from app.config.config import settings

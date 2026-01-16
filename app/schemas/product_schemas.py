@@ -4,6 +4,7 @@ from uuid import UUID
 from decimal import Decimal
 from datetime import datetime
 
+
 # ───────────────────────────────────────────────
 # Product Item (what sellers list)
 # ───────────────────────────────────────────────
@@ -12,10 +13,15 @@ class ProductItemCreate(BaseModel):
     description: Optional[str] = None
     price: Decimal = Field(..., gt=0)
     stock: int = Field(..., ge=0, description="Initial stock quantity")
-    sizes: Optional[List[str]] = Field(None, description="Available sizes e.g. ['S', 'M', 'L']")
-    colors: Optional[List[str]] = Field(None, description="Available colors e.g. ['Red', 'Blue']")
+    sizes: Optional[List[str]] = Field(
+        None, description="Available sizes e.g. ['S', 'M', 'L']"
+    )
+    colors: Optional[List[str]] = Field(
+        None, description="Available colors e.g. ['Red', 'Blue']"
+    )
     category_id: Optional[UUID] = None
     images: List[str] = Field(default_factory=list, description="URLs after upload")
+
 
 class ProductItemUpdate(BaseModel):
     name: Optional[str] = None
@@ -25,6 +31,7 @@ class ProductItemUpdate(BaseModel):
     sizes: Optional[List[str]] = None
     colors: Optional[List[str]] = None
     category_id: Optional[UUID] = None
+
 
 class ProductItemResponse(BaseModel):
     id: UUID
@@ -42,6 +49,7 @@ class ProductItemResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
+
 # ───────────────────────────────────────────────
 # Product Order Creation (customer checkout)
 # ───────────────────────────────────────────────
@@ -49,11 +57,15 @@ class ProductOrderItem(BaseModel):
     item_id: UUID
     quantity: int = Field(..., ge=1)
 
+
 class ProductOrderCreate(BaseModel):
     item: ProductOrderItem = Field(..., description="Single product + quantity")
     delivery_option: Literal["PICKUP", "VENDOR_DELIVERY"]
-    delivery_address: Optional[str] = Field(None, description="Full delivery address if VENDOR_DELIVERY")
+    delivery_address: Optional[str] = Field(
+        None, description="Full delivery address if VENDOR_DELIVERY"
+    )
     additional_info: Optional[str] = Field(None, description="Extra notes/instructions")
+
 
 class ProductOrderResponse(BaseModel):
     order_id: UUID
@@ -65,6 +77,7 @@ class ProductOrderResponse(BaseModel):
     customization: dict
     message: str
 
+
 # ───────────────────────────────────────────────
 # Vendor Order Action
 # ───────────────────────────────────────────────
@@ -72,10 +85,12 @@ class ProductVendorOrderAction(BaseModel):
     action: Literal["accept", "reject"]
     reason: Optional[str] = None
 
+
 class ProductVendorOrderActionResponse(BaseModel):
     order_id: UUID
     order_status: str
     message: str
+
 
 # ───────────────────────────────────────────────
 # Vendor Mark Ready & Customer Confirm
@@ -83,6 +98,7 @@ class ProductVendorOrderActionResponse(BaseModel):
 class ProductVendorMarkReadyResponse(BaseModel):
     order_id: UUID
     message: str
+
 
 class ProductCustomerConfirmResponse(BaseModel):
     order_id: UUID
