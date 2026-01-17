@@ -16,10 +16,10 @@ async def register_push_token(
     """
     Register or update device push token for notifications.
     Called on app start or token refresh.
-    
+
     Args:
         data (FCMTokenRegister): Token details.
-        
+
     Returns:
         FCMTokenResponse: Registration status.
     """
@@ -33,7 +33,7 @@ async def get_push_token(
 ) -> FCMTokenResponse:
     """
     Get user token.
-    
+
     Returns:
         FCMTokenResponse: Token details.
     """

@@ -404,7 +404,9 @@ async def sender_confirm_receipt(
     try:
         order = (
             await supabase.table("delivery_orders")
-            .select("id, sender_id, status, dispatch_id, delivery_fee, amount_due_dispatch")
+            .select(
+                "id, sender_id, status, dispatch_id, delivery_fee, amount_due_dispatch"
+            )
             .eq("id", str(order_id))
             .single()
             .execute()
@@ -425,7 +427,7 @@ async def sender_confirm_receipt(
             )
 
         delivery_fee = order["delivery_fee"]
-        amount_due_dispatch = order['amount_due_dispatch']
+        amount_due_dispatch = order["amount_due_dispatch"]
         platform_fee = delivery_fee - amount_due_dispatch
 
         dispatch_id = order["dispatch_id"]
@@ -466,13 +468,19 @@ async def sender_confirm_receipt(
             )
 
         # Log platform commission
-        await supabase.table("platform_commissions").insert({
-            "to_user_id": order['dispatch_id'],
-            "from_user_id": order['sender_id'],
-            "order_id": str(order_id),
-            "service_type": "DELIVERY",
-            "description": f"Platform commission from delivery order {order_id} (₦{platform_fee})"
-        }).execute()
+        await (
+            supabase.table("platform_commissions")
+            .insert(
+                {
+                    "to_user_id": order["dispatch_id"],
+                    "from_user_id": order["sender_id"],
+                    "order_id": str(order_id),
+                    "service_type": "DELIVERY",
+                    "description": f"Platform commission from delivery order {order_id} (₦{platform_fee})",
+                }
+            )
+            .execute()
+        )
 
         logger.info(
             "sender_confirm_receipt_success",

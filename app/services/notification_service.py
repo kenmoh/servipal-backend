@@ -65,7 +65,11 @@ async def send_push_notification(
 
 
 async def notify_user(
-    user_id: UUID, title: str, body: str, data: dict = None, supabase: AsyncClient = None
+    user_id: UUID,
+    title: str,
+    body: str,
+    data: dict = None,
+    supabase: AsyncClient = None,
 ) -> bool:
     """
     Helper to fetch a user's push token and send them a notification.

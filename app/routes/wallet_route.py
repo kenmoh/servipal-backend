@@ -22,7 +22,7 @@ async def get_my_wallet_details(
 ) -> WalletBalanceResponse:
     """
     Get current user's wallet details.
-    
+
     Returns:
         WalletBalanceResponse: Balance and currency.
     """
@@ -39,10 +39,10 @@ async def top_up_my_wallet(
 ) -> WalletTopUpInitiationResponse:
     """
     Initiate wallet top-up.
-    
+
     Args:
         data (TopUpRequest): Amount to add.
-        
+
     Returns:
         WalletTopUpInitiationResponse: Payment initiation details.
     """
@@ -65,10 +65,10 @@ async def pay_with_my_wallet(
 ):
     """
     Make a payment using wallet balance.
-    
+
     Args:
         data (PayWithWalletRequest): Payment details.
-        
+
     Returns:
         dict: Transaction status.
     """
@@ -82,21 +82,17 @@ async def pay_with_my_wallet(
     )
 
 
-
 @router.post("/withdraw-all", response_model=WithdrawResponse)
 async def withdraw_all_balance_endpoint(
     data: WithdrawAllRequest,
     current_profile: dict = Depends(get_current_profile),
     supabase: AsyncClient = Depends(get_supabase_client),
-    request: Request = None
+    request: Request = None,
 ):
     """
     Withdraw ALL available balance to user's bank via Flutterwave Transfer.
     Funds deducted immediately, transfer attempted instantly.
     """
     return await withdraw_all_balance(
-        data=data,
-        user_id=current_profile["id"],
-        supabase=supabase,
-        request=request
+        data=data, user_id=current_profile["id"], supabase=supabase, request=request
     )

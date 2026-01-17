@@ -86,7 +86,9 @@ async def vendor_food_order_action(
     try:
         order = (
             await supabase.table("food_orders")
-            .select("id, vendor_id, customer_id, order_status, payment_status, grand_total")
+            .select(
+                "id, vendor_id, customer_id, order_status, payment_status, grand_total"
+            )
             .eq("id", str(order_id))
             .single()
             .execute()
@@ -174,7 +176,11 @@ async def vendor_food_order_action(
             user_id=UUID(order.data["customer_id"]),
             title=title,
             body=body,
-            data={"order_id": str(order_id), "type": "FOOD_ORDER_UPDATE", "status": new_status},
+            data={
+                "order_id": str(order_id),
+                "type": "FOOD_ORDER_UPDATE",
+                "status": new_status,
+            },
             supabase=supabase,
         )
 
@@ -267,7 +273,9 @@ async def customer_confirm_food_order(
     try:
         order = (
             await supabase.table("food_orders")
-            .select("id, customer_id, vendor_id, grand_total, amount_due_vendor, order_status")
+            .select(
+                "id, customer_id, vendor_id, grand_total, amount_due_vendor, order_status"
+            )
             .eq("id", str(order_id))
             .single()
             .execute()
@@ -347,13 +355,19 @@ async def customer_confirm_food_order(
             order_id=str(order_id),
             amount_released=float(full_amount),
         )
-        await supabase.table("platform_commissions").insert({
-            "to_user_id": vendor_id,
-            "from_user_id": customer_id,
-            "order_id": str(order_id),
-            "service_type": "FOOD",
-            "description": f"Platform commission from delivery order {order_id} (₦{platform_fee})"
-        }).execute()
+        await (
+            supabase.table("platform_commissions")
+            .insert(
+                {
+                    "to_user_id": vendor_id,
+                    "from_user_id": customer_id,
+                    "order_id": str(order_id),
+                    "service_type": "FOOD",
+                    "description": f"Platform commission from delivery order {order_id} (₦{platform_fee})",
+                }
+            )
+            .execute()
+        )
 
         return {
             "success": True,

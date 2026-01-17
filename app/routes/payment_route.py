@@ -4,12 +4,14 @@ from app.services.payment_service import (
     process_successful_delivery_payment,
     process_successful_food_payment,
     process_successful_topup_payment,
+    process_successful_laundry_payment,
+    process_successful_product_payment,
 )
 from app.config.config import settings
+from app.config.logging import logger
 from app.database.supabase import get_supabase_client
 from app.worker import queue
 from rq import Retry
-from app.config.logging import logger
 
 router = APIRouter(tags=["payment-webhook"], prefix="/api/v1/payment")
 
@@ -22,15 +24,18 @@ async def flutterwave_webhook(
 ):
     """
     Handle Flutterwave payment webhooks.
-    
+
     Verifies signature, checks idempotency, and queues processing in background.
-    
+
     Args:
         request (Request): The raw request.
         verif_hash (str): The verification hash header.
-        
+
     Returns:
         dict: Processing status.
+        :param verif_hash:
+        :param request:
+        :param supabase:
     """
     # 1. Verify webhook signature (Flutterwave sends verif-hash header)
     if verif_hash != settings.FLW_SECRET_HASH:
@@ -82,9 +87,10 @@ async def flutterwave_webhook(
         handler = process_successful_food_payment
     elif tx_ref.startswith("TOPUP-"):
         handler = process_successful_topup_payment
-    # elif tx_ref.startswith("LAUNDRY-"):
-    #     handler = process_successful_laundry_payment
-    # Add PRODUCT-later if needed
+    elif tx_ref.startswith("LAUNDRY-"):
+        handler = process_successful_laundry_payment
+    elif tx_ref.startswith("PRODUCT-"):
+        handler = process_successful_product_payment
 
     if not handler:
         return {"status": "unknown_transaction_type"}
@@ -100,8 +106,6 @@ async def flutterwave_webhook(
             max=5, interval=[30, 60, 120, 300, 600]
         ),  # 30s → 1min → 2min → 5min → 10min
     )
-
-    from app.config.logging import logger
 
     logger.info("payment_webhook_queued", tx_ref=tx_ref, handler=handler.__name__)
     return {"status": "queued_with_retry"}

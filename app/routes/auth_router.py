@@ -15,10 +15,10 @@ async def signup(
 ):
     """
     Register a new user account.
-    
+
     Args:
         user_data (UserCreate): The user registration details.
-        
+
     Returns:
         TokenResponse: Access token and user profile information.
     """
@@ -36,10 +36,10 @@ async def login(
 ):
     """
     Authenticate a user and return access token.
-    
+
     Args:
         login_data (LoginRequest): Email and password.
-        
+
     Returns:
         TokenResponse: Access token and user profile information.
     """

@@ -222,9 +222,21 @@ async def resolve_dispute(
         supabase=supabase,
     )
 
-    # Notify participants 
-    await notify_user(dispute.data["initiator_id"], "Dispute resolved", "Your dispute has been resolved", data={"dispute_id": str(dispute_id)}, supabase=supabase)
-    await notify_user(dispute.data["respondent_id"], "Dispute resolved", "Your dispute has been resolved", data={"dispute_id": str(dispute_id)}, supabase=supabase)
+    # Notify participants
+    await notify_user(
+        dispute.data["initiator_id"],
+        "Dispute resolved",
+        "Your dispute has been resolved",
+        data={"dispute_id": str(dispute_id)},
+        supabase=supabase,
+    )
+    await notify_user(
+        dispute.data["respondent_id"],
+        "Dispute resolved",
+        "Your dispute has been resolved",
+        data={"dispute_id": str(dispute_id)},
+        supabase=supabase,
+    )
 
     return {"success": True, "message": "Dispute resolved"}
 

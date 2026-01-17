@@ -132,7 +132,6 @@ async def process_successful_delivery_payment(
         raise
 
 
-
 # ───────────────────────────────────────────────
 # Food Payment
 # ───────────────────────────────────────────────
@@ -164,7 +163,7 @@ async def process_successful_food_payment(
     customer_id = pending["customer_id"]
     vendor_id = pending["vendor_id"]
     delivery_fee = pending.get("delivery_fee", 0)
-    order_data = pending["order_data"]   # contains items, subtotal, delivery_fee, etc.
+    order_data = pending["order_data"]  # contains items, subtotal, delivery_fee, etc.
 
     # Idempotency + amount validation
     existing_tx = (
@@ -283,15 +282,20 @@ async def process_successful_food_payment(
             request=request,
         )
 
-
         # Log platform commission
-        await supabase.table("platform_commissions").insert({
-            "to_user_id": vendor_id,
-            "from_user_id": customer_id,
-            "order_id": str(order_id),
-            "service_type": "FOOD",
-            "description": f"Platform commission from food order {order_id} (₦{amount_due_vendor})"
-        }).execute()
+        await (
+            supabase.table("platform_commissions")
+            .insert(
+                {
+                    "to_user_id": vendor_id,
+                    "from_user_id": customer_id,
+                    "order_id": str(order_id),
+                    "service_type": "FOOD",
+                    "description": f"Platform commission from food order {order_id} (₦{amount_due_vendor})",
+                }
+            )
+            .execute()
+        )
 
         return {"status": "success", "order_id": str(order_id)}
 
@@ -566,51 +570,72 @@ async def process_successful_laundry_payment(
         commission_amount = expected_total - amount_due_vendor
 
         # Create laundry_orders record
-        order_resp = await supabase.table("laundry_orders").insert({
-            "customer_id": customer_id,
-            "vendor_id": vendor_id,
-            "subtotal": subtotal,
-            "delivery_fee": delivery_fee,
-            "total_price": subtotal,
-            "grand_total": expected_total,
-            "additional_info": pending.get("additional_info"),
-            "delivery_option": pending.get("delivery_option"),
-            "order_status": "PENDING",
-            "payment_status": "PAID",
-            "escrow_status": "HELD",
-            "amount_due_vendor": amount_due_vendor,
-        }).execute()
+        order_resp = (
+            await supabase.table("laundry_orders")
+            .insert(
+                {
+                    "customer_id": customer_id,
+                    "vendor_id": vendor_id,
+                    "subtotal": subtotal,
+                    "delivery_fee": delivery_fee,
+                    "total_price": subtotal,
+                    "grand_total": expected_total,
+                    "additional_info": pending.get("additional_info"),
+                    "delivery_option": pending.get("delivery_option"),
+                    "order_status": "PENDING",
+                    "payment_status": "PAID",
+                    "escrow_status": "HELD",
+                    "amount_due_vendor": amount_due_vendor,
+                }
+            )
+            .execute()
+        )
 
         order_id = order_resp.data[0]["id"]
 
         # Hold full amount in customer escrow
-        await supabase.rpc("update_wallet_balance", {
-            "p_user_id": customer_id,
-            "p_delta": expected_total,
-            "p_field": "escrow_balance"
-        }).execute()
+        await supabase.rpc(
+            "update_wallet_balance",
+            {
+                "p_user_id": customer_id,
+                "p_delta": expected_total,
+                "p_field": "escrow_balance",
+            },
+        ).execute()
 
         # Create transaction record
-        await supabase.table("transactions").insert({
-            "tx_ref": tx_ref,
-            "amount": expected_total,
-            "from_user_id": customer_id,
-            "to_user_id": vendor_id,  # or null if held in escrow
-            "order_id": order_id,
-            "transaction_type": "LAUNDRY_ORDER",
-            "status": "HELD",
-            "payment_method": "FLUTTERWAVE",
-            "details": {"flw_ref": flw_ref}
-        }).execute()
+        await (
+            supabase.table("transactions")
+            .insert(
+                {
+                    "tx_ref": tx_ref,
+                    "amount": expected_total,
+                    "from_user_id": customer_id,
+                    "to_user_id": vendor_id,  # or null if held in escrow
+                    "order_id": order_id,
+                    "transaction_type": "LAUNDRY_ORDER",
+                    "status": "HELD",
+                    "payment_method": "FLUTTERWAVE",
+                    "details": {"flw_ref": flw_ref},
+                }
+            )
+            .execute()
+        )
 
         # Log platform commission
-        await supabase.table("platform_commissions").insert({
-            "to_user_id": vendor_id,
-            "from_user_id": customer_id,
-            "order_id": str(order_id),
-            "service_type": "LAUNDRY",
-            "description": f"Platform commission from laundry order {order_id} (₦{amount_due_vendor})"
-        }).execute()
+        await (
+            supabase.table("platform_commissions")
+            .insert(
+                {
+                    "to_user_id": vendor_id,
+                    "from_user_id": customer_id,
+                    "order_id": str(order_id),
+                    "service_type": "LAUNDRY",
+                    "description": f"Platform commission from laundry order {order_id} (₦{amount_due_vendor})",
+                }
+            )
+            .execute()
+        )
 
         await delete_pending(pending_key)
 
@@ -629,9 +654,7 @@ async def process_successful_laundry_payment(
         )
 
         logger.info(
-            "laundry_payment_processed_success",
-            tx_ref=tx_ref,
-            order_id=str(order_id)
+            "laundry_payment_processed_success", tx_ref=tx_ref, order_id=str(order_id)
         )
 
     except Exception as e:

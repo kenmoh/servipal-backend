@@ -15,7 +15,7 @@ from app.schemas.product_schemas import (
     ProductVendorOrderActionResponse,
     ProductVendorMarkReadyResponse,
     ProductCustomerConfirmResponse,
-ProductType
+    ProductType,
 )
 from app.services import product_service
 from app.dependencies.auth import get_current_profile, require_user_type
@@ -45,7 +45,7 @@ async def create_product_item(
 ):
     """
     List a new product for sale.
-    
+
     Args:
         name (str): Product name.
         description (str, optional): Product description.
@@ -56,7 +56,7 @@ async def create_product_item(
         colors (str, optional): Comma-separated colors.
         category_id (UUID, optional): Category ID.
         images (List[UploadFile]): Product images.
-        
+
     Returns:
         ProductItemResponse: Created product details.
     """
@@ -72,10 +72,10 @@ async def create_product_item(
                 file=file,
                 supabase=supabase,
                 bucket="product-images",
-                folder=product_folder
+                folder=product_folder,
             )
             uploaded_images.append(url)
-            
+
     data = ProductItemCreate(
         name=name,
         description=description,
@@ -93,16 +93,17 @@ async def create_product_item(
         supabase=supabase,
     )
 
+
 @router.get("/items/{item_id}", response_model=ProductItemResponse)
 async def get_product_item(
     item_id: UUID, supabase: AsyncClient = Depends(get_supabase_client)
 ):
     """
     View a single product detail.
-    
+
     Args:
         item_id (UUID): The product ID.
-        
+
     Returns:
         ProductItemResponse: Product details.
     """
@@ -116,7 +117,7 @@ async def get_my_products(
 ):
     """
     Seller views their own listed products.
-    
+
     Returns:
         List[ProductItemResponse]: List of products.
     """
@@ -132,11 +133,11 @@ async def update_product_item(
 ):
     """
     Seller updates their own product.
-    
+
     Args:
         item_id (UUID): The product ID.
         data (ProductItemUpdate): Fields to update.
-        
+
     Returns:
         ProductItemResponse: Updated product.
     """
@@ -153,10 +154,10 @@ async def delete_product_item(
 ):
     """
     Seller soft-deletes their own product.
-    
+
     Args:
         item_id (UUID): The product ID.
-        
+
     Returns:
         dict: Success status.
     """
@@ -177,10 +178,10 @@ async def initiate_product_payment(
 ):
     """
     Customer initiates payment for a single product + quantity.
-    
+
     Args:
         data (ProductOrderCreate): Order details.
-        
+
     Returns:
         ProductOrderResponse: Payment details (Flutterwave).
     """
@@ -207,11 +208,11 @@ async def vendor_product_order_action(
 ):
     """
     Vendor accepts or rejects the product order.
-    
+
     Args:
         order_id (UUID): The order ID.
         data (ProductVendorOrderAction): Action data.
-        
+
     Returns:
         ProductVendorOrderActionResponse: Action result.
     """
@@ -234,10 +235,10 @@ async def vendor_mark_product_ready(
 ):
     """
     Vendor marks product order as ready for pickup/delivery.
-    
+
     Args:
         order_id (UUID): The order ID.
-        
+
     Returns:
         ProductVendorMarkReadyResponse: Updated status.
     """
@@ -260,10 +261,10 @@ async def customer_confirm_product_order(
     """
     Customer confirms receipt.
     Stock reduced, total_sold increased, payment released.
-    
+
     Args:
         order_id (UUID): The order ID.
-        
+
     Returns:
         ProductCustomerConfirmResponse: Confirmation result.
     """

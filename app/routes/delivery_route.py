@@ -58,7 +58,7 @@ async def initiate_delivery_payment_endpoint(
 ):
     """
     Initiate a delivery request and calculate payment.
-    
+
     Returns:
         dict: Payment initiation details.
     """
@@ -127,9 +127,6 @@ async def get_available_riders(
     return {"riders": riders.data}
 
 
-
-
-
 # ───────────────────────────────────────────────
 # 5. Rider Accept/Decline
 # ───────────────────────────────────────────────
@@ -142,11 +139,11 @@ async def rider_act_on_delivery(
 ):
     """
     Rider accepts or declines a delivery request.
-    
+
     Args:
         delivery_id (UUID): The delivery ID.
         action_data (DeliveryAction): 'ACCEPT' or 'DECLINE'.
-        
+
     Returns:
         DeliveryActionResponse: Result of the action.
     """
@@ -166,10 +163,10 @@ async def rider_pickup_package(
 ):
     """
     Rider confirms pickup of the package.
-    
+
     Args:
         delivery_id (UUID): The delivery ID.
-        
+
     Returns:
         dict: Status update.
     """
@@ -187,10 +184,10 @@ async def rider_confirm_delivered(
 ):
     """
     Rider confirms delivery of the package.
-    
+
     Args:
         delivery_id (UUID): The delivery ID.
-        
+
     Returns:
         dict: Status update.
     """
@@ -209,10 +206,10 @@ async def confirm_package_received(
 ):
     """
     Sender confirms receipt of the package (if applicable).
-    
+
     Args:
         delivery_id (UUID): The delivery ID.
-        
+
     Returns:
         dict: Status update.
     """
@@ -238,11 +235,11 @@ async def cancel_delivery_endpoint(
 ):
     """
     Cancel an existing delivery.
-    
+
     Args:
         delivery_id (UUID): The delivery ID.
         cancel_data (DeliveryCancelRequest): Reason for cancellation.
-        
+
     Returns:
         DeliveryCancelResponse: Cancellation result.
     """
@@ -263,7 +260,7 @@ async def get_delivery_details(
 ):
     """
     Get delivery orders for the current user.
-    
+
     Returns:
         list: List of delivery orders.
     """

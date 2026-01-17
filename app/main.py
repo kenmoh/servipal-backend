@@ -14,6 +14,7 @@ from app.routes import (
     admin_router,
     product_route,
     dispute_route,
+    escrow_route,
 )
 from app.config.logging import logger
 
@@ -91,7 +92,7 @@ async def log_requests(request: Request, call_next):
 async def root():
     """
     Root endpoint to verify API status.
-    
+
     Returns:
         dict: A welcome message, link to docs, and status.
     """
@@ -103,7 +104,7 @@ async def root():
 async def health_check():
     """
     Health check endpoint.
-    
+
     Returns:
         dict: The health status of the application.
     """
@@ -123,4 +124,5 @@ app.include_router(food_router.router)
 app.include_router(laundry_route.router)
 app.include_router(product_route.router)
 app.include_router(dispute_route.router)
+app.include_router(escrow_route.router)
 app.include_router(admin_router.router, include_in_schema=False)

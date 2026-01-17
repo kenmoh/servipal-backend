@@ -34,11 +34,11 @@ async def list_laundry_vendors(
 ):
     """
     List laundry vendors.
-    
+
     Args:
         lat (float, optional): Latitude for nearby search.
         lng (float, optional): Longitude for nearby search.
-        
+
     Returns:
         List[VendorResponse]: List of vendors.
     """
@@ -51,10 +51,10 @@ async def get_laundry_vendor_detail(
 ):
     """
     Get laundry vendor details and menu.
-    
+
     Args:
         vendor_id (UUID): The vendor ID.
-        
+
     Returns:
         LaundryVendorDetailResponse: Vendor details.
     """
@@ -70,10 +70,10 @@ async def initiate_laundry_payment_endpoint(
 ):
     """
     Initiate laundry payment.
-    
+
     Args:
         data (LaundryOrderCreate): Order details.
-        
+
     Returns:
         dict: Flutterwave RN SDK payment data.
     """
@@ -91,11 +91,11 @@ async def vendor_laundry_order_action_endpoint(
 ):
     """
     Vendor accepts or rejects laundry order.
-    
+
     Args:
         order_id (UUID): The order ID.
         data (VendorOrderAction): The action (accept/reject).
-        
+
     Returns:
         VendorOrderActionResponse: Action result.
     """
@@ -114,10 +114,10 @@ async def vendor_mark_laundry_ready_endpoint(
 ):
     """
     Vendor marks laundry order as ready.
-    
+
     Args:
         order_id (UUID): The order ID.
-        
+
     Returns:
         LaundryVendorMarkReadyResponse: Updated status.
     """
@@ -138,10 +138,10 @@ async def customer_confirm_laundry_receipt(
     """
     Customer confirms receipt of laundry order.
     Releases payment to vendor.
-    
+
     Args:
         order_id (UUID): The order ID.
-        
+
     Returns:
         LaundryCustomerConfirmResponse: Confirmation result.
     """
@@ -164,7 +164,7 @@ async def get_my_laundry_menu(
 ):
     """
     Vendor views their own laundry menu.
-    
+
     Returns:
         dict: List of laundry items.
     """
@@ -189,13 +189,13 @@ async def add_laundry_item_with_images(
 ):
     """
     Vendor adds a new laundry item with images.
-    
+
     Args:
         name (str): Item name.
         description (str, optional): item description.
         price (Decimal): Price.
         images (List[UploadFile]): Images.
-        
+
     Returns:
         dict: Created item details.
     """
@@ -218,11 +218,11 @@ async def update_laundry_item_endpoint(
 ):
     """
     Vendor updates a laundry item.
-    
+
     Args:
         item_id (UUID): The item ID.
         data (LaundryItemUpdate): Fields to update.
-        
+
     Returns:
         LaundryItemDetailResponse: Updated item.
     """

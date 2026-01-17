@@ -61,7 +61,7 @@ async def list_users(
 ):
     """
     List all users with filtering and pagination.
-    
+
     Args:
         user_type (UserType, optional): Filter by user type.
         is_verified (bool, optional): Filter by verification status.
@@ -70,7 +70,7 @@ async def list_users(
         search (str, optional): Search term.
         created_from (str, optional): Start date.
         created_to (str, optional): End date.
-        
+
     Returns:
         UsersListResponse: List of users.
     """
@@ -99,10 +99,10 @@ async def get_user(
 ):
     """
     Get detailed user information.
-    
+
     Args:
         user_id (UUID): The user ID.
-        
+
     Returns:
         AdminUserResponse: User details.
     """
@@ -120,11 +120,11 @@ async def update_user(
 ):
     """
     Update user profile (admin).
-    
+
     Args:
         user_id (UUID): The user ID.
         updates (AdminUserUpdate): Fields to update.
-        
+
     Returns:
         AdminUserResponse: Updated user.
     """
@@ -145,10 +145,10 @@ async def block_user(
 ):
     """
     Block a user.
-    
+
     Args:
         user_id (UUID): The user ID.
-        
+
     Returns:
         dict: Success status.
     """
@@ -169,10 +169,10 @@ async def unblock_user(
 ):
     """
     Unblock a user.
-    
+
     Args:
         user_id (UUID): The user ID.
-        
+
     Returns:
         dict: Success status.
     """
@@ -195,12 +195,12 @@ async def verify_user(
 ):
     """
     Verify or unverify a user (vendor/rider).
-    
+
     Args:
         user_id (UUID): The user ID.
         verified (bool): Verification status.
         reason (str, optional): Reason for action.
-        
+
     Returns:
         dict: Success status.
     """
@@ -241,7 +241,7 @@ async def list_orders(
 ):
     """
     List all orders with filtering and pagination.
-    
+
     Args:
         order_type (str, optional): Filter by order type.
         status (str, optional): Filter by status.
@@ -249,7 +249,7 @@ async def list_orders(
         customer_id (UUID, optional): Filter by customer.
         vendor_id (UUID, optional): Filter by vendor.
         rider_id (UUID, optional): Filter by rider.
-        
+
     Returns:
         OrdersListResponse: List of orders.
     """
@@ -297,7 +297,7 @@ async def list_transactions(
 ):
     """
     List all transactions with filtering and pagination.
-    
+
     Args:
         transaction_type (str, optional): Filter by type.
         status (str, optional): Filter by status.
@@ -305,7 +305,7 @@ async def list_transactions(
         to_user_id (UUID, optional): Filter by recipient.
         min_amount (float, optional): Min amount.
         max_amount (float, optional): Max amount.
-        
+
     Returns:
         TransactionsListResponse: List of transactions.
     """
@@ -343,7 +343,7 @@ async def list_wallets(
 ):
     """
     List all wallets with pagination.
-    
+
     Returns:
         WalletsListResponse: List of wallets.
     """
@@ -363,10 +363,10 @@ async def adjust_wallet(
 ):
     """
     Adjust wallet balance (admin only).
-    
+
     Args:
         adjustment (WalletAdjustmentRequest): Adjustment details.
-        
+
     Returns:
         AdminWalletResponse: Updated wallet.
     """
@@ -392,7 +392,7 @@ async def get_dashboard_stats(
 ):
     """
     Get overall dashboard statistics.
-    
+
     Returns:
         DashboardStatsResponse: Stats.
     """
@@ -422,12 +422,12 @@ async def list_audit_logs(
 ):
     """
     List audit logs with filtering and pagination.
-    
+
     Args:
         entity_type (str, optional): Filter by entity.
         action (str, optional): Filter by action.
         actor_id (UUID, optional): Filter by actor.
-        
+
     Returns:
         AuditLogsListResponse: List of logs.
     """

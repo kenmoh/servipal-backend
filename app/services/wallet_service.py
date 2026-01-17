@@ -14,7 +14,9 @@ from app.schemas.wallet_schema import (
     CustomerInfo,
     Customization,
     PayWithWalletResponse,
-    WithdrawalCreate, WithdrawalResponse, WithdrawalListResponse
+    WithdrawalCreate,
+    WithdrawalResponse,
+    WithdrawalListResponse,
 )
 from app.config.config import settings
 from app.utils.redis_utils import save_pending
@@ -167,7 +169,9 @@ async def initiate_wallet_top_up(
             amount=float(data.amount),
             public_key=settings.FLUTTERWAVE_PUBLIC_KEY,
             currency="NGN",
-            customer=CustomerInfo(email=customer_info['email'], name=customer_info['phone']),
+            customer=CustomerInfo(
+                email=customer_info["email"], name=customer_info["phone"]
+            ),
             customization=Customization(
                 title="Servipal Wallet Top-up",
                 description=f"Top up ₦{data.amount:,.2f} to your wallet",
@@ -197,16 +201,16 @@ async def initiate_wallet_top_up(
             error=str(e),
             exc_info=True,
         )
-        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, f"Top-up initiation failed: {str(e)}")
+        raise HTTPException(
+            status.HTTP_500_INTERNAL_SERVER_ERROR, f"Top-up initiation failed: {str(e)}"
+        )
 
 
 # ───────────────────────────────────────────────
 # Pay with Wallet (deduct from balance)
 # ───────────────────────────────────────────────
 async def pay_with_wallet(
-    user_id: UUID,
-    data: PayWithWalletRequest,
-    supabase: AsyncClient
+    user_id: UUID, data: PayWithWalletRequest, supabase: AsyncClient
 ) -> PayWithWalletResponse:
     """
     Deduct amount from user's wallet balance.
@@ -288,7 +292,6 @@ async def pay_with_wallet(
             .execute()
         )
 
-
         logger.info(
             "wallet_payment_success",
             user_id=str(user_id),
@@ -309,16 +312,16 @@ async def pay_with_wallet(
         logger.error(
             "wallet_payment_error", user_id=str(user_id), error=str(e), exc_info=True
         )
-        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, f"Wallet payment failed: {str(e)}")
-
-
+        raise HTTPException(
+            status.HTTP_500_INTERNAL_SERVER_ERROR, f"Wallet payment failed: {str(e)}"
+        )
 
 
 async def request_withdrawal(
     data: WithdrawalCreate,
     user_id: UUID,
     supabase: AsyncClient,
-    request = None,
+    request=None,
 ) -> WithdrawalResponse:
     try:
         # 1. Get user wallet
@@ -338,7 +341,9 @@ async def request_withdrawal(
         # 2. Check minimum and balance
         min_amount = Decimal("1000")
         if data.amount < min_amount:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, f"Minimum withdrawal is ₦{min_amount}")
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST, f"Minimum withdrawal is ₦{min_amount}"
+            )
 
         if current_balance < data.amount:
             raise HTTPException(400, "Insufficient balance")
@@ -348,24 +353,27 @@ async def request_withdrawal(
         net_amount = data.amount - fee
 
         # 4. Deduct from balance immediately
-        await supabase.rpc("update_wallet_balance", {
-            "p_user_id": str(user_id),
-            "p_delta": -data.amount,
-            "p_field": "balance"
-        }).execute()
+        await supabase.rpc(
+            "update_wallet_balance",
+            {"p_user_id": str(user_id), "p_delta": -data.amount, "p_field": "balance"},
+        ).execute()
 
         # 5. Create withdrawal record
         withdrawal = (
-            await supabase.table("withdrawals").insert({
-                "user_id": str(user_id),
-                "amount": float(data.amount),
-                "fee": float(fee),
-                "bank_name": data.bank_name,
-                "account_number": data.account_number,
-                "account_name": data.account_name,
-                "status": "PENDING",
-                "created_at": datetime.utcnow().isoformat(),
-            }).execute()
+            await supabase.table("withdrawals")
+            .insert(
+                {
+                    "user_id": str(user_id),
+                    "amount": float(data.amount),
+                    "fee": float(fee),
+                    "bank_name": data.bank_name,
+                    "account_number": data.account_number,
+                    "account_name": data.account_name,
+                    "status": "PENDING",
+                    "created_at": datetime.utcnow().isoformat(),
+                }
+            )
+            .execute()
         ).data[0]
 
         withdrawal_id = withdrawal["id"]
@@ -386,8 +394,16 @@ async def request_withdrawal(
 
     except Exception as e:
         # Rollback balance deduction on error (optional - add try/except rollback)
-        logger.error("Withdrawal request failed", user_id=str(user_id), error=str(e), exc_info=True)
-        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, f"Withdrawal request failed: {str(e)}")
+        logger.error(
+            "Withdrawal request failed",
+            user_id=str(user_id),
+            error=str(e),
+            exc_info=True,
+        )
+        raise HTTPException(
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+            f"Withdrawal request failed: {str(e)}",
+        )
 
 
 # Admin approve withdrawal (manual or auto)
@@ -400,7 +416,9 @@ async def approve_withdrawal(
     try:
         withdrawal = (
             await supabase.table("withdrawals")
-            .select("user_id, amount, fee, status, bank_name, account_number, account_name")
+            .select(
+                "user_id, amount, fee, status, bank_name, account_number, account_name"
+            )
             .eq("id", str(withdrawal_id))
             .single()
             .execute()
@@ -410,19 +428,29 @@ async def approve_withdrawal(
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Withdrawal not found")
 
         if withdrawal["status"] != "PENDING":
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, f"Withdrawal already {withdrawal['status']}")
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                f"Withdrawal already {withdrawal['status']}",
+            )
 
         # Here: Call Flutterwave Transfer API (or manual bank transfer)
         # For now, simulate success
         flutterwave_ref = f"TRF-{uuid.uuid4().hex[:12].upper()}"
 
         # Update status
-        await supabase.table("withdrawals").update({
-            "status": "PROCESSING",
-            "approved_at": datetime.utcnow().isoformat(),
-            "flutterwave_ref": flutterwave_ref,
-            "updated_at": datetime.utcnow().isoformat(),
-        }).eq("id", str(withdrawal_id)).execute()
+        await (
+            supabase.table("withdrawals")
+            .update(
+                {
+                    "status": "PROCESSING",
+                    "approved_at": datetime.utcnow().isoformat(),
+                    "flutterwave_ref": flutterwave_ref,
+                    "updated_at": datetime.utcnow().isoformat(),
+                }
+            )
+            .eq("id", str(withdrawal_id))
+            .execute()
+        )
 
         # Audit
         await log_audit_event(
@@ -434,17 +462,20 @@ async def approve_withdrawal(
             notes=f"Approved withdrawal of ₦{withdrawal['amount']} to {withdrawal['account_name']}",
         )
 
-        return {"success": True, "message": "Withdrawal approved and processing", "withdrawal_id": withdrawal_id}
+        return {
+            "success": True,
+            "message": "Withdrawal approved and processing",
+            "withdrawal_id": withdrawal_id,
+        }
 
     except Exception as e:
-        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, f"Approval failed: {str(e)}")
-
+        raise HTTPException(
+            status.HTTP_500_INTERNAL_SERVER_ERROR, f"Approval failed: {str(e)}"
+        )
 
 
 async def withdraw_all_balance(
-    current_profile: dict,
-    supabase: AsyncClient,
-    request = None
+    current_profile: dict, supabase: AsyncClient, request=None
 ) -> WithdrawResponse:
     """
     Withdraw ALL available balance to user's bank via Flutterwave Transfer API.
@@ -455,11 +486,13 @@ async def withdraw_all_balance(
     """
     try:
         # 1. Get current balance
-        wallet = await supabase.table("wallets")\
-            .select("balance")\
-            .eq("user_id", current_profile["id"])\
-            .single()\
+        wallet = (
+            await supabase.table("wallets")
+            .select("balance")
+            .eq("user_id", current_profile["id"])
+            .single()
             .execute()
+        )
 
         if not wallet.data:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Wallet not found")
@@ -467,98 +500,129 @@ async def withdraw_all_balance(
         balance = Decimal(str(wallet.data["balance"]))
 
         if balance <= 0:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, "No funds available to withdraw")
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST, "No funds available to withdraw"
+            )
 
         # 2. Fee (optional - flat or percentage, here flat ₦100)
         fee = Decimal("100")
         net_amount = balance - fee
 
         if net_amount <= 0:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Balance too low after fee")
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST, "Balance too low after fee"
+            )
 
         # 3. Generate reference
         reference = f"WITHDRAW-{uuid4().hex[:12].upper()}"
 
         # 4. Deduct full amount from balance (prevent double spend)
-        await supabase.rpc("update_wallet_balance", {
-            "p_user_id": current_profile["id"],
-            "p_delta": -balance,
-            "p_field": "balance"
-        }).execute()
+        await supabase.rpc(
+            "update_wallet_balance",
+            {
+                "p_user_id": current_profile["id"],
+                "p_delta": -balance,
+                "p_field": "balance",
+            },
+        ).execute()
 
         # 5. Create PENDING transaction
-        tx = await supabase.table("transactions").insert({
-            "tx_ref": reference,
-            "amount": Decimal(balance),
-            "from_user_id": current_profile["id"],
-            "to_user_id": None,
-            "transaction_type": TransactionType.WITHDRAWAL,
-            "status": "PENDING",
-            "payment_method": "FLUTTERWAVE_TRANSFER",
-            "details": {
-                "bank_name": current_profile["bank_name"],
-                "account_number": current_profile["account_number"],
-                "account_name": current_profile["account_holder_name"],
-                "fee": Decimal(fee),
-                "net_amount": Decimal(net_amount),
-                "narration": f"Withdrawal of NGN{balance} from your wallet"
-            },
-            "created_at": datetime.utcnow().isoformat()
-        }).execute()
+        tx = (
+            await supabase.table("transactions")
+            .insert(
+                {
+                    "tx_ref": reference,
+                    "amount": Decimal(balance),
+                    "from_user_id": current_profile["id"],
+                    "to_user_id": None,
+                    "transaction_type": TransactionType.WITHDRAWAL,
+                    "status": "PENDING",
+                    "payment_method": "FLUTTERWAVE_TRANSFER",
+                    "details": {
+                        "bank_name": current_profile["bank_name"],
+                        "account_number": current_profile["account_number"],
+                        "account_name": current_profile["account_holder_name"],
+                        "fee": Decimal(fee),
+                        "net_amount": Decimal(net_amount),
+                        "narration": f"Withdrawal of NGN{balance} from your wallet",
+                    },
+                    "created_at": datetime.utcnow().isoformat(),
+                }
+            )
+            .execute()
+        )
 
         tx_id = tx.data[0]["id"]
 
         # 6. Call Flutterwave Transfer API
         async with httpx.AsyncClient() as client:
             payload = {
-                "account_bank": current_profile["bank_name"],  # example: Access Bank code – get real code from user
-                "account_number": current_profile['account_number'],
+                "account_bank": current_profile[
+                    "bank_name"
+                ],  # example: Access Bank code – get real code from user
+                "account_number": current_profile["account_number"],
                 "amount": str(net_amount),
                 "narration": "Servipal Withdrawal",
                 "currency": "NGN",
                 "reference": reference,
                 "debit_currency": "NGN",
-                "beneficiary_name": current_profile['account_holder_name']
+                "beneficiary_name": current_profile["account_holder_name"],
             }
 
             headers = {
                 "Authorization": f"Bearer {settings.FLUTTERWAVE_SECRET_KEY}",
-                "Content-Type": "application/json"
+                "Content-Type": "application/json",
             }
 
             resp = await client.post(
                 "https://api.flutterwave.com/v3/transfers",
                 json=payload,
-                headers=headers
+                headers=headers,
             )
 
             fw_response = resp.json()
 
             if resp.status_code != 200 or fw_response.get("status") != "success":
                 # Transfer failed → refund balance
-                await supabase.rpc("update_wallet_balance", {
-                    "p_user_id": user_id,
-                    "p_delta": balance,
-                    "p_field": "balance"
-                }).execute()
+                await supabase.rpc(
+                    "update_wallet_balance",
+                    {"p_user_id": user_id, "p_delta": balance, "p_field": "balance"},
+                ).execute()
 
-                await supabase.table("transactions").update({
-                    "status": "FAILED",
-                    "details": {**payload, "flutterwave_error": fw_response}
-                }).eq("id", tx_id).execute()
+                await (
+                    supabase.table("transactions")
+                    .update(
+                        {
+                            "status": "FAILED",
+                            "details": {**payload, "flutterwave_error": fw_response},
+                        }
+                    )
+                    .eq("id", tx_id)
+                    .execute()
+                )
 
-                raise HTTPException(status.HTTP_400_BAD_REQUEST, f"Transfer failed: {fw_response.get('message', 'Unknown error')}")
+                raise HTTPException(
+                    status.HTTP_400_BAD_REQUEST,
+                    f"Transfer failed: {fw_response.get('message', 'Unknown error')}",
+                )
 
             # Success
-            await supabase.table("transactions").update({
-                "status": "COMPLETED",
-                "details": {
-                    **payload,
-                    "flutterwave_ref": fw_response["data"]["reference"],
-                    "flutterwave_id": fw_response["data"]["id"]
-                },
-                "updated_at": datetime.utcnow().isoformat()
-            }).eq("id", tx_id).execute()
+            await (
+                supabase.table("transactions")
+                .update(
+                    {
+                        "status": "COMPLETED",
+                        "details": {
+                            **payload,
+                            "flutterwave_ref": fw_response["data"]["reference"],
+                            "flutterwave_id": fw_response["data"]["id"],
+                        },
+                        "updated_at": datetime.utcnow().isoformat(),
+                    }
+                )
+                .eq("id", tx_id)
+                .execute()
+            )
 
             await log_audit_event(
                 entity_type="WITHDRAWAL",
@@ -568,7 +632,7 @@ async def withdraw_all_balance(
                 actor_id=user_id,
                 actor_type=current_profile["user_type"],
                 notes=f"Withdrawal of ₦{balance} (net ₦{net_amount}) completed to {current_profile['account_holder_name']}",
-                request=request
+                request=request,
             )
 
             return WithdrawResponse(
@@ -579,7 +643,7 @@ async def withdraw_all_balance(
                 net_amount=net_amount,
                 transaction_id=str(tx_id),
                 flutterwave_ref=fw_response["data"]["reference"],
-                status="COMPLETED"
+                status="COMPLETED",
             )
 
             await notify_user(
@@ -587,18 +651,25 @@ async def withdraw_all_balance(
                 title="Withdrawal Successful",
                 message=f"Withdrawal of ₦{balance} (net ₦{net_amount}) completed to {current_profile['account_holder_name']}",
                 notification_type="WITHDRAWAL",
-                request=request
+                request=request,
             )
 
     except HTTPException as he:
         raise he
     except Exception as e:
         # Emergency refund on any crash
-        await supabase.rpc("update_wallet_balance", {
-            "p_user_id": user_id,
-            "p_delta": balance,
-            "p_field": "balance"
-        }).execute()
+        await supabase.rpc(
+            "update_wallet_balance",
+            {"p_user_id": user_id, "p_delta": balance, "p_field": "balance"},
+        ).execute()
 
-        logger.critical("Withdrawal CRASH - refunded", user_id=current_profile["id"], error=str(e), exc_info=True)
-        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, f"Withdrawal failed (funds refunded): {str(e)}")
+        logger.critical(
+            "Withdrawal CRASH - refunded",
+            user_id=current_profile["id"],
+            error=str(e),
+            exc_info=True,
+        )
+        raise HTTPException(
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+            f"Withdrawal failed (funds refunded): {str(e)}",
+        )

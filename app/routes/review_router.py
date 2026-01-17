@@ -16,12 +16,12 @@ async def submit_review(
 ):
     """
     Submit a review after order completion.
-    
+
     Args:
         order_id (UUID): The order ID.
         order_type (str): Type of order (DELIVERY, FOOD, LAUNDRY, PRODUCT).
         review_data (ReviewCreate): Review details.
-        
+
     Returns:
         dict: Created review.
     """
@@ -35,11 +35,11 @@ async def get_entity_reviews(
 ):
     """
     Get all reviews for a specific entity.
-    
+
     Args:
         entity_id (UUID): The entity ID.
         entity_type (str): Type of entity (RIDER, VENDOR, DISPATCH).
-        
+
     Returns:
         ReviewsListResponse: List of reviews.
     """

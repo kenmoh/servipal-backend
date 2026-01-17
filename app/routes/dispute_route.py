@@ -24,10 +24,10 @@ async def create_dispute(
 ):
     """
     Create a new dispute.
-    
+
     Args:
         data (DisputeCreate): Dispute details.
-        
+
     Returns:
         DisputeResponse: Created dispute.
     """
@@ -41,7 +41,7 @@ async def get_my_disputes(
 ):
     """
     Get disputes involved with the current user.
-    
+
     Returns:
         List[DisputeResponse]: List of disputes.
     """
@@ -55,10 +55,10 @@ async def get_dispute_detail(
 ):
     """
     Get details of a specific dispute.
-    
+
     Args:
         dispute_id (UUID): The dispute ID.
-        
+
     Returns:
         DisputeResponse: Dispute details with messages.
     """
@@ -75,11 +75,11 @@ async def post_dispute_message(
 ):
     """
     Post a message to a dispute.
-    
+
     Args:
         dispute_id (UUID): The dispute ID.
         data (DisputeMessageCreate): Message content.
-        
+
     Returns:
         dict: Created message.
     """
@@ -99,11 +99,11 @@ async def resolve_dispute(
 ):
     """
     Admin/Moderator resolves a dispute.
-    
+
     Args:
         dispute_id (UUID): The dispute ID.
         data (DisputeResolve): Resolution details.
-        
+
     Returns:
         dict: Resolution status.
     """

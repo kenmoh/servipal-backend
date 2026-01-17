@@ -12,14 +12,17 @@ from enum import Enum
 
 
 class ProductType(str, Enum):
-    DIGITAL = 'DIGITAL'
-    PHYSICAL = 'PHYSICAL'
+    DIGITAL = "DIGITAL"
+    PHYSICAL = "PHYSICAL"
+
 
 class ProductItemCreate(BaseModel):
     name: str = Field(..., min_length=3, max_length=200)
     description: Optional[str] = None
     price: Decimal = Field(..., gt=0)
-    product_type: ProductType = Field(description="DIGITAL or PHYSICAL", default=ProductType.PHYSICAL)
+    product_type: ProductType = Field(
+        description="DIGITAL or PHYSICAL", default=ProductType.PHYSICAL
+    )
     stock: int = Field(..., ge=0, description="Initial stock quantity")
     sizes: Optional[List[str]] = Field(
         None, description="Available sizes e.g. ['S', 'M', 'L', 42]"

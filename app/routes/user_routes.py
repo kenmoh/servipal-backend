@@ -26,10 +26,10 @@ async def create_rider(
 ):
     """
     Dispatch owner creates a new rider account.
-    
+
     Args:
         data (RiderCreateByDispatch): Rider details (phone, name, etc.).
-        
+
     Returns:
         UserProfileResponse: The created rider's profile.
     """
@@ -48,7 +48,7 @@ async def get_my_profile(
 ):
     """
     Get the current user's profile.
-    
+
     Returns:
         UserProfileResponse: User profile details.
     """
@@ -65,10 +65,10 @@ async def update_profile(
 ):
     """
     Update the current user's profile.
-    
+
     Args:
         data (ProfileUpdate): Fields to update.
-        
+
     Returns:
         UserProfileResponse: Updated profile.
     """
@@ -89,7 +89,7 @@ async def get_my_riders(
 ):
     """
     Get all riders managed by the current dispatch user (raw RPC call).
-    
+
     Returns:
         list: List of riders.
     """
@@ -162,10 +162,10 @@ async def view_rider_earnings(
 ):
     """
     View earnings for a specific rider.
-    
+
     Args:
         rider_id (UUID): The ID of the rider.
-        
+
     Returns:
         RiderEarningsResponse: Earnings data.
     """
@@ -183,7 +183,7 @@ async def vendor_earnings_dashboard(
 ):
     """
     Get earnings dashboard for vendors and dispatch.
-    
+
     Returns:
         dict: Earnings summary and details.
     """
@@ -199,10 +199,10 @@ async def upload_profile_pic(
 ):
     """
     Upload a profile picture.
-    
+
     Args:
         file (UploadFile): The image file.
-        
+
     Returns:
         dict: Success status and image URL.
     """
@@ -232,10 +232,10 @@ async def upload_backdrop(
 ):
     """
     Upload a backdrop/cover image.
-    
+
     Args:
         file (UploadFile): The image file.
-        
+
     Returns:
         dict: Success status and image URL.
     """
@@ -261,8 +261,7 @@ async def upload_backdrop(
 # ───────────────────────────────────────────────
 @router.get("/riders/{rider_id}", response_model=DetailedRiderResponse)
 async def get_rider_details(
-    rider_id: UUID,
-    supabase: AsyncClient = Depends(get_supabase_client)
+    rider_id: UUID, supabase: AsyncClient = Depends(get_supabase_client)
 ):
     """
     Get full rider profile + stats + dispatch-level aggregated stats.
@@ -277,7 +276,7 @@ async def set_online_status(
 ):
     """
     Toggle the user's online/offline status (for riders/vendors).
-    
+
     Returns:
         dict: New status.
     """

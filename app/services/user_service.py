@@ -440,8 +440,7 @@ async def get_available_riders(
 
 
 async def get_rider_details(
-    rider_id: UUID,
-    supabase: AsyncClient 
+    rider_id: UUID, supabase: AsyncClient
 ) -> DetailedRiderResponse:
     """
     Get full rider profile + stats + dispatch-level aggregated stats.
@@ -487,10 +486,7 @@ async def get_rider_details(
             )
             dispatch_stats = dispatch.data
 
-        return DetailedRiderResponse(
-            **rider.data,
-            dispatch_stats=dispatch_stats
-        )
+        return DetailedRiderResponse(**rider.data, dispatch_stats=dispatch_stats)
 
     except Exception as e:
         logger.error("get_rider_details failed", rider_id=str(rider_id), error=str(e))
@@ -823,8 +819,6 @@ async def update_user_location(
             status.HTTP_500_INTERNAL_SERVER_ERROR,
             f"Failed to update location: {str(e)}",
         )
-
-
 
 
 async def toggle_online_status(

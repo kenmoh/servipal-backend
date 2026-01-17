@@ -35,11 +35,11 @@ async def list_food_vendors(
 ):
     """
     List restaurant vendors.
-    
+
     Args:
         lat (float, optional): Latitude for nearby search.
         lng (float, optional): Longitude for nearby search.
-        
+
     Returns:
         List[VendorCardResponse]: List of vendors.
     """
@@ -52,10 +52,10 @@ async def get_vendor_menu(
 ):
     """
     Get vendor details and full menu.
-    
+
     Args:
         vendor_id (UUID): The vendor ID.
-        
+
     Returns:
         VendorDetailResponse: Vendor details including menu categories.
     """
@@ -79,7 +79,7 @@ async def add_menu_item_with_images(
 ):
     """
     Vendor adds a new food item with optional images.
-    
+
     Args:
         name (str): Item name.
         description (str, optional): Item description.
@@ -87,7 +87,7 @@ async def add_menu_item_with_images(
         category_id (UUID, optional): Menu category ID.
         sizes (List[str], optional): Available sizes.
         images (List[UploadFile]): List of image files.
-        
+
     Returns:
         dict: Created item details.
     """
@@ -115,11 +115,11 @@ async def update_menu_item(
 ):
     """
     Vendor updates an existing food item.
-    
+
     Args:
         item_id (UUID): The item ID.
         item_data (FoodItemUpdate): Fields to update.
-        
+
     Returns:
         dict: Updated item details.
     """
@@ -142,10 +142,10 @@ async def delete_menu_item(
 ):
     """
     Vendor soft-deletes a food item.
-    
+
     Args:
         item_id (UUID): The item ID.
-        
+
     Returns:
         dict: Success status.
     """
@@ -187,10 +187,10 @@ async def initiate_food_payment_endpoint(
 ):
     """
     Customer initiates food order payment.
-    
+
     Args:
         data (CheckoutRequest): Order details including items.
-        
+
     Returns:
         dict: Payment initiation response (Flutterwave).
     """
@@ -214,11 +214,11 @@ async def vendor_food_order_action_endpoint(
 ):
     """
     Vendor accepts or rejects a food order.
-    
+
     Args:
         order_id (UUID): The order ID.
         action_data (Literal['accept', 'reject']): The action.
-        
+
     Returns:
         dict: Action result.
     """
@@ -242,10 +242,10 @@ async def vendor_mark_ready_endpoint(
 ):
     """
     Vendor marks food order as ready for pickup/delivery.
-    
+
     Args:
         order_id (UUID): The order ID.
-        
+
     Returns:
         dict: Updated order status.
     """
@@ -264,10 +264,10 @@ async def customer_confirm_food_endpoint(
     """
     Customer confirms receipt of food order.
     Releases payment to vendor.
-    
+
     Args:
         order_id (UUID): The order ID.
-        
+
     Returns:
         dict: Confirmation result.
     """

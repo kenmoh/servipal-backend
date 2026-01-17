@@ -3,6 +3,7 @@ from uuid import UUID
 from decimal import Decimal
 from datetime import datetime
 from typing import Optional, Dict, List
+from enum import Enum
 
 
 class WalletTransactionResponse(BaseModel):
@@ -88,7 +89,10 @@ class WithdrawAllRequest(BaseModel):
     bank_name: str = Field(..., min_length=2)
     account_number: str = Field(..., min_length=10, max_length=10)
     account_name: str = Field(..., min_length=2)
-    narration: Optional[str] = Field("Servipal Wallet Withdrawal", description="Optional reference")
+    narration: Optional[str] = Field(
+        "Servipal Wallet Withdrawal", description="Optional reference"
+    )
+
 
 class WithdrawResponse(BaseModel):
     success: bool
@@ -99,12 +103,38 @@ class WithdrawResponse(BaseModel):
     transaction_id: str
     flutterwave_ref: Optional[str]
     status: str
-    
+
+
+class WithdrawalCreate(BaseModel):
+    amount: Decimal = Field(..., gt=0)
+    bank_name: str
+    account_number: str
+    account_name: str
+
+
+class WithdrawalResponse(BaseModel):
+    id: UUID
+    user_id: UUID
+    amount: Decimal
+    fee: Decimal
+    bank_name: str
+    account_number: str
+    account_name: str
+    status: str
+    created_at: datetime
+    approved_at: Optional[datetime] = None
+    flutterwave_ref: Optional[str] = None
+
+
+class WithdrawalListResponse(BaseModel):
+    withdrawals: List[WithdrawalResponse]
+    total_count: int
+
+
 class TransactionType(str, Enum):
     TOP_UP = "TOP_UP"
     PRODUCT_ORDER = "PRODUCT_ORDER"
     FOOD_ORDER = "FOOD_ORDER"
     LAUNDRY_ORDER = "LAUNDRY_ORDER"
     DELIVERY_FEE = "DELIVERY_FEE"
-    WITHDRAWAL = "WITHDRAWAL"        
-    
+    WITHDRAWAL = "WITHDRAWAL"
