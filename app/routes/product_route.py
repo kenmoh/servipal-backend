@@ -1,6 +1,8 @@
-from fastapi import APIRouter, Depends
-from typing import List
+from fastapi import APIRouter, Depends, Form, File, UploadFile
+from typing import List, Optional
+from decimal import Decimal
 from uuid import UUID
+import uuid
 from app.database.supabase import get_supabase_client
 from supabase import AsyncClient
 from app.schemas.product_schemas import (
@@ -13,11 +15,13 @@ from app.schemas.product_schemas import (
     ProductVendorOrderActionResponse,
     ProductVendorMarkReadyResponse,
     ProductCustomerConfirmResponse,
+ProductType
 )
 from app.services import product_service
 from app.dependencies.auth import get_current_profile, require_user_type
 from app.dependencies.auth import get_customer_contact_info
 from app.schemas.user_schemas import UserType
+from app.utils.storage import upload_to_supabase_storage
 
 router = APIRouter(prefix="/api/v1/product", tags=["Marketplace"])
 
@@ -27,15 +31,51 @@ router = APIRouter(prefix="/api/v1/product", tags=["Marketplace"])
 # ───────────────────────────────────────────────
 @router.post("/items", response_model=ProductItemResponse)
 async def create_product_item(
-    data: ProductItemCreate,
+    name: str = Form(..., min_length=3, max_length=200),
+    description: Optional[str] = Form(None),
+    price: Decimal = Form(..., gt=0),
+    product_type: ProductType = Form(ProductType.PHYSICAL),
+    stock: int = Form(..., ge=0),
+    sizes: Optional[str] = Form(None, description="Comma-separated sizes"),
+    colors: Optional[str] = Form(None, description="Comma-separated colors"),
+    category_id: Optional[UUID] = Form(None),
+    images: List[UploadFile] = File(default=[]),
     current_profile: dict = Depends(get_current_profile),
     supabase: AsyncClient = Depends(get_supabase_client),
 ):
-    """Any logged-in user can list a product for sale"""
-    return await product_service.create_product_item(
-        data, current_profile["id"], supabase
-    )
+    """Any logged-in user can list a product for sale (with images upload)"""
 
+    parsed_sizes = [s.strip() for s in sizes.split(",")] if sizes else []
+    parsed_colors = [c.strip() for c in colors.split(",")] if colors else []
+
+    uploaded_images = []
+    if images:
+        product_folder = f"products/{uuid.uuid4().hex}"
+        for file in images:
+            url = await upload_to_supabase_storage(
+                file=file,
+                supabase=supabase,
+                bucket="product-images",
+                folder=product_folder
+            )
+            uploaded_images.append(url)
+            
+    data = ProductItemCreate(
+        name=name,
+        description=description,
+        price=price,
+        product_type=product_type,
+        stock=stock,
+        sizes=parsed_sizes,
+        colors=parsed_colors,
+        category_id=category_id,
+        images=uploaded_images,
+    )
+    return await product_service.create_product_item(
+        data=data,
+        seller_id=current_profile["id"],
+        supabase=supabase,
+    )
 
 @router.get("/items/{item_id}", response_model=ProductItemResponse)
 async def get_product_item(

@@ -13,9 +13,10 @@ from app.schemas.common import (
 from app.dependencies.auth import get_customer_contact_info
 from app.config.logging import logger
 from app.utils.audit import log_audit_event
-from typing import Optional
+from typing import Optional, Literal
 from decimal import Decimal
 from datetime import datetime
+from app.services.notification_service import notify_user
 
 
 # ───────────────────────────────────────────────
@@ -84,7 +85,7 @@ async def vendor_food_order_action(
     try:
         order = (
             await supabase.table("food_orders")
-            .select("id, vendor_id, order_status, payment_status, grand_total")
+            .select("id, vendor_id, customer_id, order_status, payment_status, grand_total")
             .eq("id", str(order_id))
             .single()
             .execute()
@@ -159,6 +160,21 @@ async def vendor_food_order_action(
             .update({"order_status": new_status})
             .eq("id", str(order_id))
             .execute()
+        )
+
+        # Notify customer
+        title = "Order Accepted!" if action == "accept" else "Order Rejected"
+        body = (
+            "Your food order is being prepared."
+            if action == "accept"
+            else "Your food order was rejected and refunded to your balance."
+        )
+        await notify_user(
+            user_id=UUID(order.data["customer_id"]),
+            title=title,
+            body=body,
+            data={"order_id": str(order_id), "type": "FOOD_ORDER_UPDATE", "status": new_status},
+            supabase=supabase,
         )
 
         # Audit log

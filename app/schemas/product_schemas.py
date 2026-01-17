@@ -3,18 +3,26 @@ from typing import List, Optional, Literal
 from uuid import UUID
 from decimal import Decimal
 from datetime import datetime
+from enum import Enum
 
 
 # ───────────────────────────────────────────────
 # Product Item (what sellers list)
 # ───────────────────────────────────────────────
+
+
+class ProductType(str, Enum):
+    DIGITAL = 'DIGITAL'
+    PHYSICAL = 'PHYSICAL'
+
 class ProductItemCreate(BaseModel):
     name: str = Field(..., min_length=3, max_length=200)
     description: Optional[str] = None
     price: Decimal = Field(..., gt=0)
+    product_type: ProductType = Field(description="DIGITAL or PHYSICAL", default=ProductType.PHYSICAL)
     stock: int = Field(..., ge=0, description="Initial stock quantity")
-    sizes: Optional[List[int | Literal["S", "M", "L", "XL", "XXL"]]] = Field(
-        None, description="Available sizes e.g. ['S', 'M', 'L', 45, 32]"
+    sizes: Optional[List[str]] = Field(
+        None, description="Available sizes e.g. ['S', 'M', 'L', 42]"
     )
     colors: Optional[List[str]] = Field(
         None, description="Available colors e.g. ['Red', 'Blue', '#000000']"

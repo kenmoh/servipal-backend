@@ -290,6 +290,19 @@ wheels = [
 ]
 
 [[package]]
+name = "exponent-server-sdk"
+version = "2.2.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "requests" },
+    { name = "six" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/ca/1d/bacc1c009f6a270c098305d83e6da0b54db218f095d8ebd1b4e0a3000abd/exponent_server_sdk-2.2.0.tar.gz", hash = "sha256:162f3b9732a05e8dd8c1263a7ea2aa27c235a2927a4ca08440ba171c95beb449", size = 8669, upload-time = "2025-07-03T15:38:06.119Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/e3/6a/9cdf0c704ca375690a0f1543b76bd0fe459c9d1c41ef4c50b2d276e6eb8d/exponent_server_sdk-2.2.0-py3-none-any.whl", hash = "sha256:ee5825baa9870fcdb28f93b3404a5e042c3784d861060e59f7dfd549347a6f0c", size = 8797, upload-time = "2025-07-03T15:38:05.033Z" },
+]
+
+[[package]]
 name = "fastapi"
 version = "0.128.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1398,6 +1411,7 @@ name = "servipal-backend"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
+    { name = "exponent-server-sdk" },
     { name = "fastapi", extra = ["standard"] },
     { name = "pydantic-settings" },
     { name = "redis" },
@@ -1409,6 +1423,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
+    { name = "exponent-server-sdk", specifier = ">=2.2.0" },
     { name = "fastapi", extras = ["standard"], specifier = ">=0.128.0" },
     { name = "pydantic-settings", specifier = ">=2.12.0" },
     { name = "redis", specifier = ">=7.1.0" },

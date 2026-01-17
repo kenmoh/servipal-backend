@@ -26,6 +26,7 @@ from app.config.config import settings
 from app.config.logging import logger
 from app.utils.audit import log_audit_event
 from decimal import Decimal
+from app.services.notification_service import notify_user
 
 
 # 1. Initiate Delivery (Pay First — No Rider Yet)
@@ -155,6 +156,16 @@ async def assign_rider_to_order(
 
         result = assign_resp.data
 
+        # Notify rider
+        if result["success"]:
+            await notify_user(
+                user_id=data.rider_id,
+                title="New Delivery Assigned!",
+                body="You have a new order",
+                data={"order_id": str(order_id), "type": "DELIVERY_ASSIGNED"},
+                supabase=supabase,
+            )
+
         return AssignRiderResponse(
             success=result["success"],
             message=result["message"],
@@ -194,7 +205,7 @@ async def rider_delivery_action(
         if order.data["rider_id"] != str(rider_id):
             raise HTTPException(status.HTTP_403_FORBIDDEN, "Not your delivery order")
 
-        if order.data["dlivery_status"] != "ASSIGNED":
+        if order.data["delivery_status"] != "ASSIGNED":
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST, f"Order is {order['status']}, cannot act"
             )
@@ -280,6 +291,15 @@ async def rider_picked_up(
             .execute()
         )
 
+        # Notify sender
+        await notify_user(
+            user_id=UUID(order["sender_id"]),
+            title="Package Picked Up!",
+            body="The rider has picked up your package and is on the way.",
+            data={"order_id": str(order_id), "type": "DELIVERY_PICKED_UP"},
+            supabase=supabase,
+        )
+
         return {
             "success": True,
             "message": "Package picked up. Dispatch escrow credited (virtual hold).",
@@ -325,6 +345,24 @@ async def rider_confirm_delivery(
             .execute()
         )
 
+        # Notify sender
+        # We need sender_id, let's get it if not available
+        sender_id_resp = (
+            await supabase.table("delivery_orders")
+            .select("sender_id")
+            .eq("id", str(order_id))
+            .single()
+            .execute()
+        )
+        if sender_id_resp.data:
+            await notify_user(
+                user_id=UUID(sender_id_resp.data["sender_id"]),
+                title="Package Delivered!",
+                body="Your package has been delivered. Please confirm receipt to release payment.",
+                data={"order_id": str(order_id), "type": "DELIVERY_DELIVERED"},
+                supabase=supabase,
+            )
+
         return {
             "success": True,
             "message": "Delivery confirmed! Waiting for sender to confirm receipt.",
@@ -365,7 +403,7 @@ async def sender_confirm_receipt(
                 status.HTTP_403_FORBIDDEN, "You are not the sender of this package"
             )
 
-        if order["delivery_status"] != "DELIVERED":
+        if order["status"] != "DELIVERED":
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
                 f"Cannot confirm receipt. Current status: {order['status']}",
@@ -401,6 +439,16 @@ async def sender_confirm_receipt(
             .eq("id", str(order_id))
             .execute()
         )
+
+        # Notify rider/dispatch
+        if order.get("rider_id"):
+            await notify_user(
+                user_id=UUID(order["rider_id"]),
+                title="Delivery Completed!",
+                body=f"The sender has confirmed receipt. NGN {dispatch_amount} has been added to your balance.",
+                data={"order_id": str(order_id), "type": "DELIVERY_COMPLETED"},
+                supabase=supabase,
+            )
 
         await log_audit_event(
             supabase,

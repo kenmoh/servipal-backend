@@ -26,9 +26,8 @@ async def create_product_item(
     data: ProductItemCreate, seller_id: UUID, supabase: AsyncClient
 ) -> ProductItemResponse:
     try:
-        item_data = data.model_dump(exclude_unset=True)
+        item_data = data.model_dump()
         item_data["seller_id"] = str(seller_id)
-        item_data["stock"] = data.stock
         item_data["total_sold"] = 0
 
         resp = await supabase.table("product_items").insert(item_data).execute()
@@ -41,6 +40,8 @@ async def create_product_item(
 
         return ProductItemResponse(**resp.data[0])
 
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
