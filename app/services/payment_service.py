@@ -163,7 +163,8 @@ async def process_successful_food_payment(
     expected_total = pending["grand_total"]
     customer_id = pending["customer_id"]
     vendor_id = pending["vendor_id"]
-    order_data = pending["order_data"]  # contains items, subtotal, delivery_fee, etc.
+    delivery_fee = pending.get("delivery_fee", 0)
+    order_data = pending["order_data"]   # contains items, subtotal, delivery_fee, etc.
 
     # Idempotency + amount validation
     existing_tx = (
@@ -187,6 +188,11 @@ async def process_successful_food_payment(
         return {"status": "amount_mismatch"}
 
     try:
+        # Get dynamic commission rate for FOOD
+        commission_rate = await get_commission_rate("FOOD", supabase)
+
+        # Calculate what vendor should receive (grand_total - commission)
+        amount_due_vendor = expected_total * (1 - commission_rate)
         # 1. Create food_order record
         order_resp = (
             await supabase.table("food_orders")
@@ -194,10 +200,11 @@ async def process_successful_food_payment(
                 {
                     "customer_id": customer_id,
                     "vendor_id": vendor_id,
-                    "subtotal": order_data["subtotal"],
-                    "delivery_fee": order_data["delivery_fee"],
+                    "total_price": order_data["total_price"],
+                    "delivery_fee": delivery_fee,
                     "grand_total": expected_total,
-                    "cooking_instructions": order_data.get("cooking_instructions"),
+                    "amount_due_vendor": amount_due_vendor,
+                    "additional_info": order_data.get("additional_info"),
                     "delivery_option": order_data["delivery_option"],
                     "order_status": "PENDING",
                     "payment_status": "PAID",
@@ -258,6 +265,10 @@ async def process_successful_food_payment(
         # 5. Cleanup Redis
         await delete_pending(pending_key)
 
+        logger.info(
+            "food_payment_processed_success", tx_ref=tx_ref, order_id=str(order_id)
+        )
+
         # Audit log
         await log_audit_event(
             supabase,
@@ -272,9 +283,16 @@ async def process_successful_food_payment(
             request=request,
         )
 
-        logger.info(
-            "food_payment_processed_success", tx_ref=tx_ref, order_id=str(order_id)
-        )
+
+        # Log platform commission
+        await supabase.table("platform_commissions").insert({
+            "to_user_id": vendor_id,
+            "from_user_id": customer_id,
+            "order_id": str(order_id),
+            "service_type": "FOOD",
+            "description": f"Platform commission from food order {order_id} (₦{amount_due_vendor})"
+        }).execute()
+
         return {"status": "success", "order_id": str(order_id)}
 
     except Exception as e:
@@ -495,5 +513,133 @@ async def process_successful_product_payment(
 
     except Exception as e:
         print(f"Product payment processing error for {tx_ref}: {e}")
+        await delete_pending(pending_key)
+        raise
+
+
+async def process_successful_laundry_payment(
+    tx_ref: str,
+    paid_amount: float,
+    flw_ref: str,
+    supabase: AsyncClient,
+    request: Optional[Request] = None,
+):
+    """
+    Handle successful payment for laundry order (webhook callback).
+    - Creates laundry_orders record
+    - Holds full amount in customer escrow
+    - Calculates amount_due_vendor (vendor gets subtotal - commission)
+    - Logs platform commission
+    - Creates transaction record
+    """
+    pending_key = f"pending_laundry_{tx_ref}"
+    pending = await get_pending(pending_key)
+
+    if not pending:
+        logger.warning("laundry_payment_pending_not_found", tx_ref=tx_ref)
+        return  # already processed or expired
+
+    expected_total = pending["grand_total"]
+    customer_id = pending["customer_id"]
+    vendor_id = pending["vendor_id"]
+    subtotal = pending["total_price"]
+    delivery_fee = pending.get("delivery_fee", 0)
+
+    if paid_amount != expected_total:
+        logger.warning(
+            "laundry_payment_amount_mismatch",
+            tx_ref=tx_ref,
+            expected=expected_total,
+            paid=paid_amount,
+        )
+        await delete_pending(pending_key)
+        return
+
+    try:
+        # Get dynamic commission rate for LAUNDRY
+        commission_rate = await get_commission_rate("LAUNDRY", supabase)
+
+        # Calculate vendor share (usually on subtotal only)
+        amount_due_vendor = expected_total * (1 - commission_rate)
+
+        # Platform commission amount (for logging)
+        commission_amount = expected_total - amount_due_vendor
+
+        # Create laundry_orders record
+        order_resp = await supabase.table("laundry_orders").insert({
+            "customer_id": customer_id,
+            "vendor_id": vendor_id,
+            "subtotal": subtotal,
+            "delivery_fee": delivery_fee,
+            "total_price": subtotal,
+            "grand_total": expected_total,
+            "additional_info": pending.get("additional_info"),
+            "delivery_option": pending.get("delivery_option"),
+            "order_status": "PENDING",
+            "payment_status": "PAID",
+            "escrow_status": "HELD",
+            "amount_due_vendor": amount_due_vendor,
+        }).execute()
+
+        order_id = order_resp.data[0]["id"]
+
+        # Hold full amount in customer escrow
+        await supabase.rpc("update_wallet_balance", {
+            "p_user_id": customer_id,
+            "p_delta": expected_total,
+            "p_field": "escrow_balance"
+        }).execute()
+
+        # Create transaction record
+        await supabase.table("transactions").insert({
+            "tx_ref": tx_ref,
+            "amount": expected_total,
+            "from_user_id": customer_id,
+            "to_user_id": vendor_id,  # or null if held in escrow
+            "order_id": order_id,
+            "transaction_type": "LAUNDRY_ORDER",
+            "status": "HELD",
+            "payment_method": "FLUTTERWAVE",
+            "details": {"flw_ref": flw_ref}
+        }).execute()
+
+        # Log platform commission
+        await supabase.table("platform_commissions").insert({
+            "to_user_id": vendor_id,
+            "from_user_id": customer_id,
+            "order_id": str(order_id),
+            "service_type": "LAUNDRY",
+            "description": f"Platform commission from laundry order {order_id} (₦{amount_due_vendor})"
+        }).execute()
+
+        await delete_pending(pending_key)
+
+        # Audit log
+        await log_audit_event(
+            supabase,
+            entity_type="LAUNDRY_ORDER",
+            entity_id=str(order_id),
+            action="PAYMENT_RECEIVED",
+            new_value={"payment_status": "PAID", "amount": expected_total},
+            actor_id=customer_id,
+            actor_type="USER",
+            change_amount=Decimal(str(expected_total)),
+            notes=f"Laundry payment received via Flutterwave: {tx_ref}",
+            request=request,
+        )
+
+        logger.info(
+            "laundry_payment_processed_success",
+            tx_ref=tx_ref,
+            order_id=str(order_id)
+        )
+
+    except Exception as e:
+        logger.error(
+            "laundry_payment_processing_error",
+            tx_ref=tx_ref,
+            error=str(e),
+            exc_info=True,
+        )
         await delete_pending(pending_key)
         raise

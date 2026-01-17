@@ -18,6 +18,7 @@ from app.utils.dispute_helpers import (
     refund_escrow,
     release_escrow,
 )
+from app.services.notification_service import notify_user
 
 
 # ───────────────────────────────────────────────
@@ -92,10 +93,10 @@ async def post_dispute_message(
         .execute()
     )
 
-    if sender_id not in [
-        dispute.data["initiator_id"],
-        dispute.data["respondent_id"],
-    ] and not is_admin(sender_id, supabase):
+    if str(sender_id) not in [
+        str(dispute.data["initiator_id"]),
+        str(dispute.data["respondent_id"]),
+    ] and not await is_admin(sender_id, supabase):
         raise HTTPException(403, "You are not part of this dispute")
 
     if dispute.data["status"] in ["RESOLVED", "CLOSED"]:
@@ -141,7 +142,7 @@ async def resolve_dispute(
     dispute_id: UUID, data: DisputeResolve, admin_id: UUID, supabase: AsyncClient
 ):
     # Check admin
-    if not is_admin(admin_id, supabase):
+    if not await is_admin(admin_id, supabase):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only admins can resolve disputes",
@@ -150,7 +151,7 @@ async def resolve_dispute(
     # Fetch dispute + order
     dispute = (
         await supabase.table("disputes")
-        .select("order_id, order_type, status")
+        .select("order_id, order_type, status, initiator_id, respondent_id")
         .eq("id", str(dispute_id))
         .single()
         .execute()
@@ -221,7 +222,9 @@ async def resolve_dispute(
         supabase=supabase,
     )
 
-    # Notify participants (later)
+    # Notify participants 
+    await notify_user(dispute.data["initiator_id"], "Dispute resolved", "Your dispute has been resolved", data={"dispute_id": str(dispute_id)}, supabase=supabase)
+    await notify_user(dispute.data["respondent_id"], "Dispute resolved", "Your dispute has been resolved", data={"dispute_id": str(dispute_id)}, supabase=supabase)
 
     return {"success": True, "message": "Dispute resolved"}
 

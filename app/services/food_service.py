@@ -1,3 +1,4 @@
+from uuid import UUID
 import uuid
 from supabase.client import AsyncClient
 from fastapi import HTTPException, UploadFile, Request
@@ -13,7 +14,7 @@ from app.schemas.common import (
 from app.dependencies.auth import get_customer_contact_info
 from app.config.logging import logger
 from app.utils.audit import log_audit_event
-from typing import Optional, Literal
+from typing import Optional, Literal, List, Dict
 from decimal import Decimal
 from datetime import datetime
 from app.services.notification_service import notify_user
@@ -266,7 +267,7 @@ async def customer_confirm_food_order(
     try:
         order = (
             await supabase.table("food_orders")
-            .select("id, customer_id, vendor_id, grand_total, order_status")
+            .select("id, customer_id, vendor_id, grand_total, amount_due_vendor, order_status")
             .eq("id", str(order_id))
             .single()
             .execute()
@@ -346,6 +347,14 @@ async def customer_confirm_food_order(
             order_id=str(order_id),
             amount_released=float(full_amount),
         )
+        await supabase.table("platform_commissions").insert({
+            "to_user_id": vendor_id,
+            "from_user_id": customer_id,
+            "order_id": str(order_id),
+            "service_type": "FOOD",
+            "description": f"Platform commission from delivery order {order_id} (₦{platform_fee})"
+        }).execute()
+
         return {
             "success": True,
             "message": "Order confirmed! Payment released to vendor.",
@@ -633,11 +642,11 @@ async def initiate_food_payment(
             "customer_id": str(customer_id),
             "vendor_id": str(data.vendor_id),
             "items": [item.model_dump() for item in data.items],
-            "subtotal": float(subtotal),
-            "delivery_fee": float(delivery_fee),
-            "grand_total": float(grand_total),
+            "total_price": Decimal(subtotal),
+            "delivery_fee": Decimal(delivery_fee),
+            "grand_total": Decimal(grand_total),
             "delivery_option": data.delivery_option,
-            "cooking_instructions": data.cooking_instructions,
+            "additional_info": data.cooking_instructions,
             "tx_ref": tx_ref,
             "created_at": datetime.now().isoformat(),
         }

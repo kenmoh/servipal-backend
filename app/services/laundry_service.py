@@ -1,7 +1,7 @@
 from uuid import UUID
 import uuid
 from datetime import datetime
-from typing import Optional, List
+from typing import Optional, List, Dict
 from decimal import Decimal
 from fastapi import HTTPException, status, Request
 from app.utils.redis_utils import save_pending

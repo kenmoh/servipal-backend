@@ -95,7 +95,7 @@ async def is_admin(user_id: UUID, supabase: AsyncClient) -> bool:
     if not profile.data:
         return False
 
-    return profile.data["user_type"] in ["ADMIN", "MODERATOR", "SUPERADMIN"]
+    return profile.data["user_type"] in ["ADMIN", "MODERATOR", "SUPER_ADMIN"]
 
 
 # Helper: Refund escrow to buyer (atomic)

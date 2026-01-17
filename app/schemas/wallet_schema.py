@@ -41,6 +41,7 @@ class PayWithWalletRequest(BaseModel):
     to_user_id: Optional[UUID]
     order_id: Optional[UUID]
     transaction_type: str = "ORDER_PAYMENT"
+    details: Optional[Dict] = None
 
 
 class CustomerInfo(BaseModel):
@@ -81,3 +82,29 @@ class PayWithWalletResponse(BaseModel):
     message: str = Field(..., description="Payment successful from wallet")
     new_balance: Decimal = Field(..., description="New balance after payment")
     tx_ref: str = Field(..., description="Unique transaction reference for this top-up")
+
+
+class WithdrawAllRequest(BaseModel):
+    bank_name: str = Field(..., min_length=2)
+    account_number: str = Field(..., min_length=10, max_length=10)
+    account_name: str = Field(..., min_length=2)
+    narration: Optional[str] = Field("Servipal Wallet Withdrawal", description="Optional reference")
+
+class WithdrawResponse(BaseModel):
+    success: bool
+    message: str
+    amount_withdrawn: Decimal
+    fee: Decimal
+    net_amount: Decimal
+    transaction_id: str
+    flutterwave_ref: Optional[str]
+    status: str
+    
+class TransactionType(str, Enum):
+    TOP_UP = "TOP_UP"
+    PRODUCT_ORDER = "PRODUCT_ORDER"
+    FOOD_ORDER = "FOOD_ORDER"
+    LAUNDRY_ORDER = "LAUNDRY_ORDER"
+    DELIVERY_FEE = "DELIVERY_FEE"
+    WITHDRAWAL = "WITHDRAWAL"        
+    

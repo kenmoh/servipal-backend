@@ -3,6 +3,9 @@ from typing import Optional
 import uuid
 from uuid import UUID
 import datetime
+
+from packaging.tags import platform_tags
+
 from app.schemas.delivery_schemas import (
     PackageDeliveryCreate,
     AssignRiderRequest,
@@ -401,7 +404,7 @@ async def sender_confirm_receipt(
     try:
         order = (
             await supabase.table("delivery_orders")
-            .select("id, sender_id, status, dispatch_id, delivery_fee")
+            .select("id, sender_id, status, dispatch_id, delivery_fee, amount_due_dispatch")
             .eq("id", str(order_id))
             .single()
             .execute()
@@ -421,9 +424,9 @@ async def sender_confirm_receipt(
                 f"Cannot confirm receipt. Current status: {order['status']}",
             )
 
-        full_amount = order["delivery_fee"]
-        commission_rate = await get_commission_rate("DELIVERY", supabase)
-        dispatch_amount = full_amount * commission_rate
+        delivery_fee = order["delivery_fee"]
+        amount_due_dispatch = order['amount_due_dispatch']
+        platform_fee = delivery_fee - amount_due_dispatch
 
         dispatch_id = order["dispatch_id"]
 
@@ -432,8 +435,8 @@ async def sender_confirm_receipt(
             "release_from_dispatch_escrow",
             {
                 "p_dispatch_id": str(dispatch_id),
-                "p_full_amount": full_amount,
-                "p_dispatch_amount": dispatch_amount,
+                "p_full_amount": delivery_fee,
+                "p_dispatch_amount": amount_due_dispatch,
             },
         ).execute()
 
@@ -457,39 +460,34 @@ async def sender_confirm_receipt(
             await notify_user(
                 user_id=UUID(order["rider_id"]),
                 title="Delivery Completed!",
-                body=f"The sender has confirmed receipt. NGN {dispatch_amount} has been added to your balance.",
+                body=f"The sender has confirmed receipt. NGN {amount_due_dispatch} has been added to your balance.",
                 data={"order_id": str(order_id), "type": "DELIVERY_COMPLETED"},
                 supabase=supabase,
             )
 
-        await log_audit_event(
-            supabase,
-            entity_type="DELIVERY_ORDER",
-            entity_id=str(order_id),
-            action="SENDER_CONFIRM_RECEIPT",
-            old_value={"status": "DELIVERED"},
-            new_value={"status": "COMPLETED"},
-            change_amount=Decimal(str(full_amount)),
-            actor_id=str(sender_id),
-            actor_type="USER",
-            notes=f"Sender confirmed receipt. Dispatch escrow cleared, dispatch got {dispatch_amount} to balance, platform kept remainder",
-            request=request,
-        )
+        # Log platform commission
+        await supabase.table("platform_commissions").insert({
+            "to_user_id": order['dispatch_id'],
+            "from_user_id": order['sender_id'],
+            "order_id": str(order_id),
+            "service_type": "DELIVERY",
+            "description": f"Platform commission from delivery order {order_id} (₦{platform_fee})"
+        }).execute()
 
         logger.info(
             "sender_confirm_receipt_success",
             order_id=str(order_id),
-            dispatch_amount=float(dispatch_amount),
-            platform_fee=float(full_amount - dispatch_amount),
+            dispatch_amount=float(amount_due_dispatch),
+            platform_fee=Decimal(delivery_fee),
         )
 
         return {
             "success": True,
             "message": "Receipt confirmed! Dispatch paid commission, platform kept fee remainder.",
             "status": "COMPLETED",
-            "dispatch_received": dispatch_amount,
-            "platform_fee": full_amount - dispatch_amount,
-            "total_cleared_from_sender_escrow": full_amount,
+            "dispatch_received": amount_due_dispatch,
+            "platform_fee": platform_fee,
+            "total_cleared_from_sender_escrow": delivery_fee,
         }
 
     except HTTPException:

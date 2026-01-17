@@ -46,6 +46,7 @@ class DisputeResponse(BaseModel):
     resolved_at: Optional[datetime]
     created_at: datetime
     updated_at: datetime
+    message_count: int = 0
     messages: List[DisputeMessageResponse] = []
 
 
