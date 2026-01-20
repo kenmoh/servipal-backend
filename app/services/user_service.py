@@ -7,7 +7,7 @@ from supabase import AsyncClient
 from app.config.logging import logger
 from app.utils.audit import log_audit_event
 from decimal import Decimal
-from app.config.config import redis
+from app.config.config import redis_client
 from app.utils.utils import check_login_attempts, record_failed_attempt, reset_login_attempts
 
 # ───────────────────────────────────────────────
@@ -116,7 +116,7 @@ async def login_user(
     logger.info("login_attempt", email=data.email)
     
     # Check for too many failed attempts
-    await check_login_attempts(data.email, redis)
+    await check_login_attempts(data.email, redis_client)
     
     try:
         # Try phone first, then email
@@ -150,7 +150,7 @@ async def login_user(
             raise HTTPException(status_code=500, detail="Profile data parsing error")
 
         # Reset login attempts on successful login
-        await reset_login_attempts(data.email, redis)
+        await reset_login_attempts(data.email, redis_client)
 
         logger.info("login_success", user_id=session.user.id, email=data.email)
         return TokenResponse(
@@ -163,7 +163,7 @@ async def login_user(
     except Exception as e:
         logger.warning("login_failed", email=data.email, error=str(e))
         # Record failed attempt
-        await record_failed_attempt(data.email, redis)
+        await record_failed_attempt(data.email, redis_client)
         raise HTTPException(status_code=401, detail=f"Invalid credentials.")
 
 

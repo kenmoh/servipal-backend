@@ -1,7 +1,7 @@
 import os
 from typing import Optional
 from pydantic_settings import BaseSettings
-from redis import asyncio as aioredis
+from redis.asyncio import Redis as AsyncRedis
 
 
 class Settings(BaseSettings):
@@ -31,7 +31,7 @@ class Settings(BaseSettings):
     SUPABASE_STORAGE_BUCKET_URL: str = os.getenv("SUPABASE_STORAGE_BUCKET_URL")
 
     # REDIS
-    REDIS_URL: str = "redis://localhost:6379/0"
+    REDIS_URL: str = os.getenv("REDIS_URL", "redis://localhost:6379")
 
     class Config:
         env_file = ".env"
@@ -43,4 +43,7 @@ class Settings(BaseSettings):
 settings = Settings()
 
 # Redis initialization
-redis = aioredis.from_url(settings.REDIS_URL, decode_responses=True)
+# redis = aioredis.from_url(settings.REDIS_URL, decode_responses=True)
+
+redis_client = AsyncRedis.from_url(settings.REDIS_URL)
+# const redis = new Redis(process.env.REDIS_URL)
