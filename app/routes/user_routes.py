@@ -113,7 +113,7 @@ async def list_available_riders(
     Get a list of available riders near a pickup point.
     If no lat/lng is provided, returns all available riders nationwide.
     """
-    return await get_available_riders(supabase, lat, lng, max_km)
+    return await get_available_riders(supabase=supabase, lat=lat, lng=lng, max_distance_km=max_km)
 
 
 @router.get("/my-riders", response_model=List[DispatchRiderResponse])

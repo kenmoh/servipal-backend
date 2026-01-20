@@ -436,13 +436,13 @@ async def refresh_online_status(user_id: UUID, supabase: AsyncClient):
 
 async def get_available_riders(
     supabase: AsyncClient,
-    latitude: Optional[float] = None,
-    longitude: Optional[float] = None,
+    lat: Optional[float] = None,
+    lng: Optional[float] = None,
     max_distance_km: int = 20,
 ) -> List[AvailableRiderResponse]:
     params = {
-        "near_lat": latitude,
-        "near_lng": longitude,
+        "near_lat": lat,
+        "near_lng": lng,
         "max_distance_km": max_distance_km,
     }
 
