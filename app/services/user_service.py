@@ -817,6 +817,7 @@ async def update_user_location(
     Update user's current location (stored as PostGIS geography point).
     Used for rider/driver proximity matching, nearby vendors, etc.
     """
+    
     try:
         # Basic validation (already done by Pydantic, but extra safety)
         if not (-90 <= data.lat <= 90) or not (-180 <= data.lng <= 180):

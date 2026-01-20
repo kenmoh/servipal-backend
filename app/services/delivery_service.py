@@ -118,6 +118,7 @@ async def initiate_delivery_payment(
             customization=PaymentCustomization(
                 title="Servipal Delivery",
                 description=f"From {data.pickup_location} to {data.destination} ({distance_km:.1f} km)",
+                logo="https://mohdelivery.s3.us-east-1.amazonaws.com/favion/favicon.ico"
             ),
             message="Ready for payment — use Flutterwave SDK",
         ).model_dump()

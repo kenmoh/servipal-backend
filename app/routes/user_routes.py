@@ -309,4 +309,7 @@ async def update_location_endpoint(
     supabase: AsyncClient = Depends(get_supabase_client),
 ):
     """Update your current location (used for nearby matching, rider assignment, etc.)"""
+
+    if current_profile["user_type"] not in ["RIDER", "CUSTOMER"]:
+        return
     return await update_user_location(current_profile["id"], data, supabase)

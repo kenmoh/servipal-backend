@@ -57,4 +57,5 @@ class PaymentInitializationResponse(BaseModel):
     distance_km: str
     customer: PaymentCustomerInfo
     customization: PaymentCustomization
+    logo: str
     message: str
