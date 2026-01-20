@@ -124,7 +124,7 @@ async def root():
     return {"message": "Welcome to ServiPal API", "docs": "/docs", "status": "active"}
 
 
-@app.get("/health", tags=["Root"])
+@app.get("/api/v1/health", tags=["Root"])
 async def health_check():
     """
     Health check endpoint.
@@ -152,7 +152,7 @@ def favicon():
     return RedirectResponse(url=FAVICON_URL)
 
 
-@app.get("/api/list-of-banks", response_model=list[BankSchema], tags=["Get Banks"])
+@app.get("/api/v1/list-of-banks", response_model=list[BankSchema], tags=["Get Banks"])
 async def get_banks():
     """Get list of all supported bank(Nigeria)"""
 
