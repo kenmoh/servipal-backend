@@ -28,7 +28,6 @@ logfire.configure()
 logfire.configure(
   token=settings.LOGFIRE_TOKEN
 )
-logfire.info('Hello, {place}!', place='World')
 
 
 
@@ -57,6 +56,7 @@ app = FastAPI(
     },
 )
 
+logfire.instrument_fastapi(app)
 
 FAVICON_URL = "https://mohdelivery.s3.us-east-1.amazonaws.com/favion/favicon.ico"
 
