@@ -21,6 +21,15 @@ from app.routes import (
 from app.config.logging import logger
 from app.utils.payment import get_all_banks
 from app.schemas.bank_schema import BankSchema
+from app.config.config import settings
+import logfire
+
+logfire.configure()
+logfire.configure(
+  token=settings.LOGFIRE_TOKEN
+)
+logfire.info('Hello, {place}!', place='World')
+
 
 
 @asynccontextmanager

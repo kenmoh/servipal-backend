@@ -819,13 +819,13 @@ async def update_user_location(
     """
     try:
         # Basic validation (already done by Pydantic, but extra safety)
-        if not (-90 <= data.latitude <= 90) or not (-180 <= data.longitude <= 180):
+        if not (-90 <= data.lat <= 90) or not (-180 <= data.lng <= 180):
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST, "Invalid latitude/longitude values"
             )
 
         # Convert to PostGIS point string: POINT(long lat)
-        point_str = f"POINT({data.longitude} {data.latitude})"
+        point_str = f"POINT({data.lng} {data.lat})"
 
         # Update location
         await (
@@ -843,8 +843,8 @@ async def update_user_location(
         return {
             "success": True,
             "message": "Location updated successfully",
-            "latitude": data.latitude,
-            "longitude": data.longitude,
+            "lat": data.lat,
+            "lng": data.lng,
         }
 
     except HTTPException as he:
