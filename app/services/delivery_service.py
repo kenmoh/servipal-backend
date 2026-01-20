@@ -99,7 +99,9 @@ async def initiate_delivery_payment(
             "tx_ref": tx_ref,
             "package_image_url": data.package_image_url,
             "distance_km": distance_km,
+            "description": data.description,
             "created_at": datetime.datetime.now().isoformat(),
+            "package_name": data.package_name,
         }
         await save_pending(f"pending_delivery_{tx_ref}", pending_data, expire=1800)
 
@@ -110,6 +112,10 @@ async def initiate_delivery_payment(
             public_key=settings.FLUTTERWAVE_PUBLIC_KEY,
             distance_km=f"{distance_km:.1f} km",
             currency="NGN",
+            receiver_phone=data.receiver_phone,
+            pickup_location=data.pickup_location,
+            destination=data.destination,
+            package_name=data.package_name,
             customer=PaymentCustomerInfo(
                 email=customer_info.get("email"),
                 phone_number=customer_info.get("phone_number"),

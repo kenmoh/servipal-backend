@@ -34,6 +34,7 @@ router = APIRouter(tags=["Deliveries"], prefix="/api/v1/delivery")
 # ───────────────────────────────────────────────
 @router.post("/initiate-payment")
 async def initiate_delivery_payment(
+    package_name: str = Form(...),
     receiver_phone: str = Form(...),
     pickup_location: str = Form(...),
     destination: str = Form(...),
@@ -41,7 +42,7 @@ async def initiate_delivery_payment(
     pickup_lng: float = Form(...),
     dropoff_lat: float = Form(...),
     dropoff_lng: float = Form(...),
-    additional_info: Optional[str] = Form(...),
+    description: Optional[str] = Form(...),
     delivery_type: DeliveryType = Form("STANDARD"),
     package_image: UploadFile = File(...),
     current_profile: dict = Depends(get_current_profile),
@@ -75,12 +76,13 @@ async def initiate_delivery_payment(
             )
 
     data = PackageDeliveryCreate(
+        package_name=package_name,
         receiver_phone=receiver_phone,
         pickup_location=pickup_location,
         destination=destination,
         pickup_coordinates=(pickup_lat, pickup_lng),
         dropoff_coordinates=(dropoff_lat, dropoff_lng),
-        additional_info=additional_info,
+        description=description,
         delivery_type=delivery_type,
         package_image_url=url,
     )

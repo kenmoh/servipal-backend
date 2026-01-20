@@ -18,18 +18,15 @@ class DeliveryStatus(str, Enum):
 
 
 class PackageDeliveryCreate(BaseModel):
-    receiver_phone: str = Field(
-        ...,
-        pattern=r"^\+234[789]\d{9}$",
-        description="Nigerian phone number in format +234XXXXXXXXXX",
-    )
+    receiver_phone: str
+    package_name: str
     pickup_location: str
     destination: str
     pickup_coordinates: tuple[float, float]
     dropoff_coordinates: tuple[float, float]
-    additional_info: Optional[str] = None
+    description: str
     delivery_type: str = "STANDARD"
-    package_image_url: Optional[str] = None
+    package_image_url: Optional[str]
 
 
 class AssignRiderRequest(BaseModel):

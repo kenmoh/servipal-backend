@@ -59,3 +59,6 @@ class PaymentInitializationResponse(BaseModel):
     customization: PaymentCustomization
     logo: str
     message: str
+    receiver_phone: str
+    pickup_location: str
+    destination: str
