@@ -45,6 +45,7 @@ class PaymentCustomerInfo(BaseModel):
 class PaymentCustomization(BaseModel):
     title: str
     description: str
+    logo: str
 
 
 class PaymentInitializationResponse(BaseModel):
@@ -57,7 +58,6 @@ class PaymentInitializationResponse(BaseModel):
     distance_km: str
     customer: PaymentCustomerInfo
     customization: PaymentCustomization
-    logo: str
     message: str
     receiver_phone: str
     pickup_location: str
