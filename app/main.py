@@ -29,9 +29,9 @@ import sentry_sdk
 sentry_sdk.init(
     dsn=settings.SENTRY_DSN,
     send_default_pii=True,
+    enable_tracing=True,
     
 )
-
 
 
 logfire.configure()
