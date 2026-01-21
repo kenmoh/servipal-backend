@@ -36,12 +36,15 @@ async def process_successful_delivery_payment(
     sender_id = pending["sender_id"]
     delivery_data = pending["delivery_data"]
 
-    if Decimal(paid_amount) != Decimal(expected_fee):
+    expected_rounded = Decimal(str(expected_fee)).quantize(Decimal("0.00"))
+    paid_rounded = Decimal(str(paid_amount)).quantize(Decimal("0.00"))
+
+    if paid_rounded != expected_rounded:
         logger.warning(
             event="delivery_payment_amount_mismatch",
             tx_ref=tx_ref,
-            expected=Decimal(expected_fee),
-            paid=Decimal(paid_amount),
+            expected=expected_rounded,
+            paid=paid_rounded,
         )
         await delete_pending(pending_key)
         return
@@ -60,9 +63,8 @@ async def process_successful_delivery_payment(
                     "dropoff_coordinates": f"POINT({delivery_data['dropoff_coordinates'][1]} {delivery_data['dropoff_coordinates'][0]})",
                     "description": delivery_data.get("description"),
                     "delivery_type": delivery_data["delivery_type"],
-                    "total_price": Decimal(expected_fee),
-                    "delivery_fee": Decimal(expected_fee),
-                    
+                    "total_price": expected_fee,
+                    "delivery_fee": expected_fee,
                     "amount_due_dispatch": expected_fee
                     * await get_commission_rate("DELIVERY", supabase),
                     "status": "PAID_NEEDS_RIDER",
@@ -187,12 +189,15 @@ async def process_successful_food_payment(
         await delete_pending(pending_key)
         return {"status": "already_processed"}
 
-    if paid_amount != expected_total:
+    expected_rounded = Decimal(str(expected_total)).quantize(Decimal("0.00"))
+    paid_rounded = Decimal(str(paid_amount)).quantize(Decimal("0.00"))
+
+    if paid_rounded != expected_rounded:
         logger.warning(
             "food_payment_amount_mismatch",
             tx_ref=tx_ref,
-            expected=expected_total,
-            paid=paid_amount,
+            expected=expected_rounded,
+            paid=paid_rounded,
         )
         await delete_pending(pending_key)
         # Optional: log mismatch or trigger refund
@@ -347,12 +352,15 @@ async def process_successful_topup_payment(
     expected_amount = pending["amount"]
     user_id = pending["user_id"]
 
-    if paid_amount != expected_amount:
+    expected_rounded = Decimal(str(expected_amount)).quantize(Decimal("0.00"))
+    paid_rounded = Decimal(str(paid_amount)).quantize(Decimal("0.00"))
+
+    if paid_rounded != expected_rounded:
         logger.warning(
             "topup_payment_amount_mismatch",
             tx_ref=tx_ref,
-            expected=expected_amount,
-            paid=paid_amount,
+            expected=expected_rounded,
+            paid=paid_rounded,
         )
         await delete_pending(pending_key)
         return
@@ -475,7 +483,10 @@ async def process_successful_product_payment(
         await delete_pending(pending_key)
         return
 
-    if paid_amount != expected_total:
+    expected_rounded = Decimal(str(expected_total)).quantize(Decimal("0.00"))
+    paid_rounded = Decimal(str(paid_amount)).quantize(Decimal("0.00"))
+
+    if paid_rounded != expected_rounded:
         await delete_pending(pending_key)
         return
 
@@ -582,12 +593,15 @@ async def process_successful_laundry_payment(
     subtotal = pending["total_price"]
     delivery_fee = pending.get("delivery_fee", 0)
 
-    if paid_amount != expected_total:
+    expected_rounded = Decimal(str(expected_total)).quantize(Decimal("0.00"))
+    paid_rounded = Decimal(str(paid_amount)).quantize(Decimal("0.00"))
+
+    if paid_rounded != expected_rounded:
         logger.warning(
             "laundry_payment_amount_mismatch",
             tx_ref=tx_ref,
-            expected=expected_total,
-            paid=paid_amount,
+            expected=expected_rounded,
+            paid=paid_rounded,
         )
         await delete_pending(pending_key)
         return
