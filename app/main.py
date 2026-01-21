@@ -32,6 +32,10 @@ sentry_sdk.init(
     
 )
 
+@app.get("/sentry-debug")
+async def trigger_error():
+    division_by_zero = 1 / 0
+
 logfire.configure()
 logfire.configure(
   token=settings.LOGFIRE_TOKEN

@@ -33,6 +33,9 @@ class Settings(BaseSettings):
     # REDIS
     REDIS_URL: str = os.getenv("REDIS_URL", "redis://localhost:6379")
 
+    # SENTRY
+    SENTRY_DSN: str = os.getenv("SENTRY_DSN")
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
