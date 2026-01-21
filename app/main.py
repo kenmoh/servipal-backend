@@ -82,6 +82,9 @@ app = FastAPI(
     },
 )
 
+logfire.configure()
+logfire.instrument_fastapi(app)
+
 FAVICON_URL = "https://mohdelivery.s3.us-east-1.amazonaws.com/favion/favicon.ico"
 
 # CORS middleware
