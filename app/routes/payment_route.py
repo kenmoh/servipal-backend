@@ -90,7 +90,7 @@ async def flutterwave_webhook(
 
     # 5. Determine which handler is based on the tx_ref prefix
     handler = None
-    if tx_ref.startswith("DEL-"):
+    if tx_ref.startswith("DELIVERY-"):
         handler = process_successful_delivery_payment
     elif tx_ref.startswith("FOOD-"):
         handler = process_successful_food_payment
