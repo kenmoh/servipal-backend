@@ -24,6 +24,14 @@ from app.schemas.bank_schema import BankSchema
 from app.config.config import settings
 import logfire
 
+import sentry_sdk
+
+sentry_sdk.init(
+    dsn=settings.SENTRY_DSN,
+    send_default_pii=True,
+    
+)
+
 logfire.configure()
 logfire.configure(
   token=settings.LOGFIRE_TOKEN

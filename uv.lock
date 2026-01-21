@@ -1671,6 +1671,11 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/88/43/1c586f9f413765201234541857cb82fda076f4b0f7bad4a0ec248da39cf3/sentry_sdk-2.49.0-py2.py3-none-any.whl", hash = "sha256:6ea78499133874445a20fe9c826c9e960070abeb7ae0cdf930314ab16bb97aa0", size = 415693, upload-time = "2026-01-08T09:56:21.872Z" },
 ]
 
+[package.optional-dependencies]
+fastapi = [
+    { name = "fastapi" },
+]
+
 [[package]]
 name = "servipal-backend"
 version = "0.1.0"
@@ -1683,6 +1688,7 @@ dependencies = [
     { name = "pytest" },
     { name = "redis" },
     { name = "rq" },
+    { name = "sentry-sdk", extra = ["fastapi"] },
     { name = "structlog" },
     { name = "supabase" },
     { name = "uvicorn" },
@@ -1702,6 +1708,7 @@ requires-dist = [
     { name = "pytest", specifier = ">=9.0.2" },
     { name = "redis", specifier = ">=7.1.0" },
     { name = "rq", specifier = ">=2.6.1" },
+    { name = "sentry-sdk", extras = ["fastapi"], specifier = ">=2.49.0" },
     { name = "structlog", specifier = ">=25.5.0" },
     { name = "supabase", specifier = ">=2.27.2" },
     { name = "uvicorn", specifier = ">=0.40.0" },
