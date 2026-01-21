@@ -62,14 +62,13 @@ async def flutterwave_webhook(
 
     logger.info(
         event="webhook_received",
-        event=event,
         status=data.get("status"),
         tx_ref=data.get("tx_ref"),
     )
 
     # 3. Only process successful charge events
     if event != "charge.completed" or data.get("status") != "succeeded":
-        logger.debug(event="webhook_event_ignored", level="debug", event=event, status=data.get("status"))
+        logger.debug(event="webhook_event_ignored", level="debug", status=data.get("status"))
         return {"status": "ignored", "message": "Event not charge.completed or not successful"}
 
     tx_ref = data.get("tx_ref")
@@ -117,5 +116,5 @@ async def flutterwave_webhook(
         ),  # 30s → 1min → 2min → 5min → 10min
     )
 
-    logger.info(event="payment_webhook_queued", level="info", tx_ref=tx_ref, handler=handler.__name__)
+    logger.info(event=event, level="info", tx_ref=tx_ref, handler=handler.__name__)
     return {"status": "queued_with_retry", "tx_ref": tx_ref, "message": "Payment processing queued"}
