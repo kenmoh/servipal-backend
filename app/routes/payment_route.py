@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Request, Header, HTTPException, Depends, status
+from fastapi import APIRouter, Request,  HTTPException, Depends, status
 from supabase import AsyncClient
 from app.services.payment_service import (
     process_successful_delivery_payment,
@@ -10,7 +10,7 @@ from app.services.payment_service import (
 from app.config.config import settings
 from app.config.logging import logger
 from app.database.supabase import get_supabase_client
-from app.worker import queue
+from app.worker import  enqueue_job
 from rq import Retry
 from pydantic import BaseModel
 import hmac
@@ -31,7 +31,7 @@ async def flutterwave_webhook(
     """
     ** Handle Flutterwave payment webhooks. **
 
-    - Verifies signature, checks idempotency, and queues processing in background.
+    - Verifies signature, checks idempotency, and queues processing in the background.
 
     - Args:
         - request (Request): The raw request.
@@ -64,14 +64,17 @@ async def flutterwave_webhook(
             error=str(e),
             client_ip=request.client.host if request.client else None,
         )
-        return {"status": "error", "message": "Invalid JSON payload"}
-    
-    webhook_event = payload.get("type")
-    data = payload.get("data", {})
+        return PaymentWebhookResponse(status="error", message="Invalid JSON payload")
+
+    webhook_event = payload.get("event") or payload.get("event.type") or payload.get("type")
+
+    data = payload.get("data") if payload.get("data") else payload
+
+    flw_ref = data.get("id") or payload.get("id")
 
     print('*' * 100)
-    print(webhook_event)
-    print(data)
+    print(f"Webhook Event: {webhook_event}")
+    print(f"Data: {data}")
     print('*' * 100)
 
     logger.info(
@@ -80,30 +83,31 @@ async def flutterwave_webhook(
         payment_status=data.get("status"),
         tx_ref=data.get("tx_ref"),
         amount=data.get("amount"),
-        flw_ref=data.get("id"),
+        flw_ref=flw_ref,
     )
 
     # 3. Only process successful charge events
-    if webhook_event != "charge.completed" or data.get("status") != "succeeded":
+    # Flutterwave status for successful is usually 'successful'
+    if data.get("status") != "successful":
         logger.debug(event="flutterwave_webhook_event_ignored", level="debug", status=data.get("status"))
-        return {"status": "ignored", "message": "Event not charge.completed or not successful"}
+        return PaymentWebhookResponse(status="ignored", message=f"Payment status is {data.get('status')}, not successful")
 
     tx_ref = data.get("tx_ref")
     paid_amount = data.get("amount")
-    flw_ref = data.get("id")
 
     if not tx_ref:
         logger.warning(event="flutterwave_webhook_missing_tx_ref", level="warning", payload=payload)
-        return {"status": "error", "message": "Missing tx_ref"}
+        return PaymentWebhookResponse(status="error", message="Missing tx_ref")
 
     # 4. Idempotency check (prevent double-processing)
+    # We use the raw supabase client here as it's available in the route
     existing = (
         await supabase.table("transactions").select("id").eq("tx_ref", tx_ref).execute()
     )
 
     if existing.data:
         logger.info(event="flutterwave_webhook_already_processed", level="info", tx_ref=tx_ref)
-        return {"status": "already_processed", "message": "Transaction already processed", "tx_ref": tx_ref}
+        return PaymentWebhookResponse(status="already_processed", message="Transaction already processed", trx_ref=tx_ref)
 
     # 5. Determine which handler is based on the tx_ref prefix
     handler = None
@@ -120,7 +124,7 @@ async def flutterwave_webhook(
 
     if not handler:
         logger.warning(event="flutterwave_webhook_unknown_transaction_type", level="warning", tx_ref=tx_ref)
-        return {"status": "unknown_transaction_type"}
+        return PaymentWebhookResponse(status="unknown_transaction_type")
 
     # 6. Queue the job with retry (5 attempts, exponential backoff)
     job_id = enqueue_job(
@@ -128,9 +132,10 @@ async def flutterwave_webhook(
         tx_ref=tx_ref,
         paid_amount=paid_amount,
         flw_ref=flw_ref,
-        request=request,
         retry=Retry(max=5, interval=[30, 60, 120, 300, 600]),
     )
 
     logger.info(event=webhook_event, level="info", tx_ref=tx_ref, job_id=job_id, handler=handler.__name__)
-    return {"status": "queued_with_retry", "tx_ref": tx_ref, "message": "Payment processing queued"}
+    return PaymentWebhookResponse(status="queued_with_retry", trx_ref=tx_ref, message="Payment processing queued")
+
+
