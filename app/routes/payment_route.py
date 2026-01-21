@@ -49,7 +49,8 @@ async def flutterwave_webhook(
     signature = request.headers.get("verif-hash")
     if not hmac.compare_digest(signature, secret_hash):
         logger.warning(
-            "webhook_signature_invalid",
+           event="webhook_signature_invalid",
+           level="warning",
             client_ip=request.client.host if request.client else None,
         )
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid webhook signature")
@@ -60,7 +61,7 @@ async def flutterwave_webhook(
     data = payload.get("data", {})
 
     logger.info(
-        "webhook_received",
+        event="webhook_received",
         event=event,
         status=data.get("status"),
         tx_ref=data.get("tx_ref"),
@@ -68,7 +69,7 @@ async def flutterwave_webhook(
 
     # 3. Only process successful charge events
     if event != "charge.completed" or data.get("status") != "succeeded":
-        logger.debug("webhook_event_ignored", event=event, status=data.get("status"))
+        logger.debug(event="webhook_event_ignored", level="debug", event=event, status=data.get("status"))
         return {"status": "ignored", "message": "Event not charge.completed or not successful"}
 
     tx_ref = data.get("tx_ref")
@@ -76,7 +77,7 @@ async def flutterwave_webhook(
     flw_ref = data.get("id")
 
     if not tx_ref:
-        logger.warning("webhook_missing_tx_ref", payload=payload)
+        logger.warning(event="webhook_missing_tx_ref", level="warning", payload=payload)
         return {"status": "error", "message": "Missing tx_ref"}
 
     # 4. Idempotency check (prevent double-processing)
@@ -85,7 +86,7 @@ async def flutterwave_webhook(
     )
 
     if existing.data:
-        logger.info("webhook_already_processed", tx_ref=tx_ref)
+        logger.info(event="webhook_already_processed", level="info", tx_ref=tx_ref)
         return {"status": "already_processed", "message": "Transaction already processed", "tx_ref": tx_ref}
 
     # 5. Determine which handler is based on the tx_ref prefix
@@ -116,5 +117,5 @@ async def flutterwave_webhook(
         ),  # 30s → 1min → 2min → 5min → 10min
     )
 
-    logger.info("payment_webhook_queued", tx_ref=tx_ref, handler=handler.__name__)
+    logger.info(event="payment_webhook_queued", level="info", tx_ref=tx_ref, handler=handler.__name__)
     return {"status": "queued_with_retry", "tx_ref": tx_ref, "message": "Payment processing queued"}

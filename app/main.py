@@ -68,9 +68,6 @@ app = FastAPI(
 
 logfire.instrument_fastapi(app)
 
-@app.get("/sentry-debug")
-async def trigger_error():
-    division_by_zero = 1 / 0
 
 FAVICON_URL = "https://mohdelivery.s3.us-east-1.amazonaws.com/favion/favicon.ico"
 
