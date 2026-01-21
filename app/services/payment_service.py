@@ -51,6 +51,7 @@ async def process_successful_delivery_payment(
 
     try:
         # Create delivery_order (no rider yet)
+        logger.info("creating_delivery_order", sender_id=sender_id, delivery_data=delivery_data)
         order_resp = (
             await supabase.table("delivery_orders")
             .insert(
@@ -78,8 +79,10 @@ async def process_successful_delivery_payment(
         )
 
         order_id = order_resp.data[0]["id"]
+        logger.info("delivery_order_created", order_id=order_id)
 
         # Hold fee in sender escrow
+        logger.info("holding_fee_in_sender_escrow", sender_id=sender_id, expected_fee=expected_fee)
         await supabase.rpc(
             "update_wallet_balance",
             {
@@ -88,8 +91,10 @@ async def process_successful_delivery_payment(
                 "p_field": "escrow_balance",
             },
         ).execute()
+        logger.info("fee_held_in_sender_escrow", sender_id=sender_id, expected_fee=expected_fee)
 
         # Create transaction
+        logger.info("creating_transaction", tx_ref=tx_ref, sender_id=sender_id, expected_fee=expected_fee)
         await (
             supabase.table("transactions")
             .insert(
@@ -108,10 +113,13 @@ async def process_successful_delivery_payment(
             )
             .execute()
         )
+        logger.info("transaction_created", tx_ref=tx_ref, sender_id=sender_id, expected_fee=expected_fee)
 
         await delete_pending(pending_key)
+        logger.info("pending_delivery_deleted", tx_ref=tx_ref)
 
         # Audit log
+        logger.info("logging_audit_event", tx_ref=tx_ref, sender_id=sender_id, expected_fee=expected_fee)
         await log_audit_event(
             supabase,
             entity_type="DELIVERY_ORDER",
@@ -124,14 +132,15 @@ async def process_successful_delivery_payment(
             notes=f"Delivery payment received via Flutterwave: {tx_ref}",
             request=request,
         )
+        logger.info("audit_event_logged", tx_ref=tx_ref, sender_id=sender_id, expected_fee=expected_fee)
 
         logger.info(
-            "delivery_payment_processed_success", tx_ref=tx_ref, order_id=str(order_id)
+            event="delivery_payment_processed_success", tx_ref=tx_ref, order_id=str(order_id)
         )
 
     except Exception as e:
         logger.error(
-            "delivery_payment_processing_error",
+            event="delivery_payment_processing_error",
             tx_ref=tx_ref,
             error=str(e),
             exc_info=True,
@@ -163,14 +172,14 @@ async def process_successful_food_payment(
 
     verified = await verify_transaction_tx_ref(tx_ref)
     if not verified or verified.get("status") != "success":
-        logger.error("delivery_payment_verification_failed", tx_ref=tx_ref)
+        logger.error(event="delivery_payment_verification_failed", tx_ref=tx_ref)
         return
 
     pending_key = f"pending_food_{tx_ref}"
     pending = await get_pending(pending_key)
 
     if not pending:
-        logger.warning("food_payment_pending_not_found", tx_ref=tx_ref)
+        logger.warning(event="food_payment_pending_not_found", tx_ref=tx_ref)
         return None
 
     expected_total = pending["grand_total"]
@@ -185,7 +194,7 @@ async def process_successful_food_payment(
     )
 
     if existing_tx.data:
-        logger.warning("food_payment_already_processed", tx_ref=tx_ref)
+        logger.warning(event="food_payment_already_processed", tx_ref=tx_ref)
         await delete_pending(pending_key)
         return {"status": "already_processed"}
 
@@ -194,7 +203,7 @@ async def process_successful_food_payment(
 
     if paid_rounded != expected_rounded:
         logger.warning(
-            "food_payment_amount_mismatch",
+            event="food_payment_amount_mismatch",
             tx_ref=tx_ref,
             expected=expected_rounded,
             paid=paid_rounded,
@@ -282,7 +291,7 @@ async def process_successful_food_payment(
         await delete_pending(pending_key)
 
         logger.info(
-            "food_payment_processed_success", tx_ref=tx_ref, order_id=str(order_id)
+            event="food_payment_processed_success", tx_ref=tx_ref, order_id=str(order_id)
         )
 
         # Audit log
@@ -319,7 +328,7 @@ async def process_successful_food_payment(
     except Exception as e:
         # Critical: attempt refund on error (implement refund_flutterwave if needed)
         logger.error(
-            "food_payment_processing_error", tx_ref=tx_ref, error=str(e), exc_info=True
+            event="food_payment_processing_error", tx_ref=tx_ref, error=str(e), exc_info=True
         )
         await delete_pending(pending_key)
         # Optional: await refund_flutterwave(tx_ref)
@@ -340,13 +349,13 @@ async def process_successful_topup_payment(
 
     verified = await verify_transaction_tx_ref(tx_ref)
     if not verified or verified.get("status") != "success":
-        logger.error("delivery_payment_verification_failed", tx_ref=tx_ref)
+        logger.error(event="delivery_payment_verification_failed", tx_ref=tx_ref)
         return
     pending_key = f"pending_topup_{tx_ref}"
     pending = await get_pending(pending_key)
 
     if not pending:
-        logger.warning("topup_payment_pending_not_found", tx_ref=tx_ref)
+        logger.warning(event="topup_payment_pending_not_found", tx_ref=tx_ref)
         return  # already processed
 
     expected_amount = pending["amount"]
@@ -357,7 +366,7 @@ async def process_successful_topup_payment(
 
     if paid_rounded != expected_rounded:
         logger.warning(
-            "topup_payment_amount_mismatch",
+            event="topup_payment_amount_mismatch",
             tx_ref=tx_ref,
             expected=expected_rounded,
             paid=paid_rounded,
@@ -441,7 +450,7 @@ async def process_successful_topup_payment(
 
     except Exception as e:
         logger.error(
-            "topup_payment_processing_error", tx_ref=tx_ref, error=str(e), exc_info=True
+           event="topup_payment_processing_error", tx_ref=tx_ref, error=str(e), exc_info=True
         )
         await delete_pending(pending_key)
         raise
@@ -455,11 +464,11 @@ async def process_successful_product_payment(
 ):
     
 
-    logger.info("processing_product_payment", tx_ref=tx_ref, paid_amount=paid_amount)
+    logger.info(event="processing_product_payment", tx_ref=tx_ref, paid_amount=paid_amount)
 
     verified = await verify_transaction_tx_ref(tx_ref)
     if not verified or verified.get("status") != "success":
-        logger.error("delivery_payment_verification_failed", tx_ref=tx_ref)
+        logger.error(event="delivery_payment_verification_failed", tx_ref=tx_ref)
         return
     
     pending_key = f"pending_product_{tx_ref}"
@@ -553,7 +562,7 @@ async def process_successful_product_payment(
         await delete_pending(pending_key)
 
     except Exception as e:
-        print(f"Product payment processing error for {tx_ref}: {e}")
+        logger.error(event="product_payment_processing_error", tx_ref=tx_ref, error=str(e), exc_info=True)
         await delete_pending(pending_key)
         raise
 
@@ -573,18 +582,18 @@ async def process_successful_laundry_payment(
     - Logs platform commission
     - Creates transaction record
     """
-    logger.info("processing_laundry_payment", tx_ref=tx_ref, paid_amount=paid_amount)
+    logger.info(event="processing_laundry_payment", tx_ref=tx_ref, paid_amount=paid_amount)
 
     verified = await verify_transaction_tx_ref(tx_ref)
     if not verified or verified.get("status") != "success":
-        logger.error("delivery_payment_verification_failed", tx_ref=tx_ref)
+        logger.error(event="delivery_payment_verification_failed", tx_ref=tx_ref)
         return
     
     pending_key = f"pending_laundry_{tx_ref}"
     pending = await get_pending(pending_key)
 
     if not pending:
-        logger.warning("laundry_payment_pending_not_found", tx_ref=tx_ref)
+        logger.warning(event="laundry_payment_pending_not_found", tx_ref=tx_ref)
         return  # already processed or expired
 
     expected_total = pending["grand_total"]
@@ -598,7 +607,7 @@ async def process_successful_laundry_payment(
 
     if paid_rounded != expected_rounded:
         logger.warning(
-            "laundry_payment_amount_mismatch",
+            event="laundry_payment_amount_mismatch",
             tx_ref=tx_ref,
             expected=expected_rounded,
             paid=paid_rounded,
@@ -701,12 +710,12 @@ async def process_successful_laundry_payment(
         )
 
         logger.info(
-            "laundry_payment_processed_success", tx_ref=tx_ref, order_id=str(order_id)
+            event="laundry_payment_processed_success", tx_ref=tx_ref, order_id=str(order_id)
         )
 
     except Exception as e:
         logger.error(
-            "laundry_payment_processing_error",
+            event="laundry_payment_processing_error",
             tx_ref=tx_ref,
             error=str(e),
             exc_info=True,
