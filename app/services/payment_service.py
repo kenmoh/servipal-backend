@@ -14,7 +14,7 @@ from app.utils.payment import verify_transaction_tx_ref
 # ───────────────────────────────────────────────
 async def process_successful_delivery_payment(
     tx_ref: str,
-    paid_amount: float,
+    paid_amount: Decimal,
     flw_ref: str,
     supabase: AsyncClient,
     request: Optional[Request] = None,
@@ -36,12 +36,12 @@ async def process_successful_delivery_payment(
     sender_id = pending["sender_id"]
     delivery_data = pending["delivery_data"]
 
-    if paid_amount != expected_fee:
+    if Decimal(paid_amount) != Decimal(expected_fee):
         logger.warning(
-            "delivery_payment_amount_mismatch",
+            event="delivery_payment_amount_mismatch",
             tx_ref=tx_ref,
-            expected=expected_fee,
-            paid=paid_amount,
+            expected=Decimal(expected_fee),
+            paid=Decimal(paid_amount),
         )
         await delete_pending(pending_key)
         return
@@ -58,11 +58,11 @@ async def process_successful_delivery_payment(
                     "destination": delivery_data["destination"],
                     "pickup_coordinates": f"POINT({delivery_data['pickup_coordinates'][1]} {delivery_data['pickup_coordinates'][0]})",
                     "dropoff_coordinates": f"POINT({delivery_data['dropoff_coordinates'][1]} {delivery_data['dropoff_coordinates'][0]})",
-                    "additional_info": delivery_data.get("additional_info"),
+                    "description": delivery_data.get("description"),
                     "delivery_type": delivery_data["delivery_type"],
-                    "total_price": expected_fee,
-                    "delivery_fee": expected_fee,
-                    "grand_total": expected_fee,
+                    "total_price": Decimal(expected_fee),
+                    "delivery_fee": Decimal(expected_fee),
+                    
                     "amount_due_dispatch": expected_fee
                     * await get_commission_rate("DELIVERY", supabase),
                     "status": "PAID_NEEDS_RIDER",
