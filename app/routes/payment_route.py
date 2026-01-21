@@ -123,16 +123,14 @@ async def flutterwave_webhook(
         return {"status": "unknown_transaction_type"}
 
     # 6. Queue the job with retry (5 attempts, exponential backoff)
-    queue.enqueue(
+    job_id = enqueue_job(
         handler,
-        tx_ref,
-        paid_amount,
-        flw_ref,
-        request,  # Pass request for audit logging
-        retry=Retry(
-            max=5, interval=[30, 60, 120, 300, 600]
-        ),  # 30s → 1min → 2min → 5min → 10min
+        tx_ref=tx_ref,
+        paid_amount=paid_amount,
+        flw_ref=flw_ref,
+        request=request,
+        retry=Retry(max=5, interval=[30, 60, 120, 300, 600]),
     )
 
-    logger.info(event=webhook_event, level="info", tx_ref=tx_ref, handler=handler.__name__)
+    logger.info(event=webhook_event, level="info", tx_ref=tx_ref, job_id=job_id, handler=handler.__name__)
     return {"status": "queued_with_retry", "tx_ref": tx_ref, "message": "Payment processing queued"}

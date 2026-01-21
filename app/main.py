@@ -21,9 +21,10 @@ from app.routes import (
 from app.config.logging import logger
 from app.utils.payment import get_all_banks
 from app.schemas.bank_schema import BankSchema
-from app.config.config import settings
+from app.config.config import settings, redis_client, sync_redis_client
 import logfire
-
+from rq import Worker
+import multiprocessing
 import sentry_sdk
 
 sentry_sdk.init(
@@ -34,11 +35,11 @@ sentry_sdk.init(
 )
 
 
-logfire.configure()
-logfire.configure(
-  token=settings.LOGFIRE_TOKEN
-)
-
+def run_worker():
+    """Run the RQ worker"""
+    logger.info("Starting RQ worker")
+    worker = Worker(['default'], connection=sync_redis_client)
+    worker.work()
 
 
 @asynccontextmanager
@@ -46,10 +47,25 @@ async def lifespan(_: FastAPI):
     """Handle application lifespan events"""
     # Startup
     logger.info("Servipal Application Started", version="1.0.0")
+    
+    # Start worker in a separate process
+    logger.info("Starting RQ worker")
+    worker_process = multiprocessing.Process(target=run_worker)
+    worker_process.start()
+    
     yield
+    
     # Shutdown
     logger.info("Servipal Application Shutdown")
-
+    
+    # Stop worker
+    if worker_process.is_alive():
+        logger.info("Stopping RQ worker")
+        worker_process.terminate()
+        worker_process.join(timeout=5)
+        if worker_process.is_alive():
+            worker_process.kill()
+        logger.info("RQ worker stopped")
 
 app = FastAPI(
     title="ServiPal API",
@@ -65,9 +81,6 @@ app = FastAPI(
         "email": "servipal@servi-pal.com",
     },
 )
-
-logfire.instrument_fastapi(app)
-
 
 FAVICON_URL = "https://mohdelivery.s3.us-east-1.amazonaws.com/favion/favicon.ico"
 

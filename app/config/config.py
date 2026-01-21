@@ -2,6 +2,7 @@ import os
 from typing import Optional
 from pydantic_settings import BaseSettings
 from redis.asyncio import Redis as AsyncRedis
+from redis import Redis as SyncRedis
 
 
 class Settings(BaseSettings):
@@ -49,4 +50,5 @@ settings = Settings()
 # redis = aioredis.from_url(settings.REDIS_URL, decode_responses=True)
 
 redis_client = AsyncRedis.from_url(settings.REDIS_URL)
+sync_redis_client = SyncRedis.from_url(settings.REDIS_URL)
 # const redis = new Redis(process.env.REDIS_URL)
