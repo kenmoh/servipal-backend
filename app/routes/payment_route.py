@@ -23,7 +23,7 @@ class PaymentWebhookResponse(BaseModel):
 router = APIRouter(tags=["payment-webhook"], prefix="/api/v1/payment")
 
 
-@router.post("/webhook")
+@router.post("/webhook", status_code=status.HTTP_200_OK)
 async def flutterwave_webhook(
     request: Request,
     supabase: AsyncClient = Depends(get_supabase_client),
@@ -56,7 +56,7 @@ async def flutterwave_webhook(
 
     # 2. Parse payload
     payload = await request.json()
-    event = payload.get("event")
+    event = payload.get("type")
     data = payload.get("data", {})
 
     logger.info(
@@ -67,7 +67,7 @@ async def flutterwave_webhook(
     )
 
     # 3. Only process successful charge events
-    if event != "charge.completed" or data.get("status") != "successful":
+    if event != "charge.completed" or data.get("status") != "succeeded":
         logger.debug("webhook_event_ignored", event=event, status=data.get("status"))
         return {"status": "ignored", "message": "Event not charge.completed or not successful"}
 
