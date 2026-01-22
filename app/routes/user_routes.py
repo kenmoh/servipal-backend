@@ -196,11 +196,10 @@ async def vendor_earnings_dashboard(
 
 @router.post("/profile/image")
 async def upload_profile_pic(
-    file: UploadFile = File(...),
-    request: Request = None,
+    image: UploadFile = File(...),
     current_profile: dict = Depends(get_current_profile),
     supabase: AsyncClient = Depends(get_supabase_client),
-):
+) -> ImageUploadResponse:
     """
     Upload a profile picture.
 
@@ -208,56 +207,33 @@ async def upload_profile_pic(
         file (UploadFile): The image file.
 
     Returns:
-        dict: Success status and image URL.
+        ImageUploadResponse: Success status and image URL.
     """
-    logger.info(
-        "profile_image_upload_requested",
-        user_id=current_profile["id"],
-        image_type="profile",
-    )
     url = await upload_profile_image(
-        file, current_profile["id"], "profile", supabase, request
+        image, current_profile["id"], "profile", supabase
     )
-    logger.info(
-        "profile_image_uploaded",
-        user_id=current_profile["id"],
-        image_type="profile",
-        url=url,
-    )
-    return {"success": True, "url": url}
+    return ImageUploadResponse(success=True, url=url)
 
 
 @router.post("/profile/backdrop")
 async def upload_backdrop(
-    file: UploadFile = File(...),
-    request: Request = None,
+    backdrop: UploadFile = File(...),
     current_profile: dict = Depends(get_current_profile),
     supabase: AsyncClient = Depends(get_supabase_client),
-):
+) -> ImageUploadResponse:
     """
     Upload a backdrop/cover image.
-
     Args:
         file (UploadFile): The image file.
 
     Returns:
-        dict: Success status and image URL.
+        ImageUploadResponse: Success status and image URL.
     """
-    logger.info(
-        "backdrop_image_upload_requested",
-        user_id=current_profile["id"],
-        image_type="backdrop",
-    )
+
     url = await upload_profile_image(
-        file, current_profile["id"], "backdrop", supabase, request
+        backdrop, current_profile["id"], "backdrop", supabase
     )
-    logger.info(
-        "backdrop_image_uploaded",
-        user_id=current_profile["id"],
-        image_type="backdrop",
-        url=url,
-    )
-    return {"success": True, "url": url}
+    return ImageUploadResponse(success=True, url=url)
 
 
 # ───────────────────────────────────────────────

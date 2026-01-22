@@ -243,3 +243,8 @@ class DetailedRiderResponse(BaseModel):
     class Config:
         from_attributes = True
         json_encoders = {Decimal: lambda v: float(v) if v is not None else None}
+
+
+class ImageUploadResponse(BaseModel):
+    success: bool
+    url: str
