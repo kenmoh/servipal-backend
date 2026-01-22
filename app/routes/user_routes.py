@@ -13,6 +13,7 @@ from app.dependencies.auth import get_current_profile, require_user_type
 from app.database.supabase import get_supabase_client, get_supabase_admin_client
 from app.config.logging import logger
 from supabase import AsyncClient
+from app.services import user_service
 
 router = APIRouter(prefix="/api/v1/users", tags=["Users"])
 
@@ -38,7 +39,7 @@ async def create_rider(
     logger.info(
         "create_rider_requested", dispatch_id=current_user["id"], rider_phone=data.phone
     )
-    result = await create_rider_by_dispatch(data, current_user, supabase, request)
+    result = await user_service.create_rider_by_dispatch(data, current_user, supabase, request)
     logger.info("rider_created", dispatch_id=current_user["id"], rider_id=result.id)
     return result
 
@@ -55,7 +56,7 @@ async def get_my_profile(
         UserProfileResponse: User profile details.
     """
     logger.debug("get_profile_requested", user_id=profile["id"])
-    return await get_user_profile(profile["id"], supabase)
+    return await user_service.get_user_profile(profile["id"], supabase)
 
 
 @router.patch("/me", response_model=UserProfileResponse)
@@ -79,7 +80,7 @@ async def update_profile(
         user_id=profile["id"],
         updates=data.model_dump(exclude_unset=True),
     )
-    result = await update_user_profile(profile["id"], data, supabase, request)
+    result = await user_service.update_user_profile(profile["id"], data, supabase, request)
     logger.info("profile_updated", user_id=profile["id"])
     return result
 
@@ -113,7 +114,7 @@ async def list_available_riders(
     Get a list of available riders near a pickup point.
     If no lat/lng is provided, returns all available riders nationwide.
     """
-    return await get_available_riders(supabase=supabase, lat=lat, lng=lng, max_distance_km=max_km)
+    return await user_service.get_available_riders(supabase=supabase, lat=lat, lng=lng, max_distance_km=max_km)
 
 
 @router.get("/my-riders", response_model=List[DispatchRiderResponse])
@@ -125,7 +126,7 @@ async def get_dispatch_riders(
     Dispatch owner gets a list of all their riders
     with performance stats for management
     """
-    return await get_my_riders(current_profile["id"], supabase)
+    return await user_service.get_my_riders(current_profile["id"], supabase)
 
 
 @router.post("/riders/suspend", response_model=RiderSuspensionResponse)
@@ -145,7 +146,7 @@ async def suspend_rider(
         rider_id=data.rider_id,
         suspend=data.suspend,
     )
-    result = await suspend_or_unsuspend_rider(
+    result = await user_service.suspend_or_unsuspend_rider(
         data, current_profile["id"], supabase, request
     )
     logger.info(
@@ -172,7 +173,7 @@ async def view_rider_earnings(
     Returns:
         RiderEarningsResponse: Earnings data.
     """
-    return await get_rider_earnings(rider_id, current_profile["id"], supabase)
+    return await user_service.get_rider_earnings(rider_id, current_profile["id"], supabase)
 
 
 @router.get("/earnings")
@@ -191,7 +192,7 @@ async def vendor_earnings_dashboard(
     Returns:
         dict: Earnings summary and details.
     """
-    return await get_vendor_earnings(current_profile["id"], supabase)
+    return await user_service.get_vendor_earnings(current_profile["id"], supabase)
 
 
 @router.post("/profile/image")
@@ -209,7 +210,7 @@ async def upload_profile_pic(
     Returns:
         ImageUploadResponse: Success status and image URL.
     """
-    url = await upload_profile_image(
+    url = await user_service.upload_profile_image(
         file=image, user_id=current_profile["id"], image_type="profile", supabase=supabase
     )
     return ImageUploadResponse(success=True, url=url)
@@ -230,7 +231,7 @@ async def upload_backdrop(
         ImageUploadResponse: Success status and image URL.
     """
 
-    url = await upload_profile_image(
+    url = await user_service.upload_profile_image(
         file=backdrop, user_id=current_profile["id"], image_type="backdrop", supabase=supabase
     )
     return ImageUploadResponse(success=True, url=url)
@@ -262,7 +263,7 @@ async def set_online_status(
     Returns:
         OnlineStatusResponse: New status.
     """
-    return await toggle_online_or_can_pickup(user_id=current_profile["id"], supabase=supabase, field="is_online")
+    return await user_service.toggle_online_or_can_pickup(user_id=current_profile["id"], supabase=supabase, field="is_online")
 
 
 @router.post("/set-pickup-dropoff", response_model=OnlineStatusResponse)
@@ -276,7 +277,7 @@ async def set_pickup_dropoff_status(
     Returns:
         OnlineStatusResponse: New status.
     """
-    return await toggle_online_or_can_pickup(user_id=current_profile["id"], supabase=supabase, field="can_pickup_and_dropoff")
+    return await user_service.toggle_online_or_can_pickup(user_id=current_profile["id"], supabase=supabase, field="can_pickup_and_dropoff")
 
 @router.post("/update-location")
 async def update_location_endpoint(
@@ -288,4 +289,4 @@ async def update_location_endpoint(
 
     if current_profile["user_type"] not in ["RIDER", "CUSTOMER"]:
         return
-    return await update_user_location(current_profile["id"], data, supabase)
+    return await user_service.update_user_location(current_profile["id"], data, supabase)
