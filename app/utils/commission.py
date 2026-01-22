@@ -1,4 +1,5 @@
 from supabase import AsyncClient
+from app.config.logging import logger
 
 
 async def get_commission_rate(order_type: str, supabase: AsyncClient) -> float:
@@ -21,11 +22,20 @@ async def get_commission_rate(order_type: str, supabase: AsyncClient) -> float:
     resp = (
         await supabase.table("charges_and_commissions")
         .select(column)
-        .single()
+        .maybe_single()
         .execute()
     )
+    
+    print('*'*50)
+    print(resp.data)
+    print('*'*50)
 
     if not resp.data:
-        raise ValueError("Charges configuration not found")
+        logger.warning(
+            event="commission_config_not_found",
+            order_type=order_type,
+            notes="Using fallback commission rate of 0.8",
+        )
+        return 0.8
 
     return float(resp.data[column])

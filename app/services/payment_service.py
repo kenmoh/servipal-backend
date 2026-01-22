@@ -113,26 +113,26 @@ async def process_successful_delivery_payment(
             )
             .execute()
         )
-        logger.info("transaction_created", tx_ref=tx_ref, sender_id=sender_id, expected_fee=expected_fee)
+       
 
         await delete_pending(pending_key)
         logger.info("pending_delivery_deleted", tx_ref=tx_ref)
 
-        # Audit log
-        logger.info("logging_audit_event", tx_ref=tx_ref, sender_id=sender_id, expected_fee=expected_fee)
-        await log_audit_event(
-            supabase,
-            entity_type="DELIVERY_ORDER",
-            entity_id=str(order_id),
-            action="PAYMENT_RECEIVED",
-            new_value={"payment_status": "PAID", "amount": expected_fee},
-            actor_id=sender_id,
-            actor_type="USER",
-            change_amount=Decimal(str(expected_fee)),
-            notes=f"Delivery payment received via Flutterwave: {tx_ref}",
-            request=request,
-        )
-        logger.info("audit_event_logged", tx_ref=tx_ref, sender_id=sender_id, expected_fee=expected_fee)
+        # # Audit log
+        # print('*'*50, "logging_audit_event", tx_ref=tx_ref, sender_id=sender_id, expected_fee=expected_fee)
+        # await log_audit_event(
+        #     supabase,
+        #     entity_type="DELIVERY_ORDER",
+        #     entity_id=str(order_id),
+        #     action="PAYMENT_RECEIVED",
+        #     new_value={"payment_status": "PAID", "amount": expected_fee},
+        #     actor_id=sender_id,
+        #     actor_type="USER",
+        #     change_amount=Decimal(str(expected_fee)),
+        #     notes=f"Delivery payment received via Flutterwave: {tx_ref}",
+        #     request=request,
+        # )
+        # logger.info("audit_event_logged", tx_ref=tx_ref, sender_id=sender_id, expected_fee=expected_fee)
 
         logger.info(
             event="delivery_payment_processed_success", tx_ref=tx_ref, order_id=str(order_id)

@@ -33,11 +33,11 @@ def run_async_job(func_module, func_name, *args, **kwargs):
     module = importlib.import_module(func_module)
     func = getattr(module, func_name)
     
-    # Get a supabase client
-    from app.database.supabase import create_supabase_client
+    # Get a supabase client (ADMIN)
+    from app.database.supabase import create_supabase_admin_client
     
     async def _run():
-        supabase = await create_supabase_client()
+        supabase = await create_supabase_admin_client()
         return await func(*args, supabase=supabase, **kwargs)
         
     return asyncio.run(_run())
