@@ -210,7 +210,7 @@ async def upload_profile_pic(
         ImageUploadResponse: Success status and image URL.
     """
     url = await upload_profile_image(
-        image, current_profile["id"], "profile", supabase
+        file=image, user_id=current_profile["id"], image_type="profile", supabase=supabase
     )
     return ImageUploadResponse(success=True, url=url)
 
@@ -231,7 +231,7 @@ async def upload_backdrop(
     """
 
     url = await upload_profile_image(
-        backdrop, current_profile["id"], "backdrop", supabase
+        file=backdrop, user_id=current_profile["id"], image_type="backdrop", supabase=supabase
     )
     return ImageUploadResponse(success=True, url=url)
 
