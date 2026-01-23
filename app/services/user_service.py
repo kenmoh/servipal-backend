@@ -202,7 +202,7 @@ async def create_rider_by_dispatch(
             status_code=status.HTTP_403_FORBIDDEN, detail="Only dispatch users can create riders"
         )
     
-    riders = await get_my_riders(current_profile.id, supabase_admin)
+    riders = await get_my_riders(dispatch_user_id=current_profile.id, supabase=supabase_admin)
     # Validation: Limit riders if no business registration number
     if  dispatch_profile['business_registration_number'] is None and len(riders) >= 1:
         raise HTTPException(
