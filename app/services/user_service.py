@@ -230,7 +230,7 @@ async def create_rider_by_dispatch(
             {
                 "email": data.email,
                 "phone": data.phone,
-                "password": "TempPass123!",
+                "password": data.password,
                 "phone_confirm": True,
                 "user_metadata": {
                     "created_by": "dispatch",

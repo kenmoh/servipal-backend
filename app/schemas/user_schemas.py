@@ -29,6 +29,7 @@ class RiderCreateByDispatch(BaseModel):
     email: EmailStr
     full_name: str
     phone: str = Field(..., pattern=r"^\+\d{10,15}$")
+    password: str = Field(..., min_length=8)
     bike_number: Optional[str] = None
 
 
