@@ -177,13 +177,13 @@ async def create_rider_by_dispatch(
     request: Optional[Request] = None,
 ) -> UserProfileResponse:
     logger.info(
-        "create_rider_attempt",
+        event="create_rider_attempt",
         dispatch_id=current_profile["id"],
         rider_phone=data.phone,
     )
 
     # Define dispatcher_id for later use
-    dispatcher_id = current_profile["id"]
+    dispatcher_id = current_profile.id
 
     # Fetch the dispatcher profile with required fields
     dispatch_profile_resp = (
@@ -202,7 +202,7 @@ async def create_rider_by_dispatch(
             status_code=status.HTTP_403_FORBIDDEN, detail="Only dispatch users can create riders"
         )
     
-    riders = await get_my_riders()
+    riders = await get_my_riders(current_profile.id, supabase_admin)
     # Validation: Limit riders if no business registration number
     if  dispatch_profile['business_registration_number'] is None and len(riders) >= 1:
         raise HTTPException(
@@ -233,7 +233,7 @@ async def create_rider_by_dispatch(
                 "password": data.password,
                 "phone_confirm": True,
                 "user_metadata": {
-                    "created_by": "dispatch",
+                    "created_by": current_profile.id,
                     "user_type": UserType.RIDER.value,
                     "phone_number": data.phone,
                     "bike_number": data.bike_number,

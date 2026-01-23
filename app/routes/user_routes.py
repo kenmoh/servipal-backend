@@ -22,7 +22,7 @@ router = APIRouter(prefix="/api/v1/users", tags=["Users"])
 async def create_rider(
     data: RiderCreateByDispatch,
     request: Request,
-    current_user: dict = Depends(get_current_profile),
+    current_user: dict = Depends(get_current_user),
     dispatch_user=Depends(require_user_type([UserType.DISPATCH])),
     supabase: AsyncClient = Depends(get_supabase_admin_client),
     
@@ -37,10 +37,10 @@ async def create_rider(
         UserProfileResponse: The created rider's profile.
     """
     logger.info(
-        "create_rider_requested", dispatch_id=current_user["id"], rider_phone=data.phone
+        "create_rider_requested", dispatch_id=current_user.id, rider_phone=data.phone
     )
     result = await user_service.create_rider_by_dispatch(data, current_user, supabase, request)
-    logger.info("rider_created", dispatch_id=current_user["id"], rider_id=result.id)
+    logger.info("rider_created", dispatch_id=current_user.id, rider_id=result.id)
     return result
 
 
