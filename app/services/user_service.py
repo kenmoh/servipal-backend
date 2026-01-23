@@ -178,7 +178,7 @@ async def create_rider_by_dispatch(
 ) -> UserProfileResponse:
     logger.info(
         event="create_rider_attempt",
-        dispatch_id=current_profile["id"],
+        dispatch_id=current_profile.id,
         rider_phone=data.phone,
     )
 
@@ -189,7 +189,7 @@ async def create_rider_by_dispatch(
     dispatch_profile_resp = (
         await supabase_admin.table("profiles")
         .select("user_type, business_name, business_address, state, business_registration_number")
-        .eq("id", current_profile["id"])
+        .eq("id", current_profile.id)
         .single()
         .execute()
     )

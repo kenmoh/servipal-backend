@@ -8,7 +8,6 @@ from app.schemas.user_schemas import (
     DetailedRiderResponse,
     OnlineStatusResponse,
 )
-from app.services import user_service
 from app.dependencies.auth import get_current_profile, require_user_type, get_current_user
 from app.database.supabase import get_supabase_client, get_supabase_admin_client
 from app.config.logging import logger
