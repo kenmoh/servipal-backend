@@ -78,14 +78,6 @@ async def initiate_delivery_payment(
         delivery_fee = round(delivery_fee, 2)
         amount_due_dispatch = round(delivery_fee * (Decimal(1) - Decimal(str(commission_percentage))), 2)
 
-
-        print('*' * 50)
-        print('Delivery Fee:', delivery_fee)
-        print('Amount Due Dispatch:', amount_due_dispatch)
-        print('Commission Percentage:', commission_percentage)
-        print('Base delivery fee:', base_fee)
-        print('*' * 50)
-
         # 4. Generate unique tx_ref
         tx_ref = f"DELIVERY-{uuid.uuid4().hex[:24].upper()}"
 
@@ -101,7 +93,7 @@ async def initiate_delivery_payment(
             "distance": str(data.distance),
             "description": data.description,
             "created_at": datetime.datetime.now().isoformat(),
-            "package_name": data.package_name,
+            
         }
         await save_pending(f"pending_delivery_{tx_ref}", pending_data, expire=1800)
 

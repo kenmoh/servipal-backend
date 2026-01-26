@@ -60,11 +60,12 @@ async def process_successful_delivery_payment(
             .insert(
                 {
                     "sender_id": sender_id,
+                    "package_name": delivery_data["package_name"],
                     "receiver_phone": delivery_data["receiver_phone"],
                     "pickup_location": delivery_data["pickup_location"],
                     "destination": delivery_data["destination"],
-                    "pickup_coordinates": f"POINT({delivery_data['pickup_coordinates'][1]} {delivery_data['pickup_coordinates'][0]})",
-                    "dropoff_coordinates": f"POINT({delivery_data['dropoff_coordinates'][1]} {delivery_data['dropoff_coordinates'][0]})",
+                    "pickup_coordinates": [delivery_data['pickup_lat'], delivery_data['pickup_lng']],
+                    "dropoff_coordinates": [delivery_data['dropoff_lat'], delivery_data['dropoff_lng']],
                     "additional_info": delivery_data.get("description"),
                     "delivery_type": delivery_data["delivery_type"],
                     "total_price": expected_fee,
@@ -74,7 +75,7 @@ async def process_successful_delivery_payment(
                     "delivery_status": "PAID_NEEDS_RIDER",
                     "payment_status": "PAID",
                     "escrow_status": "HELD",
-                    "package_image_url": pending.get("package_image_url"),
+                    "package_image_url": delivery_data['package_image_url'],
                     "distance": pending.get("distance", 0),
                 }
             )
