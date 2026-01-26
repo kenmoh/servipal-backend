@@ -62,7 +62,7 @@ async def process_successful_delivery_payment(
                     "destination": delivery_data["destination"],
                     "pickup_coordinates": f"POINT({delivery_data['pickup_coordinates'][1]} {delivery_data['pickup_coordinates'][0]})",
                     "dropoff_coordinates": f"POINT({delivery_data['dropoff_coordinates'][1]} {delivery_data['dropoff_coordinates'][0]})",
-                    "description": delivery_data.get("description"),
+                    "additional_info": delivery_data.get("description"),
                     "delivery_type": delivery_data["delivery_type"],
                     "total_price": expected_fee,
                     "delivery_fee": expected_fee,
