@@ -93,7 +93,7 @@ async def process_successful_delivery_payment(
             {
                 "p_user_id": sender_id,
                 "p_balance_change": Decimal('0'),
-                "p_escrow_balance_change": -expected_rounded,
+                "p_escrow_balance_change": expected_rounded,
             },
         ).execute()
         logger.info("fee_held_in_sender_escrow", sender_id=sender_id, expected_fee=expected_fee)
