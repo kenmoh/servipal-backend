@@ -17,7 +17,6 @@ async def process_successful_delivery_payment(
     paid_amount: Decimal,
     flw_ref: str,
     supabase: AsyncClient,
-    request: Optional[Request] = None,
 ):
     logger.info("processing_delivery_payment", tx_ref=tx_ref, paid_amount=paid_amount)
     verified = await verify_transaction_tx_ref(tx_ref)
@@ -52,9 +51,6 @@ async def process_successful_delivery_payment(
     try:
         # Create delivery_order (no rider yet)
         logger.info("creating_delivery_order", sender_id=sender_id, delivery_data=delivery_data)
-        
-        delivery_percentage = await get_commission_rate('DELIVERY', supabase)
-        amount_due_dispatch = round(Decimal(Decimal(expected_fee) * Decimal(delivery_percentage)), 2)
 
         order_resp = (
             await supabase.table("delivery_orders")
@@ -70,12 +66,13 @@ async def process_successful_delivery_payment(
                     "delivery_type": delivery_data["delivery_type"],
                     "total_price": expected_fee,
                     "delivery_fee": expected_fee,
-                    "amount_due_dispatch": amount_due_dispatch,
+                    "duration": delivery_data.get('duration'),
+                    "amount_due_dispatch": delivery_data.get('amount_due_dispatch'),
                     "status": "PAID_NEEDS_RIDER",
                     "payment_status": "PAID",
                     "escrow_status": "HELD",
                     "package_image_url": pending.get("package_image_url"),
-                    "distance": pending.get("distance_km", 0),
+                    "distance_km": pending.get("distance_km", 0),
                 }
             )
             .execute()

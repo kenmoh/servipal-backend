@@ -71,7 +71,7 @@ async def initiate_delivery_payment(
         # 2. Get charges from DB
         charges = (
             await supabase.table("charges_and_commissions")
-            .select("base_delivery_fee, delivery_fee_per_km")
+            .select("base_delivery_fee, delivery_fee_per_km, delivery_commission_percentage")
             .single()
             .execute()
         )
@@ -83,10 +83,12 @@ async def initiate_delivery_payment(
 
         base_fee = charges.data["base_delivery_fee"]
         per_km_fee = charges.data["delivery_fee_per_km"]
+        commission_percentage = charges.data["delivery_commission_percentage"]
 
         # 3. Calculate final fee
-        delivery_fee = base_fee + (per_km_fee * distance_km)
+        delivery_fee = base_fee + (per_km_fee * data.distance_km)
         delivery_fee = round(delivery_fee, 2)
+        amount_due_dispatch = round(delivery_fee * (1 - commission_percentage))
 
         # 4. Generate unique tx_ref
         tx_ref = f"DELIVERY-{uuid.uuid4().hex[:20].upper()}"
@@ -96,9 +98,11 @@ async def initiate_delivery_payment(
             "sender_id": str(sender_id),
             "delivery_data": data.model_dump(),
             "delivery_fee": str(delivery_fee),
+            "amount_due_dispatch": str(amount_due_dispatch),
             "tx_ref": tx_ref,
             "package_image_url": data.package_image_url,
-            "distance_km": str(distance_km),
+            "duration": data.duration,
+            "distance_km": str(data.distance_km),
             "description": data.description,
             "created_at": datetime.datetime.now().isoformat(),
             "package_name": data.package_name,
@@ -119,7 +123,7 @@ async def initiate_delivery_payment(
             customer=PaymentCustomerInfo(
                 email=customer_info.get("email"),
                 phone_number=customer_info.get("phone_number"),
-                full_name=customer_info.get("full_name") or "N/A",
+                full_name=customer_info.get("full_name")  or "N/A",
             ),
             customization=PaymentCustomization(
                 title="Servipal Delivery",
