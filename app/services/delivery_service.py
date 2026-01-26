@@ -76,7 +76,7 @@ async def initiate_delivery_payment(
         # 3. Calculate final fee
         delivery_fee = base_fee + (per_km_fee * data.distance)
         delivery_fee = round(delivery_fee, 2)
-        amount_due_dispatch = round(delivery_fee * (1 - commission_percentage). 2)
+        amount_due_dispatch = round(delivery_fee * (1 - commission_percentage), 2)
 
         # 4. Generate unique tx_ref
         tx_ref = f"DELIVERY-{uuid.uuid4().hex[:20].upper()}"
