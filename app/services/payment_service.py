@@ -68,7 +68,7 @@ async def process_successful_delivery_payment(
                     "delivery_fee": expected_fee,
                     "duration": delivery_data.get('duration'),
                     "amount_due_dispatch": delivery_data.get('amount_due_dispatch'),
-                    "status": "PAID_NEEDS_RIDER",
+                    "delivery_status": "PAID_NEEDS_RIDER",
                     "payment_status": "PAID",
                     "escrow_status": "HELD",
                     "package_image_url": pending.get("package_image_url"),
