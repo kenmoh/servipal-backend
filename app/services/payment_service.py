@@ -35,7 +35,7 @@ async def process_successful_delivery_payment(
         return  # already processed or expired
 
     expected_fee = pending["delivery_fee"]
-    sender_id = UUID(pending["sender_id"])
+    sender_id = str(pending["sender_id"])
     delivery_data = pending["delivery_data"]
     amount_due_dispatch = pending["amount_due_dispatch"]
 
@@ -91,7 +91,7 @@ async def process_successful_delivery_payment(
         await supabase.rpc(
             "update_user_wallet",
             {
-                "p_user_id": sender_id,
+                "p_user_id": str(sender_id),
                 "p_balance_change": Decimal('0'),
                 "p_escrow_balance_change": expected_rounded,
             },
@@ -106,9 +106,9 @@ async def process_successful_delivery_payment(
                 {
                     "tx_ref": tx_ref,
                     "amount": expected_fee,
-                    "from_user_id": sender_id,
+                    "from_user_id": str(sender_id),
                     "to_user_id": None,
-                    "order_id": order_id,
+                    "order_id": str(order_id),
                     "transaction_type": "DELIVERY_FEE",
                     "status": "HELD",
                     "payment_status": "PAID",

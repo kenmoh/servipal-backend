@@ -129,7 +129,7 @@ async def flutterwave_webhook(
     # 6. Queue the job with retry (5 attempts, exponential backoff)
     job_id = enqueue_job(
         handler,
-        tx_ref=tx_ref,
+        tx_ref=str(tx_ref),
         paid_amount=paid_amount,
         flw_ref=flw_ref,
         retry=Retry(max=5, interval=[30, 60, 120, 300, 600]),
