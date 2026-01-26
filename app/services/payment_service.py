@@ -52,6 +52,10 @@ async def process_successful_delivery_payment(
     try:
         # Create delivery_order (no rider yet)
         logger.info("creating_delivery_order", sender_id=sender_id, delivery_data=delivery_data)
+        
+        delivery_percentage = await get_commission_rate('DELIVERY', supabase)
+        amount_due_dispatch = round(Decimal(Decimal(expected_fee) * Decimal(delivery_percentage)), 2)
+
         order_resp = (
             await supabase.table("delivery_orders")
             .insert(
@@ -66,8 +70,7 @@ async def process_successful_delivery_payment(
                     "delivery_type": delivery_data["delivery_type"],
                     "total_price": expected_fee,
                     "delivery_fee": expected_fee,
-                    "amount_due_dispatch": expected_fee
-                    * await get_commission_rate("DELIVERY", supabase),
+                    "amount_due_dispatch": amount_due_dispatch,
                     "status": "PAID_NEEDS_RIDER",
                     "payment_status": "PAID",
                     "escrow_status": "HELD",
@@ -117,22 +120,6 @@ async def process_successful_delivery_payment(
 
         await delete_pending(pending_key)
         logger.info("pending_delivery_deleted", tx_ref=tx_ref)
-
-        # # Audit log
-        # print('*'*50, "logging_audit_event", tx_ref=tx_ref, sender_id=sender_id, expected_fee=expected_fee)
-        # await log_audit_event(
-        #     supabase,
-        #     entity_type="DELIVERY_ORDER",
-        #     entity_id=str(order_id),
-        #     action="PAYMENT_RECEIVED",
-        #     new_value={"payment_status": "PAID", "amount": expected_fee},
-        #     actor_id=sender_id,
-        #     actor_type="USER",
-        #     change_amount=Decimal(str(expected_fee)),
-        #     notes=f"Delivery payment received via Flutterwave: {tx_ref}",
-        #     request=request,
-        # )
-        # logger.info("audit_event_logged", tx_ref=tx_ref, sender_id=sender_id, expected_fee=expected_fee)
 
         logger.info(
             event="delivery_payment_processed_success", tx_ref=tx_ref, order_id=str(order_id)

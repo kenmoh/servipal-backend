@@ -89,7 +89,7 @@ async def initiate_delivery_payment(
         delivery_fee = round(delivery_fee, 2)
 
         # 4. Generate unique tx_ref
-        tx_ref = f"DELIVERY-{uuid.uuid4().hex[:32].upper()}"
+        tx_ref = f"DELIVERY-{uuid.uuid4().hex[:20].upper()}"
 
         # 5. Save pending state in Redis
         pending_data = {

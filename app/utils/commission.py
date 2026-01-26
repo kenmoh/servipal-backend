@@ -8,10 +8,10 @@ async def get_commission_rate(order_type: str, supabase: AsyncClient) -> float:
     Returns the vendor/dispatch share (e.g., 0.85)
     """
     column_map = {
-        "DELIVERY": "delivery_commission_rate",
-        "FOOD": "food_commission_rate",
-        "LAUNDRY": "laundry_commission_rate",
-        "PRODUCT": "product_commission_rate",
+        "DELIVERY": "delivery_commission_percentage",
+        "FOOD": "food_commission_percentage",
+        "LAUNDRY": "laundry_commission_percentage",
+        "PRODUCT": "product_commission_percentage",
     }
 
     if order_type not in column_map:
