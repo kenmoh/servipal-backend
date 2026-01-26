@@ -74,9 +74,9 @@ async def initiate_delivery_payment(
         commission_percentage = charges.data["delivery_commission_percentage"]
 
         # 3. Calculate final fee
-        delivery_fee = base_fee + (per_km_fee * data.distance_km)
+        delivery_fee = base_fee + (per_km_fee * data.distance)
         delivery_fee = round(delivery_fee, 2)
-        amount_due_dispatch = round(delivery_fee * (1 - commission_percentage))
+        amount_due_dispatch = round(delivery_fee * (1 - commission_percentage). 2)
 
         # 4. Generate unique tx_ref
         tx_ref = f"DELIVERY-{uuid.uuid4().hex[:20].upper()}"
@@ -109,7 +109,6 @@ async def initiate_delivery_payment(
             destination=data.destination,
             package_name=data.package_name,
             duration=data.duration,
-            distance=data.distance,
             customer=PaymentCustomerInfo(
                 email=customer_info.get("email"),
                 phone_number=customer_info.get("phone_number"),
