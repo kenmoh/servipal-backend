@@ -109,9 +109,8 @@ async def process_successful_delivery_payment(
                     "from_user_id": str(sender_id),
                     "to_user_id": None,
                     "order_id": str(order_id),
-                    "transaction_type": "DELIVERY_FEE",
-                    "status": "HELD",
-                    "payment_status": "PAID",
+                    "transaction_type": "ESCROW_HOLD",
+                    "payment_status": "SUCCESS",
                     "payment_method": "FLUTTERWAVE",
                     "details": {"flw_ref": flw_ref},
                 }
