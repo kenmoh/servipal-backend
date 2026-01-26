@@ -65,6 +65,7 @@ async def process_successful_delivery_payment(
                     "additional_info": delivery_data.get("description"),
                     "delivery_type": delivery_data["delivery_type"],
                     "total_price": expected_fee,
+                    "amount_due_dispatch": delivery_data.get('amount_due_dispatch'),
                     "delivery_fee": expected_fee,
                     "duration": delivery_data.get('duration'),
                     "amount_due_dispatch": delivery_data.get('amount_due_dispatch'),
