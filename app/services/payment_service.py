@@ -1,4 +1,5 @@
 from app.utils.redis_utils import get_pending, delete_pending
+from uuid import UUID
 from supabase import AsyncClient
 from app.utils.commission import get_commission_rate
 from app.config.logging import logger
@@ -90,7 +91,7 @@ async def process_successful_delivery_payment(
         await supabase.rpc(
             "update_wallet_balance",
             {
-                "p_user_id": sender_id,
+                "p_user_id": UUID(sender_id),
                 "p_delta": expected_fee,
                 "p_field": "escrow_balance",
             },
