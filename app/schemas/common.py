@@ -55,10 +55,11 @@ class PaymentInitializationResponse(BaseModel):
     )
     public_key: str
     currency: str
-    distance_km: str
     customer: PaymentCustomerInfo
     customization: PaymentCustomization
     message: str
     receiver_phone: str
     pickup_location: str
     destination: str
+    distance: Decimal
+    duration: str

@@ -3,6 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Form, File, Uplo
 from uuid import UUID
 import uuid
 from typing import Optional
+from decimal import Decimal
 
 from app.schemas.delivery_schemas import (
     PackageDeliveryCreate,
@@ -39,6 +40,8 @@ async def initiate_delivery_payment(
     pickup_location: str = Form(...),
     destination: str = Form(...),
     pickup_lat: float = Form(...),
+    duration: str = Form(...),
+    distance: Decimal = Form(...),
     pickup_lng: float = Form(...),
     dropoff_lat: float = Form(...),
     dropoff_lng: float = Form(...),
@@ -85,6 +88,8 @@ async def initiate_delivery_payment(
         description=description,
         delivery_type=delivery_type,
         package_image_url=url,
+        distance=duration,
+        duration=duration
     )
 
     return await delivery_service.initiate_delivery_payment(
