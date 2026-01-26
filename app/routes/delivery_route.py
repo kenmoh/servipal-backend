@@ -88,7 +88,7 @@ async def initiate_delivery_payment(
         description=description,
         delivery_type=delivery_type,
         package_image_url=url,
-        distance=duration,
+        distance=distance,
         duration=duration
     )
 
