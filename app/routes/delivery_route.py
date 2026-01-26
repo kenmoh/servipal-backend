@@ -41,7 +41,7 @@ async def initiate_delivery_payment(
     destination: str = Form(...),
     pickup_lat: float = Form(...),
     duration: str = Form(...),
-    distance: Decimal = Form(...),
+    distance: str = Form(...),
     pickup_lng: float = Form(...),
     dropoff_lat: float = Form(...),
     dropoff_lng: float = Form(...),

@@ -26,7 +26,7 @@ class PackageDeliveryCreate(BaseModel):
     dropoff_coordinates: tuple[float, float]
     description: str
     delivery_type: str = "STANDARD"
-    distance: Decimal
+    distance: str
     duration: str
     package_image_url: Optional[str]
 
