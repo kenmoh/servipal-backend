@@ -61,5 +61,5 @@ class PaymentInitializationResponse(BaseModel):
     receiver_phone: str
     pickup_location: str
     destination: str
-    distance: Decimal
+    distance: str
     duration: str
