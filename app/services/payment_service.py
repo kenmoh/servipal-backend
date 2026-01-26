@@ -72,7 +72,7 @@ async def process_successful_delivery_payment(
                     "payment_status": "PAID",
                     "escrow_status": "HELD",
                     "package_image_url": pending.get("package_image_url"),
-                    "distance_km": pending.get("distance_km", 0),
+                    "distance": pending.get("distance", 0),
                 }
             )
             .execute()

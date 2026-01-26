@@ -55,18 +55,17 @@ async def initiate_delivery_payment(
         data=data.model_dump(),
     )
     try:
-        # 1. Calculate distance using RPC
-        distance_resp = await supabase.rpc(
-            "calculate_distance",
-            {
-                "p_lat1": data.pickup_coordinates[0],
-                "p_lng1": data.pickup_coordinates[1],
-                "p_lat2": data.dropoff_coordinates[0],
-                "p_lng2": data.dropoff_coordinates[1],
-            },
-        ).execute()
+        # # 1. Calculate distance using RPC
+        # distance_resp = await supabase.rpc(
+        #     "calculate_distance",
+        #     {
+        #         "p_lat1": data.pickup_coordinates[0],
+        #         "p_lng1": data.pickup_coordinates[1],
+        #         "p_lat2": data.dropoff_coordinates[0],
+        #         "p_lng2": data.dropoff_coordinates[1],
+        #     },
+        # ).execute()
 
-        distance_km = distance_resp.data if distance_resp.data is not None else 0.0
 
         # 2. Get charges from DB
         charges = (
@@ -102,7 +101,7 @@ async def initiate_delivery_payment(
             "tx_ref": tx_ref,
             "package_image_url": data.package_image_url,
             "duration": data.duration,
-            "distance_km": str(data.distance_km),
+            "distance": str(data.distance),
             "description": data.description,
             "created_at": datetime.datetime.now().isoformat(),
             "package_name": data.package_name,
@@ -114,7 +113,7 @@ async def initiate_delivery_payment(
             tx_ref=tx_ref,
             amount=Decimal(str(delivery_fee)),
             public_key=settings.FLUTTERWAVE_PUBLIC_KEY,
-            distance_km=f"{distance_km:.1f}",
+            distance=f"{data.distance:.1f}",
             currency="NGN",
             receiver_phone=data.receiver_phone,
             pickup_location=data.pickup_location,
@@ -127,7 +126,7 @@ async def initiate_delivery_payment(
             ),
             customization=PaymentCustomization(
                 title="Servipal Delivery",
-                description=f"From {data.pickup_location} to {data.destination} ({distance_km:.1f} km)",
+                description=f"From {data.pickup_location} to {data.destination} ({data.distance:.1f} km)",
                 logo="https://mohdelivery.s3.us-east-1.amazonaws.com/favion/favicon.ico"
             ),
             message="Ready for payment — use Flutterwave SDK",
