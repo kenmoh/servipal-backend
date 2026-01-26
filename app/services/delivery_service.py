@@ -69,14 +69,14 @@ async def initiate_delivery_payment(
                 status.HTTP_500_INTERNAL_SERVER_ERROR, "Charges configuration missing"
             )
 
-        base_fee = charges.data["base_delivery_fee"]
-        per_km_fee = charges.data["delivery_fee_per_km"]
-        commission_percentage = charges.data["delivery_commission_percentage"]
+        base_fee = Decimal(str(charges.data["base_delivery_fee"]))
+        per_km_fee = Decimal(str(charges.data["delivery_fee_per_km"]))
+        commission_percentage = Decimal(str(charges.data["delivery_commission_percentage"]))
 
         # 3. Calculate final fee
         delivery_fee = base_fee + (per_km_fee * data.distance)
         delivery_fee = round(delivery_fee, 2)
-        amount_due_dispatch = round(delivery_fee * (1 - commission_percentage), 2)
+        amount_due_dispatch = round(delivery_fee * (Decimal(1) - commission_percentage), 2)
 
         # 4. Generate unique tx_ref
         tx_ref = f"DELIVERY-{uuid.uuid4().hex[:20].upper()}"
