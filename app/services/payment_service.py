@@ -74,12 +74,12 @@ async def process_successful_delivery_payment(
                 "p_pickup_location": delivery_data["pickup_location"],
                 "p_destination": delivery_data["destination"],
                 "p_pickup_coordinates": [
-                    delivery_data['pickup_lat'],
-                    delivery_data['pickup_lng']
+                    delivery_data[0],
+                    delivery_data[1]
                 ],
                 "p_dropoff_coordinates": [
-                    delivery_data['dropoff_lat'],
-                    delivery_data['dropoff_lng']
+                    delivery_data[0],
+                    delivery_data[1]
                 ],
                 "p_additional_info": delivery_data.get("description"),
                 "p_delivery_type": delivery_data["delivery_type"],

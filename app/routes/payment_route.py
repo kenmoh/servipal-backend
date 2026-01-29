@@ -92,7 +92,8 @@ async def flutterwave_webhook(
     print('*' * 100)
     print(f"PAYMENT STATUS: {data.get('status')}")
     print(f"Webhook Event: {webhook_event}")
-    print('REFERENCE: {tx_ref}')
+    print(f"REFERENCE: {tx_ref}")
+    print(f"FLUTTERWAVE REFERENCE: {flw_ref}")
     print(f"Data: {data}")
     print('*' * 100)
 
