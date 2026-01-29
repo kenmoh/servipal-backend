@@ -71,12 +71,6 @@ async def flutterwave_webhook(
     data = payload.get("data") if payload.get("data") else payload
 
     flw_ref = data.get("id") or payload.get("id")
-
-    print('*' * 100)
-    print(f"Webhook Event: {webhook_event}")
-    print(f"Data: {data}")
-    print('*' * 100)
-
     logger.info(
         event="flutterwave_webhook_received",
         webhook_event=webhook_event,
@@ -94,6 +88,13 @@ async def flutterwave_webhook(
 
     tx_ref = data.get("tx_ref")
     paid_amount = data.get("amount")
+
+    print('*' * 100)
+    print(f"PAYMENT STATUS: {data.get('status')}")
+    print(f"Webhook Event: {webhook_event}")
+    print('REFERENCE: {tx_ref}')
+    print(f"Data: {data}")
+    print('*' * 100)
 
     if not tx_ref:
         logger.warning(event="flutterwave_webhook_missing_tx_ref", level="warning", payload=payload)
