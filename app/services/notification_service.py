@@ -23,6 +23,13 @@ async def send_push_notification(
 ) -> bool:
     """
     Sends a push notification using Expo's server SDK.
+    Args
+        token (str): The push token to send the notification to
+        title (str): Notification title
+        body (str): Notification body
+        data (dict): Additional data to send
+    Returns
+        bool: True if the notification was sent successfully
     """
     try:
         response = PushClient().publish(
@@ -74,6 +81,13 @@ async def notify_user(
 ) -> bool:
     """
     Helper to fetch a user's push token and send them a notification.
+    Returns True if the notification was sent successfully.
+    Args
+        user_id (UUID): The user to notify
+        title (str): Notification title
+        body (str): Notification body
+        data (dict): Additional data to send
+        supabase (AsyncClient): Supabase client instance
     """
     if not supabase:
         from app.database.supabase import create_supabase_admin_client
