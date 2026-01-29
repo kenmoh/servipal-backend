@@ -8,7 +8,7 @@ from app.config.logging import logger
 from supabase import AsyncClient
 from uuid import UUID
 from datetime import datetime
-from app.dependencies import require_user_type
+from app.dependencies.auth import require_user_type
 router = APIRouter(prefix="/api/v1/admin", tags=["Admin"])
 
 
