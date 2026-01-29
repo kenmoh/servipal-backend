@@ -15,7 +15,6 @@ class WalletTransactionResponse(BaseModel):
     transaction_type: str
     status: str
     payment_method: str
-    # details: Dict
     created_at: datetime
 
 

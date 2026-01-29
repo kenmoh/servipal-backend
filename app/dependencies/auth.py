@@ -109,7 +109,7 @@ async def get_customer_contact_info(
     try:
         profile_resp = (
             await supabase_client.table("profiles")
-            .select("email, phone_number, full_name, business_name")
+            .select("email, phone_number, full_name, business_name, store_name")
             .eq("id", current_profile.get("id"))
             .single()
             .execute()
@@ -127,7 +127,7 @@ async def get_customer_contact_info(
             "phone_number": profile.get("phone_number", ""),
             "full_name": profile.get("full_name")
             if profile.get("full_name")
-            else profile.get("business_name", ""),
+            else profile.get("business_name") if profile.get('business_name') else profile.get('store_name'),
         }
 
     except Exception as e:

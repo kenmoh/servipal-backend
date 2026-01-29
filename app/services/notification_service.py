@@ -12,6 +12,7 @@ from exponent_server_sdk import (
 from requests.exceptions import ConnectionError, HTTPError
 from app.config.logging import logger
 from datetime import datetime
+from app.utils.utils import get_push_token
 
 
 # ───────────────────────────────────────────────
@@ -79,56 +80,10 @@ async def notify_user(
 
         supabase = await create_supabase_admin_client()
 
-    token_data = await get_my_fcm_token(user_id, supabase)
-    if not token_data or not token_data.token:
+    token = await get_push_token(user_id, supabase)
+    if not token:
         logger.debug("push_notification_no_token", user_id=str(user_id))
         return False
 
-    return await send_push_notification(token_data.token, title, body, data)
+    return await send_push_notification(token, title, body, data)
 
-
-# ───────────────────────────────────────────────
-# Token Management
-# ───────────────────────────────────────────────
-async def register_fcm_token(
-    data: FCMTokenRegister, user_id: UUID, supabase: AsyncClient
-) -> FCMTokenResponse:
-    try:
-        # Upsert: if user_id exists → update token/platform/updated_at
-        # if not → insert new
-        await (
-            supabase.table("fcm_tokens")
-            .upsert(
-                {
-                    "user_id": str(user_id),
-                    "token": data.token,
-                    "platform": data.platform,
-                    "updated_at": datetime.now().isoformat(),
-                },
-                on_conflict="user_id",
-            )
-            .execute()
-        )
-        return FCMTokenResponse(token=data.token, platform=data.platform)
-
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Failed to register token: {str(e)}"
-        )
-
-
-async def get_my_fcm_token(
-    user_id: UUID, supabase: AsyncClient
-) -> Optional[FCMTokenResponse]:
-    resp = (
-        await supabase.table("fcm_tokens")
-        .select("*")
-        .eq("user_id", str(user_id))
-        .single()
-        .execute()
-    )
-
-    if not resp.data:
-        return None
-
-    return FCMTokenResponse(**resp.data)
