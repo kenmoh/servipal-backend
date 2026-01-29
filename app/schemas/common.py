@@ -38,7 +38,7 @@ class VendorResponse(BaseModel):
 
 class PaymentCustomerInfo(BaseModel):
     email: str
-    phone_number: str = Field(..., pattern=r"^\+\d{10,15}$")
+    phone_number: str
     full_name: str | None = None
 
 
