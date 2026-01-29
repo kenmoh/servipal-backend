@@ -7,7 +7,6 @@ from app.routes import (
     user_routes,
     payment_route,
     delivery_route,
-    notification_router,
     review_router,
     food_router,
     laundry_route,
@@ -21,7 +20,7 @@ from app.routes import (
 from app.config.logging import logger
 from app.utils.payment import get_all_banks
 from app.schemas.bank_schema import BankSchema
-from app.config.config import settings, redis_client, sync_redis_client
+from app.config.config import settings, sync_redis_client
 import logfire
 from rq import Worker
 import multiprocessing
@@ -191,7 +190,6 @@ app.include_router(user_routes.router)
 app.include_router(wallet_route.router, include_in_schema=False)
 app.include_router(payment_route.router)
 app.include_router(delivery_route.router)
-app.include_router(notification_router.router)
 app.include_router(review_router.router)
 app.include_router(food_router.router)
 app.include_router(laundry_route.router)
