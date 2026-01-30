@@ -89,8 +89,6 @@ async def initiate_delivery_payment(
             "amount_due_dispatch": str(amount_due_dispatch),
             "tx_ref": tx_ref,
             "package_image_url": data.package_image_url,
-            # "duration": data.duration,
-            # "distance": str(data.distance),
             "description": data.description,
             "created_at": datetime.datetime.now().isoformat(),
             
