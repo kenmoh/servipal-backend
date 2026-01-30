@@ -70,7 +70,7 @@ async def flutterwave_webhook(
 
     data = payload.get("data") if payload.get("data") else payload
 
-    flw_ref = data.get("id") or payload.get("id")
+    flw_ref = data.get("flw_ref") or payload.get("flw_ref")
     logger.info(
         event="flutterwave_webhook_received",
         webhook_event=webhook_event,
