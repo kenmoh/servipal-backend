@@ -65,8 +65,12 @@ class ProductItemResponse(BaseModel):
 # Product Order Creation (customer checkout)
 # ───────────────────────────────────────────────
 class ProductOrderItem(BaseModel):
+    vendor_id: str
     item_id: UUID
     quantity: int = Field(..., ge=1)
+    sizes: List[str] = None
+    colors: List[str] = None
+    images: List[str] = None
 
 
 class ProductOrderCreate(BaseModel):

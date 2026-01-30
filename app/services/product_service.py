@@ -16,6 +16,12 @@ from decimal import Decimal
 from typing import List
 from app.utils.redis_utils import save_pending
 from app.config.config import settings
+from app.schemas.common import (
+    PaymentInitializationResponse,
+    PaymentCustomerInfo,
+    PaymentCustomization,
+)
+
 # from app.utils.commission import get_commission_rate
 
 
@@ -150,13 +156,13 @@ async def delete_product_item(
 
 # Initiate payment (single item + quantity)
 async def initiate_product_payment(
-    data: ProductOrderCreate, buyer_id: UUID, customer_info: dict, supabase: AsyncClient
+    data: ProductOrderCreate, customer_info: dict, supabase: AsyncClient
 ) -> dict:
     try:
         # Fetch the product
         item_resp = (
             await supabase.table("product_items")
-            .select("id, seller_id, price, stock, in_stock, sizes, colors")
+            .select("id, seller_id, price, stock, name, in_stock, sizes, colors")
             .eq("id", str(data.item_id))
             .single()
             .execute()
@@ -196,13 +202,18 @@ async def initiate_product_payment(
 
         # Save pending state
         pending_data = {
-            "buyer_id": str(buyer_id),
-            "seller_id": str(item["seller_id"]),
-            "item_id": str(data.item_id),
-            "quantity": data.quantity,
-            "subtotal": float(subtotal),
-            "delivery_fee": float(delivery_fee),
-            "grand_total": float(grand_total),
+            "product_name": item["name"],
+            "unit_price": str(item["price"]), # Accurate price at time of purchase
+            "customer_id": str(customer_info.get("id")),
+            "vendor_id": str(data.item.vendor_id),
+            "item_id": str(data.item.item_id),
+            "quantity": data.item.quantity,
+            "selected_size": data.item.sizes,     # Capturing buyer's choice
+            "selected_color": data.item.colors,   # Capturing buyer's choice
+            "subtotal": str(subtotal),
+            "delivery_fee": str(delivery_fee),
+            "grand_total": str(grand_total),
+            "images": data.item.images,
             "delivery_option": data.delivery_option,
             "delivery_address": data.delivery_address,
             "additional_info": data.additional_info,
@@ -211,18 +222,25 @@ async def initiate_product_payment(
         }
         await save_pending(f"pending_product_{tx_ref}", pending_data)
 
-        return {
-            "tx_ref": tx_ref,
-            "amount": float(grand_total),
-            "public_key": settings.FLUTTERWAVE_PUBLIC_KEY,
-            "currency": "NGN",
-            "customer": customer_info,
-            "customization": {
-                "title": "Servipal Product Purchase",
-                "description": f"{data.quantity} × product",
-            },
-            "message": "Ready for payment — Pay with Flutterwave",
-        }
+        return PaymentInitializationResponse(
+            tx_ref=tx_ref,
+            amount=Decimal(str(grand_total)),
+            public_key=settings.FLUTTERWAVE_PUBLIC_KEY,
+            currency="NGN",
+            receiver_phone=customer_info.get("phone_number"),
+            package_name=item['name'],
+            customer=PaymentCustomerInfo(
+                email=customer_info.get("email"),
+                phone_number=customer_info.get("phone_number"),
+                full_name=customer_info.get("full_name")  or "N/A",
+            ),
+            customization=PaymentCustomization(
+                title="Servipal Delivery",
+                description=f"Payment for {item['name']} ({data.item.quantity} units)",
+                logo="https://mohdelivery.s3.us-east-1.amazonaws.com/favion/favicon.ico"
+            ),
+            message="Ready for payment",
+        ).model_dump()
 
     except Exception as e:
         raise HTTPException(500, f"Product payment initiation failed: {str(e)}")

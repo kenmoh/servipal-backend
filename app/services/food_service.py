@@ -296,7 +296,8 @@ async def customer_confirm_food_order(
                 status=order.data["order_status"],
             )
             raise HTTPException(400, "Order not ready for confirmation yet")
-
+        
+        
         tx = (
             await supabase.table("transactions")
             .select("id, amount, to_user_id, status")
@@ -310,6 +311,7 @@ async def customer_confirm_food_order(
 
         full_amount = tx.data["amount"]
         vendor_id = order.data["vendor_id"] or tx.data["to_user_id"]
+        platform_fee = Decimal(order['grand_total']) - Decimal(order['amount_due_vendor'])
 
         # Atomic release: deduct customer escrow + credit vendor balance
         await supabase.rpc(

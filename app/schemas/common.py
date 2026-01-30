@@ -58,8 +58,10 @@ class PaymentInitializationResponse(BaseModel):
     customer: PaymentCustomerInfo
     customization: PaymentCustomization
     message: str
-    receiver_phone: str
-    pickup_location: str
-    destination: str
-    distance: str
-    duration: str
+    receiver_phone: str | None = None
+    pickup_location: str | None = None
+    destination: str | None = None
+    distance: str | None = None
+    duration: str | None = None
+    distance: str | None = None
+    duration: str | None = None
