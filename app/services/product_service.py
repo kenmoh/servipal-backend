@@ -177,7 +177,7 @@ async def initiate_product_payment(
             raise HTTPException(400, f"Only {item['stock']} units left in stock")
 
         # Calculate subtotal
-        subtotal = Decimal(str(item["price"])) * data.quantity
+        subtotal = Decimal(str(item["price"])) * data.item.quantity
 
         # Delivery fee (from seller profile)
         shipping_cost = item['shipping_cost']

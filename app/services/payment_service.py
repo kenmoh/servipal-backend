@@ -503,7 +503,7 @@ async def process_successful_product_payment(
         # 1 Create the main product_order
         product_id = pending["item_id"]
         quantity = pending["quantity"]
-        product_name = pending.get("item_name", "Product") 
+        product_name = pending.get("product_name", "Product") 
         unit_price = pending.get("unit_price", pending["subtotal"] / quantity)
         
         # 2. Create the main product_order
