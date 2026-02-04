@@ -31,7 +31,7 @@ class ProductItemCreate(BaseModel):
         None, description="Available colors e.g. ['Red', 'Blue', '#000000']"
     )
     category_id: Optional[UUID] = None
-    warranty: int = Field(default=0)
+    warranty: str | None = None
     shipping_cost: Decimal | None = None
     return_days: int = Field(default=0)
     images: List[str] = Field(default_factory=list, description="URLs after upload")

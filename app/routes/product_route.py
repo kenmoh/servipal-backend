@@ -39,7 +39,7 @@ async def create_product_item(
     sizes: Optional[str] = Form(None),
     colors: Optional[str] = Form(None),
     category_id: Optional[UUID] = Form(None),
-    warranty: Optional[int] = Form(...),
+    warranty: Optional[str] = Form(None),
     shipping_cost: Optional[Decimal] = Form(None),
     return_days: Optional[int] = Form(...),
     images: List[UploadFile] = File(default=[]),
