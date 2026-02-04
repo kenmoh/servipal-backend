@@ -10,7 +10,7 @@ from app.schemas.product_schemas import (
     ProductItemUpdate,
     ProductItemResponse,
     ProductOrderCreate,
-    ProductOrderResponse,
+    PaymentInitializationResponse,
     ProductVendorOrderAction,
     ProductVendorOrderActionResponse,
     ProductVendorMarkReadyResponse,
@@ -179,7 +179,7 @@ async def delete_product_item(
 # ───────────────────────────────────────────────
 # Payment Initiation (Checkout)
 # ───────────────────────────────────────────────
-@router.post("/initiate-payment", response_model=ProductOrderResponse)
+@router.post("/initiate-payment", response_model=PaymentInitializationResponse)
 async def initiate_product_payment(
     data: ProductOrderCreate,
     current_profile: dict = Depends(get_current_profile),

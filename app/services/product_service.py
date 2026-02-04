@@ -157,7 +157,7 @@ async def delete_product_item(
 # Initiate payment (single item + quantity)
 async def initiate_product_payment(
     data: ProductOrderCreate, customer_info: dict, supabase: AsyncClient
-) -> dict:
+) -> PaymentInitializationResponse:
     try:
         # Fetch the product
         item_resp = (
