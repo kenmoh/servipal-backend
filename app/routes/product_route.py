@@ -196,7 +196,7 @@ async def initiate_product_payment(
         ProductOrderResponse: Payment details (Flutterwave).
     """
     return await product_service.initiate_product_payment(
-        data, current_profile["id"], customer_info, supabase
+        data,  customer_info, supabase
     )
 
 
