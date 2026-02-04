@@ -10,7 +10,6 @@ from app.schemas.product_schemas import (
     ProductItemUpdate,
     ProductItemResponse,
     ProductOrderCreate,
-    PaymentInitializationResponse,
     ProductVendorOrderAction,
     ProductVendorOrderActionResponse,
     ProductVendorMarkReadyResponse,
@@ -22,6 +21,7 @@ from app.dependencies.auth import get_current_profile, require_user_type
 from app.dependencies.auth import get_customer_contact_info
 from app.schemas.user_schemas import UserType
 from app.utils.storage import upload_to_supabase_storage
+from app.schemas.common import PaymentInitializationResponse
 
 router = APIRouter(prefix="/api/v1/products", tags=["Marketplace"])
 
