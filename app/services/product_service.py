@@ -180,10 +180,10 @@ async def initiate_product_payment(
         subtotal = Decimal(str(item["price"])) * data.quantity
 
         # Delivery fee (from seller profile)
-        shipping_cost = item['shipping_cost']
+        shipping_cost = item.get('shipping_cost', 0)
         
 
-        grand_total = subtotal + shipping_cost
+        grand_total = subtotal + shipping_cost if shipping_cost is not None else 0
 
         # Generate tx_ref
         tx_ref = f"PRODUCT-{uuid.uuid4().hex[:12].upper()}"
