@@ -29,11 +29,11 @@ from app.schemas.common import (
 # CREATE - Any authenticated user can create
 # ───────────────────────────────────────────────
 async def create_product_item(
-    data: ProductItemCreate, seller_id: UUID, supabase: AsyncClient
+    data: ProductItemCreate, vendor_id: UUID, supabase: AsyncClient
 ) -> ProductItemResponse:
     try:
         item_data = data.model_dump()
-        item_data["seller_id"] = str(seller_id)
+        item_data["vendor_id"] = str(vendor_id)
         item_data["total_sold"] = 0
 
         resp = await supabase.table("product_items").insert(item_data).execute()
@@ -81,12 +81,12 @@ async def get_product_item(item_id: UUID, supabase: AsyncClient) -> ProductItemR
 # READ - Seller's own items
 # ───────────────────────────────────────────────
 async def get_my_product_items(
-    seller_id: UUID, supabase: AsyncClient
+    vendor_id: UUID, supabase: AsyncClient
 ) -> List[ProductItemResponse]:
     items = (
         await supabase.table("product_items")
         .select("*")
-        .eq("seller_id", str(seller_id))
+        .eq("vendor_id", str(vendor_id))
         .eq("is_deleted", False)
         .order("created_at", desc=True)
         .execute()
@@ -99,18 +99,18 @@ async def get_my_product_items(
 # UPDATE - Only owner can update
 # ───────────────────────────────────────────────
 async def update_product_item(
-    item_id: UUID, data: ProductItemUpdate, seller_id: UUID, supabase: AsyncClient
+    item_id: UUID, data: ProductItemUpdate, vendor_id: UUID, supabase: AsyncClient
 ) -> ProductItemResponse:
     # Check ownership
     item = (
         await supabase.table("product_items")
-        .select("seller_id")
+        .select("vendor_id")
         .eq("id", str(item_id))
         .single()
         .execute()
     )
 
-    if not item.data or item.data["seller_id"] != str(seller_id):
+    if not item.data or item.data["vendor_id"] != str(vendor_id):
         raise HTTPException(403, "Not your product item")
 
     update_data = data.model_dump(exclude_unset=True)
@@ -131,17 +131,17 @@ async def update_product_item(
 # DELETE - Soft delete (only owner)
 # ───────────────────────────────────────────────
 async def delete_product_item(
-    item_id: UUID, seller_id: UUID, supabase: AsyncClient
+    item_id: UUID, vendor_id: UUID, supabase: AsyncClient
 ) -> dict:
     item = (
         await supabase.table("product_items")
-        .select("seller_id")
+        .select("vendor_id")
         .eq("id", str(item_id))
         .single()
         .execute()
     )
 
-    if not item.data or item.data["seller_id"] != str(seller_id):
+    if not item.data or item.data["vendor_id"] != str(vendor_id):
         raise HTTPException(403, "Not your product item")
 
     await (
@@ -162,7 +162,7 @@ async def initiate_product_payment(
         # Fetch the product
         item_resp = (
             await supabase.table("product_items")
-            .select("id, seller_id, price, stock, name, in_stock, sizes, colors, shipping_cost")
+            .select("id, vendor_id, price, stock, name, in_stock, sizes, colors, shipping_cost")
             .eq("id", str(data.item_id))
             .single()
             .execute()
@@ -240,7 +240,7 @@ async def customer_confirm_product_order(
     try:
         order = (
             await supabase.table("product_orders")
-            .select("id, buyer_id, seller_id, grand_total, order_status")
+            .select("id, buyer_id, vendor_id, grand_total, order_status")
             .eq("id", str(order_id))
             .single()
             .execute()
@@ -264,7 +264,7 @@ async def customer_confirm_product_order(
             raise HTTPException(400, "Already confirmed")
 
         full_amount = tx.data["amount"]
-        seller_id = order.data["seller_id"]
+        vendor_id = order.data["vendor_id"]
 
         # Get commission rate
         # commission_rate = await get_commission_rate("PRODUCT", supabase)
@@ -275,7 +275,7 @@ async def customer_confirm_product_order(
             "release_order_payment",
             {
                 "p_customer_id": str(customer_id),
-                "p_vendor_id": str(seller_id),
+                "p_vendor_id": str(vendor_id),
                 "p_full_amount": full_amount,
             },
         ).execute()
@@ -312,7 +312,7 @@ async def customer_confirm_product_order(
 async def vendor_product_order_action(
     order_id: UUID,
     data: ProductVendorOrderAction,
-    seller_id: UUID,
+    vendor_id: UUID,
     supabase: AsyncClient,
 ) -> ProductVendorOrderActionResponse:
     """
@@ -325,7 +325,7 @@ async def vendor_product_order_action(
         order_resp = (
             await supabase.table("product_orders")
             .select(
-                "id, seller_id, buyer_id, order_status, payment_status, grand_total"
+                "id, vendor_id, buyer_id, order_status, payment_status, grand_total"
             )
             .eq("id", str(order_id))
             .single()
@@ -338,7 +338,7 @@ async def vendor_product_order_action(
         order = order_resp.data
 
         # 2. Security & validation
-        if order["seller_id"] != str(seller_id):
+        if order["vendor_id"] != str(vendor_id):
             raise HTTPException(403, "This is not your order")
 
         if order["order_status"] != "PENDING":
@@ -421,7 +421,7 @@ async def vendor_product_order_action(
 
 
 async def vendor_mark_product_ready(
-    order_id: UUID, seller_id: UUID, supabase: AsyncClient
+    order_id: UUID, vendor_id: UUID, supabase: AsyncClient
 ) -> ProductVendorMarkReadyResponse:
     """
     Seller marks the product order as ready for pickup or delivery.
@@ -430,7 +430,7 @@ async def vendor_mark_product_ready(
         # 1. Fetch order
         order_resp = (
             await supabase.table("product_orders")
-            .select("id, seller_id, order_status")
+            .select("id, vendor_id, order_status")
             .eq("id", str(order_id))
             .single()
             .execute()
@@ -442,7 +442,7 @@ async def vendor_mark_product_ready(
         order = order_resp.data
 
         # 2. Validation
-        if order["seller_id"] != str(seller_id):
+        if order["vendor_id"] != str(vendor_id):
             raise HTTPException(403, "This is not your order")
 
         if order["order_status"] != "ACCEPTED":
