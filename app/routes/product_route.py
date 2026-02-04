@@ -23,7 +23,7 @@ from app.dependencies.auth import get_customer_contact_info
 from app.schemas.user_schemas import UserType
 from app.utils.storage import upload_to_supabase_storage
 
-router = APIRouter(prefix="/api/v1/product", tags=["Marketplace"])
+router = APIRouter(prefix="/api/v1/products", tags=["Marketplace"])
 
 
 # ───────────────────────────────────────────────
@@ -36,9 +36,12 @@ async def create_product_item(
     price: Decimal = Form(..., gt=0),
     product_type: ProductType = Form(ProductType.PHYSICAL),
     stock: int = Form(..., ge=0),
-    sizes: Optional[str] = Form(None, description="Comma-separated sizes"),
-    colors: Optional[str] = Form(None, description="Comma-separated colors"),
+    sizes: Optional[str] = Form(None),
+    colors: Optional[str] = Form(None),
     category_id: Optional[UUID] = Form(None),
+    warranty: Optional[int] = Form(...),
+    shipping_cost: Optional[Decimal] = Form(None),
+    return_days: Optional[int] = Form(...),
     images: List[UploadFile] = File(default=[]),
     current_profile: dict = Depends(get_current_profile),
     supabase: AsyncClient = Depends(get_supabase_client),
@@ -85,6 +88,9 @@ async def create_product_item(
         sizes=parsed_sizes,
         colors=parsed_colors,
         category_id=category_id,
+        return_days=return_days,
+        warranty=warranty,
+        shipping_cost=shipping_cost,
         images=uploaded_images,
     )
     return await product_service.create_product_item(

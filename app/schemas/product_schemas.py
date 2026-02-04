@@ -31,6 +31,9 @@ class ProductItemCreate(BaseModel):
         None, description="Available colors e.g. ['Red', 'Blue', '#000000']"
     )
     category_id: Optional[UUID] = None
+    warranty: int = Field(default=0)
+    shipping_cost: Decimal | None = None
+    return_days: int = Field(default=0)
     images: List[str] = Field(default_factory=list, description="URLs after upload")
 
 
@@ -44,19 +47,9 @@ class ProductItemUpdate(BaseModel):
     category_id: Optional[UUID] = None
 
 
-class ProductItemResponse(BaseModel):
+class ProductItemResponse(ProductItemCreate):
     id: UUID
     seller_id: UUID
-    name: str
-    description: Optional[str]
-    price: Decimal = Field(gt=0, default=0.00, max_digits=6, decimal_places=2)
-    stock: int
-    in_stock: bool
-    total_sold: int
-    sizes: Optional[List[str]]
-    colors: Optional[List[str]]
-    category_id: Optional[UUID]
-    images: List[str]
     created_at: datetime
     updated_at: datetime
 

@@ -162,7 +162,7 @@ async def initiate_product_payment(
         # Fetch the product
         item_resp = (
             await supabase.table("product_items")
-            .select("id, seller_id, price, stock, name, in_stock, sizes, colors")
+            .select("id, seller_id, price, stock, name, in_stock, sizes, colors, shipping_cost")
             .eq("id", str(data.item_id))
             .single()
             .execute()
@@ -180,22 +180,10 @@ async def initiate_product_payment(
         subtotal = Decimal(str(item["price"])) * data.quantity
 
         # Delivery fee (from seller profile)
-        delivery_fee = Decimal("0")
-        if data.delivery_option == "VENDOR_DELIVERY":
-            seller = (
-                await supabase.table("profiles")
-                .select("can_pickup_and_dropoff, pickup_and_delivery_charge")
-                .eq("id", str(item["seller_id"]))
-                .single()
-                .execute()
-            )
+        shipping_cost = item['shipping_cost']
+        
 
-            if not seller.data or not seller.data["can_pickup_and_dropoff"]:
-                raise HTTPException(400, "Seller does not offer delivery")
-
-            delivery_fee = Decimal(str(seller.data["pickup_and_delivery_charge"] or 0))
-
-        grand_total = subtotal + delivery_fee
+        grand_total = subtotal + shipping_cost
 
         # Generate tx_ref
         tx_ref = f"PRODUCT-{uuid.uuid4().hex[:12].upper()}"
@@ -211,7 +199,7 @@ async def initiate_product_payment(
             "selected_size": data.item.sizes,     # Capturing buyer's choice
             "selected_color": data.item.colors,   # Capturing buyer's choice
             "subtotal": str(subtotal),
-            "delivery_fee": str(delivery_fee),
+            "shipping_cost": str(shipping_cost),
             "grand_total": str(grand_total),
             "images": data.item.images,
             "delivery_option": data.delivery_option,
