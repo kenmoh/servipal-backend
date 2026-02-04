@@ -182,8 +182,11 @@ async def initiate_product_payment(
         # Delivery fee (from seller profile)
         shipping_cost = item.get('shipping_cost', 0)
         
-
-        grand_total = subtotal + shipping_cost if shipping_cost is not None else 0
+        grand_total = subtotal + (shipping_cost if shipping_cost is not None else 0)
+        print('*'*100)
+        print("SHOPPING COST: ", shipping_cost)
+        print("GRAND TOTSL: ", grand_total)
+        print('*'*100)
 
         # Generate tx_ref
         tx_ref = f"PRODUCT-{uuid.uuid4().hex[:12].upper()}"
