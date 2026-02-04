@@ -177,7 +177,7 @@ async def initiate_product_payment(
             raise HTTPException(400, f"Only {item['stock']} units left in stock")
 
         # Calculate subtotal
-        subtotal = Decimal(str(item["price"])) * data.item.quantity
+        subtotal = Decimal(str(item["price"])) * data.quantity
 
         # Delivery fee (from seller profile)
         shipping_cost = item['shipping_cost']
@@ -191,17 +191,17 @@ async def initiate_product_payment(
         # Save pending state
         pending_data = {
             "product_name": item["name"],
-            "unit_price": str(item["price"]), # Accurate price at time of purchase
+            "unit_price": str(item["price"]),
             "customer_id": str(customer_info.get("id")),
-            "vendor_id": str(data.item.vendor_id),
-            "item_id": str(data.item.item_id),
-            "quantity": data.item.quantity,
-            "selected_size": data.item.sizes,     # Capturing buyer's choice
-            "selected_color": data.item.colors,   # Capturing buyer's choice
+            "vendor_id": str(data.vendor_id),
+            "item_id": str(data.item_id),
+            "quantity": data.quantity,
+            "selected_size": data.sizes,   
+            "selected_color": data.colors, 
             "subtotal": str(subtotal),
             "shipping_cost": str(shipping_cost),
             "grand_total": str(grand_total),
-            "images": data.item.images,
+            "images": data.images,
             "delivery_option": data.delivery_option,
             "delivery_address": data.delivery_address,
             "additional_info": data.additional_info,
@@ -224,7 +224,7 @@ async def initiate_product_payment(
             ),
             customization=PaymentCustomization(
                 title="Servipal Delivery",
-                description=f"Payment for {item['name']} ({data.item.quantity} units)",
+                description=f"Payment for {item['name']} ({data.quantity} units)",
                 logo="https://mohdelivery.s3.us-east-1.amazonaws.com/favion/favicon.ico"
             ),
             message="Ready for payment",

@@ -57,22 +57,19 @@ class ProductItemResponse(ProductItemCreate):
 # ───────────────────────────────────────────────
 # Product Order Creation (customer checkout)
 # ───────────────────────────────────────────────
-class ProductOrderItem(BaseModel):
+class ProductOrderCreate(BaseModel):
     vendor_id: str
     item_id: UUID
     quantity: int = Field(..., ge=1)
-    sizes: List[str] = None
-    colors: List[str] = None
-    images: List[str] = None
-
-
-class ProductOrderCreate(BaseModel):
-    item: ProductOrderItem = Field(..., description="Single product + quantity")
     delivery_option: Literal["PICKUP", "VENDOR_DELIVERY"]
     delivery_address: Optional[str] = Field(
         None, description="Full delivery address if VENDOR_DELIVERY"
     )
     additional_info: Optional[str] = Field(None, description="Extra notes/instructions")
+    sizes: List[str] = None
+    colors: List[str] = None
+    images: List[str] = None
+   
 
 
 class ProductOrderResponse(BaseModel):
