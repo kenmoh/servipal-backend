@@ -504,7 +504,8 @@ async def process_successful_product_payment(
         product_id = pending["item_id"]
         quantity = pending["quantity"]
         product_name = pending.get("product_name", "Product") 
-        unit_price = pending.get("unit_price", pending["subtotal"] / quantity)
+        unit_price = pending.get("price", 0)
+        
         
         # 2. Create the main product_order
         order_resp = await supabase.table("product_orders").insert({
@@ -513,7 +514,7 @@ async def process_successful_product_payment(
             "vendor_id": pending["vendor_id"],
             "grand_total": pending["grand_total"],
             "amount_due_vendor": pending["subtotal"],
-            "shipping_cost": pending["shipping_cost"],
+            "shipping_cost": pending.get("shipping_cost", 0),
             "delivery_option": pending["delivery_option"],
             "delivery_address": pending["delivery_address"],
             "additional_info": pending["additional_info"],
@@ -577,116 +578,6 @@ async def process_successful_product_payment(
         # so it can be retried, but keeping it as per your original logic.
         await delete_pending(pending_key) 
         raise
-# async def process_successful_product_payment(
-#     tx_ref: str, paid_amount: float, flw_ref: str, supabase: AsyncClient
-# ):
-    
-
-#     logger.info(event="processing_product_payment", tx_ref=tx_ref, paid_amount=paid_amount)
-
-#     verified = await verify_transaction_tx_ref(tx_ref)
-#     if not verified or verified.get("status") != "success":
-#         logger.error(event="delivery_payment_verification_failed", tx_ref=tx_ref)
-#         return
-    
-#     pending_key = f"pending_product_{tx_ref}"
-#     pending = await get_pending(pending_key)
-
-#     if not pending:
-#         return
-
-#     expected_total = pending["grand_total"]
-#     customer_id = pending["customer_id"]
-#     vendor_id = pending["vendor_id"]
-#     item_id = pending["item_id"]
-#     quantity = pending["quantity"]
-
-#     # Idempotency check
-#     existing = (
-#         await supabase.table("transactions").select("id").eq("tx_ref", tx_ref).execute()
-#     )
-
-#     if existing.data:
-#         await delete_pending(pending_key)
-#         return
-
-#     expected_rounded = Decimal(str(expected_total)).quantize(Decimal("0.00"))
-#     paid_rounded = Decimal(str(paid_amount)).quantize(Decimal("0.00"))
-
-#     if paid_rounded != expected_rounded:
-#         await delete_pending(pending_key)
-#         return
-
-#     try:
-#         # Create product_order
-#         order_resp = (
-#             await supabase.table("product_orders")
-#             .insert(
-#                 {
-#                     "customer_id": customer_id,
-#                     "vendor_id": vendor_id,
-#                     "item_id": item_id,
-#                     "quantity": quantity,
-#                     "subtotal": pending["subtotal"],
-#                     "delivery_fee": pending["delivery_fee"],
-#                     "grand_total": pending["grand_total"],
-#                     "delivery_option": pending["delivery_option"],
-#                     "delivery_address": pending["delivery_address"],
-#                     "additional_info": pending["additional_info"],
-#                     "delivery_address": pending["delivery_address"],
-#                     "order_status": "PENDING",
-#                     "payment_status": "PAID",
-#                     "escrow_status": "HELD",
-#                 }
-#             )
-#             .execute()
-#         )
-
-#         order_id = order_resp.data[0]["id"]
-
-#         # Create product_order_item (single item)
-#         await (
-#             supabase.table("product_order_items")
-#             .insert({"order_id": order_id, "item_id": item_id, "quantity": quantity})
-#             .execute()
-#         )
-
-#         # Hold full amount in buyer escrow
-#         await supabase.rpc(
-#             "update_wallet_balance",
-#             {
-#                 "p_user_id": customer_id,
-#                 "p_delta": expected_total,
-#                 "p_field": "escrow_balance",
-#             },
-#         ).execute()
-
-#         # Create transaction record
-#         await (
-#             supabase.table("transactions")
-#             .insert(
-#                 {
-#                     "tx_ref": tx_ref,
-#                     "amount": expected_total,
-#                     "from_user_id": customer_id,
-#                     "to_user_id": vendor_id,
-#                     "order_id": order_id,
-#                     "transaction_type": "PRODUCT_ORDER",
-#                     "status": "HELD",
-#                     "payment_method": "FLUTTERWAVE",
-#                     "details": {"flw_ref": flw_ref},
-#                 }
-#             )
-#             .execute()
-#         )
-
-#         await delete_pending(pending_key)
-
-#     except Exception as e:
-#         logger.error(event="product_payment_processing_error", tx_ref=tx_ref, error=str(e), exc_info=True)
-#         await delete_pending(pending_key)
-#         raise
-
 
 async def process_successful_laundry_payment(
     tx_ref: str,

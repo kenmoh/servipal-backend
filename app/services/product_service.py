@@ -183,18 +183,14 @@ async def initiate_product_payment(
         shipping_cost = item.get('shipping_cost', 0)
         
         grand_total = subtotal + (shipping_cost if shipping_cost is not None else 0)
-        print('*'*100)
-        print("SHOPPING COST: ", shipping_cost)
-        print("GRAND TOTSL: ", grand_total)
-        print('*'*100)
-
+        
         # Generate tx_ref
         tx_ref = f"PRODUCT-{uuid.uuid4().hex[:12].upper()}"
 
         # Save pending state
         pending_data = {
             "product_name": item["name"],
-            "unit_price": str(item["price"]),
+            "price": str(item["price"]),
             "customer_id": str(customer_info.get("id")),
             "vendor_id": str(data.vendor_id),
             "item_id": str(data.item_id),
