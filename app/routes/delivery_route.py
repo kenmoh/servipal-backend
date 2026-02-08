@@ -59,6 +59,16 @@ async def initiate_delivery_payment(
         dict: Payment initiation details.
     """
     logger.info("customer_info_received", customer_info=customer_info)
+    
+    # DEBUG: Log raw coordinate inputs
+    logger.info(
+        "initiate_delivery_coords_debug", 
+        pickup_lat=pickup_lat, 
+        pickup_lng=pickup_lng, 
+        dropoff_lat=dropoff_lat, 
+        dropoff_lng=dropoff_lng
+    )
+
     # Upload image if provided
     url = None
     if package_image:
@@ -117,28 +127,6 @@ async def assign_rider(
         order_id, data, current_profile["id"], supabase
     )
 
-
-# ───────────────────────────────────────────────
-# 3. Get Available Riders (Distance-Based)
-# ───────────────────────────────────────────────
-# @router.get("/available-riders")
-# async def get_available_riders(
-#     lat: float,
-#     lng: float,
-#     max_distance_km: int = 20,
-#     supabase=Depends(get_supabase_client),
-# ) -> AvailableRiderResponse:
-#     """
-#     Get list of available riders near sender location, sorted by distance.
-#     Only riders with has_delivery=false, online, active.
-#     """
-#     # Call RPC or query with PostGIS
-#     riders = await supabase.rpc(
-#         "get_available_riders",
-#         {"p_lat": lat, "p_lng": lng, "p_max_km": max_distance_km},
-#     ).execute()
-
-#     return {"riders": riders.data}
 
 
 # ───────────────────────────────────────────────

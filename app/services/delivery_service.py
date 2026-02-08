@@ -79,7 +79,7 @@ async def initiate_delivery_payment(
         amount_due_dispatch = round(delivery_fee * (Decimal(1) - Decimal(str(commission_percentage))), 2)
 
         # 4. Generate unique tx_ref
-        tx_ref = f"DELIVERY-{uuid.uuid4().hex[:24].upper()}"
+        tx_ref = f"DELIVERY-{uuid.uuid4().hex[:32].upper()}"
 
         # 5. Save pending state in Redis
         pending_data = {
