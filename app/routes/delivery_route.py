@@ -61,6 +61,7 @@ async def initiate_delivery_payment(
     logger.info("customer_info_received", customer_info=customer_info)
     
     # DEBUG: Log raw coordinate inputs
+    print('*'* 50, "COORDINATES DEBUG INFO ROUTE")
     logger.info(
         "initiate_delivery_coords_debug", 
         pickup_lat=pickup_lat, 
@@ -68,6 +69,8 @@ async def initiate_delivery_payment(
         dropoff_lat=dropoff_lat, 
         dropoff_lng=dropoff_lng
     )
+    print('*'* 50, "COORDINATES DEBUG INFO ROUTE")
+
 
     # Upload image if provided
     url = None

@@ -63,7 +63,15 @@ async def process_successful_delivery_payment(
     try:
         # Create delivery_order (no rider yet)
         logger.info("creating_delivery_order", sender_id=sender_id, delivery_data=delivery_data)
-
+        
+        # DEBUG: Log coordinates from delivery_data
+        print('*'* 50, "COORDINATES DEBUG PAYMENT SERVICE")
+        logger.info(
+            "payment_service_coords_debug", 
+            pickup_coords=delivery_data.get('pickup_coordinates'),
+            dropoff_coords=delivery_data.get('dropoff_coordinates')
+        )
+        print('*'* 50, "COORDINATES DEBUG SERVICE")
         order_resp = (
             await supabase.table("delivery_orders")
             .insert(
