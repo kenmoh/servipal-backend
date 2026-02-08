@@ -77,8 +77,8 @@ async def process_successful_delivery_payment(
             .insert(
                 {
                     "sender_id": sender_id,
-                    "package_name": delivery_data["package_name"],
-                    "receiver_phone": delivery_data["receiver_phone"],
+                    "package_name": delivery_data.get("package_name"),
+                    "receiver_phone": delivery_data.get("receiver_phone"),
                     "pickup_location": delivery_data["pickup_location"],
                     "destination": delivery_data["destination"],
                     "pickup_coordinates": delivery_data['pickup_coordinates'],
