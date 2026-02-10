@@ -662,7 +662,7 @@ async def initiate_food_payment(
             "delivery_fee": Decimal(delivery_fee),
             "grand_total": Decimal(grand_total),
             "delivery_option": data.delivery_option,
-            "additional_info": data.cooking_instructions,
+            "additional_info": data.instructions,
             "tx_ref": tx_ref,
             "created_at": datetime.now().isoformat(),
         }
