@@ -622,7 +622,7 @@ async def initiate_food_payment(
         item_ids = [str(item.item_id) for item in data.items]
         db_items = (
             await supabase.table("food_items")
-            .select("id, name, price, in_stock, vendor_id")
+            .select("id, name, price, vendor_id")
             .in_("id", item_ids)
             .eq("vendor_id", str(data.vendor_id))
             .execute()
@@ -633,7 +633,7 @@ async def initiate_food_payment(
 
         for cart_item in data.items:
             db_item = items_map.get(str(cart_item.item_id))
-            if not db_item or not db_item["in_stock"]:
+            if not db_item:
                 raise HTTPException(
                     400, f"Item {cart_item.name} not available or out of stock"
                 )
