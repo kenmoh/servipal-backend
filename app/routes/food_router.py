@@ -204,7 +204,7 @@ async def initiate_food_payment_endpoint(
         vendor_id=str(data.vendor_id),
     )
     return await food_service.initiate_food_payment(
-        data, current_profile["id"], supabase, request
+        data, current_profile["id"], supabase
     )
 
 
