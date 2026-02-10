@@ -105,15 +105,7 @@ async def initiate_delivery_payment(
         duration=duration
     )
 
-    print('*'* 50, "AFTER PYDANTIC MODEL CREATION")
-    logger.info(
-        "pydantic_model_created",
-        pickup_coords=data.pickup_coordinates,
-        dropoff_coords=data.dropoff_coordinates,
-        pickup_type=type(data.pickup_coordinates),
-        dropoff_type=type(data.dropoff_coordinates)
-    )
-    print('*'* 50, "AFTER PYDANTIC MODEL CREATION")
+  
 
     return await delivery_service.initiate_delivery_payment(
         data, current_profile["id"], supabase, customer_info

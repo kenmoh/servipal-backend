@@ -64,14 +64,6 @@ async def process_successful_delivery_payment(
         # Create delivery_order (no rider yet)
         logger.info("creating_delivery_order", sender_id=sender_id, delivery_data=delivery_data)
         
-        # DEBUG: Log coordinates from delivery_data
-        print('*'* 50, "COORDINATES DEBUG PAYMENT SERVICE")
-        logger.info(
-            "payment_service_coords_debug", 
-            pickup_coords=delivery_data.get('pickup_coordinates'),
-            dropoff_coords=delivery_data.get('dropoff_coordinates')
-        )
-        print('*'* 50, "COORDINATES DEBUG SERVICE")
         order_resp = (
             await supabase.table("delivery_orders")
             .insert(
@@ -125,11 +117,12 @@ async def process_successful_delivery_payment(
                     "tx_ref": tx_ref,
                     "amount": float(expected_rounded),
                     "from_user_id": str(sender_id),
-                    "to_user_id": None,
                     "order_id": str(order_id),
+                    "wallet_id": str(sender_id),
                     "transaction_type": "ESCROW_HOLD",
                     "payment_status": "SUCCESS",
                     "payment_method": "FLUTTERWAVE",
+                    "order_type":"DELIVERY",
                     "details": {"flw_ref": flw_ref},
                 }
             )
@@ -193,7 +186,7 @@ async def process_successful_food_payment(
     customer_id = pending["customer_id"]
     vendor_id = pending["vendor_id"]
     delivery_fee = pending.get("delivery_fee", 0)
-    order_data = pending["order_data"]  # contains items, subtotal, delivery_fee, etc.
+    order_data = pending["order_data"]
 
     # Idempotency + amount validation
     existing_tx = (
@@ -284,11 +277,12 @@ async def process_successful_food_payment(
                     "from_user_id": customer_id,
                     "to_user_id": vendor_id,
                     "order_id": order_id,
-                    "transaction_type": "FOOD_ORDER",
-                    "status": "HELD",
-                    "payment_status": "PAID",
+                    "wallet_id": customer_id,
+                    "transaction_type": "ESCROW_HOLD",
+                    "payment_status": "SUCCESS",
                     "payment_method": "FLUTTERWAVE",
-                    "details": {"flw_ref": flw_ref},
+                    "order_type":"FOOD",
+                    "details": {"flw_ref": flw_ref, "label": "DEBIT"},
                 }
             )
             .execute()
@@ -421,12 +415,13 @@ async def process_successful_topup_payment(
                 {
                     "tx_ref": tx_ref,
                     "amount": paid_amount,
-                    "from_user_id": user_id,  # external payment
+                    "from_user_id": user_id,
                     "to_user_id": user_id,
-                    "transaction_type": "TOP_UP",
-                    "status": "COMPLETED",
+                    "wallet_id": user_id,
+                    "transaction_type": "DEPOSIT",
                     "payment_method": "FLUTTERWAVE",
-                    "details": {"flw_ref": flw_ref},
+                    "order_type":"DEPOSIT",
+                    "details": {"flw_ref": flw_ref, "label": "CREDIT"},
                 }
             )
             .execute()
@@ -568,11 +563,12 @@ async def process_successful_product_payment(
                     "amount": expected_total,
                     "from_user_id": customer_id,
                     "to_user_id": vendor_id,
+                    "wallet_id": customer_id,
                     "order_id": order_id,
-                    "transaction_type": "PRODUCT_ORDER",
-                    "status": "HELD",
+                    "transaction_type": "ESCROW_HOLD",
                     "payment_method": "FLUTTERWAVE",
-                    "details": {"flw_ref": flw_ref},
+                    "order_type":"PRODUCT",
+                    "details": {"flw_ref": flw_ref, "label": "DEBIT"},
                 }
             )
             .execute()
@@ -689,10 +685,11 @@ async def process_successful_laundry_payment(
                     "from_user_id": customer_id,
                     "to_user_id": vendor_id,  # or null if held in escrow
                     "order_id": order_id,
-                    "transaction_type": "LAUNDRY_ORDER",
-                    "status": "HELD",
+                    "wallet_id": customer_id,
+                    "transaction_type": "ESCROW_HOLD",
                     "payment_method": "FLUTTERWAVE",
-                    "details": {"flw_ref": flw_ref},
+                    "order_type":"LAUNDRY",
+                    "details": {"flw_ref": flw_ref, "label": "DEBIT"},
                 }
             )
             .execute()

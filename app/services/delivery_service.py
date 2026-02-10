@@ -95,15 +95,8 @@ async def initiate_delivery_payment(
             "created_at": datetime.datetime.now().isoformat(),
             
         }
-        print('*'* 50, "BEFORE REDIS SAVE")
-        logger.info(
-            "before_redis_save",
-            pending_data=pending_data,  # or whatever dict you're passing
-            pickup_coords=pending_data.get('delivery_data', {}).get('pickup_coordinates'),
-            dropoff_coords=pending_data.get('delivery_data', {}).get('dropoff_coordinates'),
-        )
-        print('*'* 50, "BEFORE REDIS SAVE")
         
+
         await save_pending(f"pending_delivery_{tx_ref}", pending_data, expire=1800)
 
         # 6. Return data for Flutterwave RN SDK
