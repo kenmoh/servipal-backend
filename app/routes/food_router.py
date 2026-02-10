@@ -234,7 +234,7 @@ async def vendor_food_order_action_endpoint(
         vendor_id=current_profile["id"],
         supabase=supabase,
         action=action_data,
-        request=request,
+        current_profile=current_profile,
     )
 
 
