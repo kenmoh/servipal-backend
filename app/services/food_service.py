@@ -586,7 +586,6 @@ async def delete_food_item(
 
 async def initiate_food_payment(
     data: CheckoutRequest,
-    customer_id: UUID,
     supabase: AsyncClient,
     current_profile: dict
 ) -> dict:
@@ -597,7 +596,7 @@ async def initiate_food_payment(
     """
     logger.info(
         "initiate_food_payment",
-        customer_id=str(customer_id),
+        customer_id=str(current_profile.get('id')),
         vendor_id=str(data.vendor_id),
     )
     try:
@@ -655,7 +654,7 @@ async def initiate_food_payment(
 
         # 5. Save pending state in Redis
         pending_data = {
-            "customer_id": str(customer_id),
+            "customer_id": str(current_profile.get('id')),
             "vendor_id": str(data.vendor_id),
             "items": [item.model_dump(mode='json') for item in data.items],
             "total_price": str(Decimal(subtotal)),
@@ -694,7 +693,7 @@ async def initiate_food_payment(
     except Exception as e:
         logger.error(
             "initiate_food_payment_error",
-            customer_id=str(customer_id),
+            customer_id=str(current_profile.get('id')),
             error=str(e),
             exc_info=True,
         )
