@@ -588,7 +588,6 @@ async def initiate_food_payment(
     data: CheckoutRequest,
     customer_id: UUID,
     supabase: AsyncClient,
-    request: Optional[Request] = None,
 ) -> dict:
     """
     Validate items, calculate total, save pending state in Redis,
@@ -651,16 +650,20 @@ async def initiate_food_payment(
         grand_total = subtotal + delivery_fee
 
         # 4. Generate tx_ref
-        tx_ref = f"FOOD-{uuid.uuid4().hex[:12].upper()}"
+        tx_ref = f"FOOD-{uuid.uuid4().hex[:32].upper()}"
 
         # 5. Save pending state in Redis
         pending_data = {
             "customer_id": str(customer_id),
             "vendor_id": str(data.vendor_id),
-            "items": [item.model_dump() for item in data.items],
-            "total_price": Decimal(subtotal),
-            "delivery_fee": Decimal(delivery_fee),
-            "grand_total": Decimal(grand_total),
+            "items": [item.model_dump(mode='json') for item in data.items],
+            # "items": [
+            #         {**item.model_dump(), "item_id": str(item.item_id)}
+            #         for item in data.items
+            #     ],
+            "total_price": str(Decimal(subtotal)),
+            "delivery_fee": str(Decimal(delivery_fee)),
+            "grand_total": str(Decimal(grand_total)),
             "delivery_option": data.delivery_option,
             "additional_info": data.instructions,
             "tx_ref": tx_ref,
@@ -668,7 +671,7 @@ async def initiate_food_payment(
         }
         await save_pending(f"pending_food_{tx_ref}", pending_data, expire=1800)
 
-        # 6. Get real customer info (DI)
+        # 6. Get real customer info
         customer_info = await get_customer_contact_info()
 
         # 7. Return SDK-ready data
@@ -677,7 +680,11 @@ async def initiate_food_payment(
             amount=Decimal(str(grand_total)),
             public_key=settings.FLUTTERWAVE_PUBLIC_KEY,
             currency="NGN",
-            customer=PaymentCustomerInfo(**customer_info),
+            customer=PaymentCustomerInfo(
+                    email=customer_info.get("email"),
+                    phone_number=customer_info.get("phone_number"),
+                    full_name=customer_info.get("full_name")
+            ),
             customization=PaymentCustomization(
                 title="Servipal Food Order",
                 description=f"Order from {vendor['store_name']}",
