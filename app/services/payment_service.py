@@ -186,7 +186,7 @@ async def process_successful_food_payment(
     customer_id = pending["customer_id"]
     vendor_id = pending["vendor_id"]
     delivery_fee = pending.get("delivery_fee", 0)
-    order_data = pending["order_data"]
+    order_data = pending["items"]
 
     # Idempotency + amount validation
     existing_tx = (
@@ -242,7 +242,7 @@ async def process_successful_food_payment(
         order_id = order_resp.data[0]["id"]
 
         # 2. Create food_order_items (multiple rows)
-        for item in order_data["items"]:
+        for item in order_data:
             await (
                 supabase.table("food_order_items")
                 .insert(
@@ -251,7 +251,8 @@ async def process_successful_food_payment(
                         "item_id": item["item_id"],
                         "quantity": item["quantity"],
                         "sizes": item.get("sizes", []),
-                        "colors": item.get("colors", []),
+                        "sides": item.get("sides", []), 
+                        "images": item.get("images", []), 
                     }
                 )
                 .execute()
