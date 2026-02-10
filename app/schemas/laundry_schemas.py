@@ -123,13 +123,6 @@ class LaundryItemDetailResponse(LaundryItemResponse):
     is_deleted: bool = False
 
 
-class LaundryCartItem(BaseModel):
-    item_id: UUID
-    name: str
-    price: Decimal
-    quantity: int
-
-
 class LaundryVendorMarkReadyResponse(BaseModel):
     order_id: UUID
     order_status: str = "READY"
@@ -143,7 +136,8 @@ class LaundryCustomerConfirmResponse(BaseModel):
     message: str = "Order confirmed! Payment released to vendor"
 
 
-class LaundryItemOrder(BaseModel):
+class LaundryOrderItem(BaseModel):
+    name: str
     price: Decimal 
     item_id: UUID = Field(..., description="ID of the laundry item")
     quantity: int = Field(..., gt=0, description="Number of units (e.g., shirts, kg)")
@@ -153,11 +147,11 @@ class LaundryItemOrder(BaseModel):
 
 class LaundryOrderCreate(BaseModel):
     vendor_id: UUID = Field(..., description="ID of the laundry vendor")
-    items: List[LaundryItemOrder] = Field(description="List of laundry items to order")
+    items: List[LaundryOrderItem] = Field(description="List of laundry items to order")
     delivery_option: Literal["PICKUP", "VENDOR_DELIVERY"] = Field(
         ..., description="Pickup at shop or vendor delivers"
     )
-    washing_instructions: Optional[str] = Field(
+    instructions: Optional[str] = Field(
         None, description="Special instructions for washing"
     )
     delivery_address: Optional[str]

@@ -169,15 +169,17 @@ class CartItem(BaseModel):
     name: str
     price: Decimal
     quantity: int
+    images: List[str] = []
+    sides: List[str] =[]
     sizes: List[str] = []
-    colors: List[str] = []
 
 
 class CheckoutRequest(BaseModel):
     vendor_id: UUID
     items: List[CartItem]
     delivery_option: Literal["PICKUP", "VENDOR_DELIVERY"] = "PICKUP"
-    cooking_instructions: Optional[str] = None
+    delivery_address: Optional[str] = None
+    instructions: Optional[str] = None
 
 
 class CheckoutResponse(BaseModel):

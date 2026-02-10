@@ -152,18 +152,6 @@ class DispatchRiderResponse(BaseModel):
     full_name: Optional[str]
     phone_number: str
     profile_image_url: Optional[str]
-    bike_number: Optional[str]
-    is_online: bool
-    is_verified: bool
-    has_delivery: bool
-    average_rating: Optional[Decimal] = 0.0
-    review_count: int = 0
-    total_deliveries: int = 0
-    total_distance_travelled: Optional[Decimal] = 0.0
-    order_cancel_count: int = 0
-    rider_is_suspended_for_order_cancel: bool = False
-    rider_suspension_until: Optional[datetime] = None
-    created_at: datetime
 
     class Config:
         from_attributes = True
