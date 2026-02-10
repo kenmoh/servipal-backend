@@ -144,12 +144,11 @@ class LaundryCustomerConfirmResponse(BaseModel):
 
 
 class LaundryItemOrder(BaseModel):
+    price: Decimal 
     item_id: UUID = Field(..., description="ID of the laundry item")
     quantity: int = Field(..., gt=0, description="Number of units (e.g., shirts, kg)")
-    sizes: Optional[List[str]] = Field(None, description="Selected sizes if applicable")
-    colors: Optional[List[str]] = Field(
-        None, description="Selected colors if applicable"
-    )
+    images: List[str]
+   
 
 
 class LaundryOrderCreate(BaseModel):
@@ -161,3 +160,4 @@ class LaundryOrderCreate(BaseModel):
     washing_instructions: Optional[str] = Field(
         None, description="Special instructions for washing"
     )
+    delivery_address: Optional[str]

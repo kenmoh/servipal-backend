@@ -431,7 +431,7 @@ async def initiate_laundry_payment(
         grand_total = subtotal + delivery_fee
 
         # Generate tx_ref
-        tx_ref = f"LAUNDRY-{uuid.uuid4().hex[:12].upper()}"
+        tx_ref = f"LAUNDRY-{uuid.uuid4().hex[:32].upper()}"
 
         # Save pending in Redis
         pending_data = {
@@ -443,6 +443,7 @@ async def initiate_laundry_payment(
             "grand_total": float(grand_total),
             "delivery_option": data.delivery_option,
             "washing_instructions": data.washing_instructions,
+            "delivery_address": data.delivery_address,
             "tx_ref": tx_ref,
             "created_at": datetime.now().isoformat(),
         }
@@ -454,12 +455,13 @@ async def initiate_laundry_payment(
             amount=Decimal(str(grand_total)),
             public_key=settings.FLUTTERWAVE_PUBLIC_KEY,
             currency="NGN",
-            customer=PaymentCustomerInfo(**customer_info),
+            customer=PaymentCustomerInfo(**customer_info), 
             customization=PaymentCustomization(
-                title="Servipal Laundry Order",
-                description=f"Order from {vendor['store_name']}",
+                title="Servipal Delivery",
+                description=f"From {data.pickup_location} to {data.destination} ({data.distance} km)",
+                logo="https://mohdelivery.s3.us-east-1.amazonaws.com/favion/favicon.ico"
             ),
-            message="Ready for payment — use Flutterwave SDK",
+            message="Ready for payment",
         ).model_dump()
 
     except Exception as e:
