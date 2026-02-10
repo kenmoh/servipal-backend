@@ -684,6 +684,7 @@ async def initiate_food_payment(
             customization=PaymentCustomization(
                 title="Servipal Food Order",
                 description=f"Order from {vendor['store_name']}",
+                logo="https://mohdelivery.s3.us-east-1.amazonaws.com/favion/favicon.ico"
             ),
             message="Ready for payment — use Flutterwave SDK",
         ).model_dump()
