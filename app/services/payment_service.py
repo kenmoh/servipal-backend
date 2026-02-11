@@ -88,7 +88,7 @@ async def process_successful_delivery_payment(
                     "distance": float(pending.get("distance", 0)),
                     "tx_ref": tx_ref,
                     "flw_ref": flw_ref,
-                     "order_type":"FOOD"
+                     "order_type":"DELIVERY"
                 }
             )
             .execute()
