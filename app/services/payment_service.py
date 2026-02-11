@@ -88,6 +88,7 @@ async def process_successful_delivery_payment(
                     "distance": float(pending.get("distance", 0)),
                     "tx_ref": tx_ref,
                     "flw_ref": flw_ref,
+                     "order_type":"FOOD"
                 }
             )
             .execute()
@@ -238,6 +239,7 @@ async def process_successful_food_payment(
                     "delivery_option":delivery_option,
                     "order_status": "PENDING",
                     "payment_status": "SUCCESS",
+                    "order_type":"FOOD"
                    
                 }
             )
@@ -297,7 +299,7 @@ async def process_successful_food_payment(
                     "payment_status": "SUCCESS",
                     "payment_method": "FLUTTERWAVE",
                     "order_type":"FOOD",
-                    "details": {"flw_ref": flw_ref, "label": "DEBIT"},
+                    "details": {"flw_ref": flw_ref, "label": "DEBIT", "order_type":"FOOD"},
                 }
             )
             .execute()
@@ -317,7 +319,7 @@ async def process_successful_food_payment(
                     "payment_status": "SUCCESS",
                     "payment_method": "FLUTTERWAVE",
                     "order_type":"FOOD",
-                    "details": {"flw_ref": flw_ref, "label": "CREDIT", "from": f"{name}"},
+                    "details": {"flw_ref": flw_ref, "label": "CREDIT", "from": f"{name}",  "order_type":"FOOD"},
                 }
             )
             .execute()
@@ -577,6 +579,7 @@ async def process_successful_product_payment(
             "order_status": "PENDING",
             "payment_status": "PAID",
             "escrow_status": "HELD",
+             "order_type":"PRODUCT"
         }).execute()
 
         order_id = order_resp.data[0]["id"]
@@ -718,6 +721,7 @@ async def process_successful_laundry_payment(
                     "payment_status": "PAID",
                     "escrow_status": "HELD",
                     "amount_due_vendor": amount_due_vendor,
+                     "order_type":"LAUNDRY"
                 }
             )
             .execute()
