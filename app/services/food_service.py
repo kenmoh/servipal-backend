@@ -663,6 +663,7 @@ async def initiate_food_payment(
             "delivery_option": data.delivery_option,
             "additional_info": data.instructions,
             "tx_ref": tx_ref,
+            "name":current_profile.get("phone_number"),
             "created_at": datetime.now().isoformat(),
         }
         await save_pending(f"pending_food_{tx_ref}", pending_data, expire=1800)

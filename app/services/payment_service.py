@@ -8,7 +8,7 @@ from typing import Optional
 from fastapi import Request
 from decimal import Decimal
 from app.utils.payment import verify_transaction_tx_ref
-
+from app.services.notification_service import notify_user
 
 
 
@@ -187,6 +187,7 @@ async def process_successful_food_payment(
     vendor_id = pending["vendor_id"]
     delivery_fee = Decimal(pending.get("delivery_fee", 0))
     order_data = pending["items"]
+    name = pending.get("name")
 
     # Idempotency + amount validation
     existing_tx = (
@@ -214,7 +215,7 @@ async def process_successful_food_payment(
 
     try:
         # Get dynamic commission rate for FOOD
-        commission_rate = await get_commission_rate("FOOD", supabase)
+        commission_rate = Decimal(str(await get_commission_rate("FOOD", supabase)))
 
         # Calculate what vendor should receive (grand_total - commission)
         amount_due_vendor = expected_total * (1 - commission_rate)
@@ -288,6 +289,15 @@ async def process_successful_food_payment(
             )
             .execute()
         )
+
+        # Notify rider on success
+        await notify_user(
+                user_id=vendor_id,
+                title="New Order",
+                body=f"You have a new order from {name}",
+                data={"order_id": str(order_id), "type": "FOOD_PAYMENT"},
+                supabase=supabase,
+            )
 
         # 5. Cleanup Redis
         await delete_pending(pending_key)
@@ -443,6 +453,15 @@ async def process_successful_topup_payment(
             request=request,
         )
 
+         # Notify rider on success
+        await notify_user(
+                user_id=user_id,
+                title="Wallet Top up",
+                body=f"Wallet top up successful",
+                data={"user_id": str(user_id), "type": "WALLET TOP UP"},
+                supabase=supabase,
+            )
+
         await delete_pending(pending_key)
         logger.info(
             "topup_payment_processed_success",
@@ -480,11 +499,11 @@ async def process_successful_product_payment(
         logger.warning(event="pending_order_not_found", tx_ref=tx_ref)
         return
 
-    expected_total = pending["grand_total"]
+    expected_total = Decimal(pending["grand_total"])
     customer_id = pending["customer_id"]
     vendor_id = pending["vendor_id"]
     product_id = pending["item_id"]  # item_id refers to product_id
-    quantity = pending["quantity"]
+    quantity = int(pending["quantity"])
 
     # Idempotency check
     existing = (
@@ -506,7 +525,7 @@ async def process_successful_product_payment(
     try:
         # 1 Create the main product_order
         product_id = pending["item_id"]
-        quantity = pending["quantity"]
+        quantity = int(pending["quantity"])
         product_name = pending.get("product_name", "Product") 
         unit_price = pending.get("price", 0)
         
@@ -528,10 +547,6 @@ async def process_successful_product_payment(
         }).execute()
 
         order_id = order_resp.data[0]["id"]
-
-        # Create the product_order_item (Snapshotting name and price)
-        # Assuming your 'pending' data has item_name and price, 
-        # otherwise we grab it from the product listing
         
         await supabase.table("product_order_items").insert({
             "order_id": order_id, 
@@ -575,7 +590,18 @@ async def process_successful_product_payment(
             .execute()
         )
 
+        # Notify rider on success
+        await notify_user(
+                user_id=vendor_id,
+                title="New Order",
+                body=f"You have a new order",
+                data={"order_id": str(order_id), "type": "PRODUCT_PAYMENT"},
+                supabase=supabase,
+            )
+
+
         await delete_pending(pending_key)
+
 
     except Exception as e:
         logger.error(event="product_payment_processing_error", tx_ref=tx_ref, error=str(e), exc_info=True)
@@ -710,6 +736,15 @@ async def process_successful_laundry_payment(
             )
             .execute()
         )
+
+        # Notify rider on success
+        await notify_user(
+                user_id=vendor_id,
+                title="New Order",
+                body=f"You have a new order",
+                data={"order_id": str(order_id), "type": "LAUNDRY_PAYMENT"},
+                supabase=supabase,
+            )
 
         await delete_pending(pending_key)
 
