@@ -182,10 +182,10 @@ async def process_successful_food_payment(
         logger.warning(event="food_payment_pending_not_found", tx_ref=tx_ref)
         return None
 
-    expected_total = pending["grand_total"]
+    expected_total = Decimal(pending["grand_total"])
     customer_id = pending["customer_id"]
     vendor_id = pending["vendor_id"]
-    delivery_fee = pending.get("delivery_fee", 0)
+    delivery_fee = Decimal(pending.get("delivery_fee", 0))
     order_data = pending["items"]
 
     # Idempotency + amount validation
