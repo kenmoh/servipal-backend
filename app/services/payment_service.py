@@ -222,6 +222,7 @@ async def process_successful_food_payment(
 
         # Calculate what vendor should receive (grand_total - commission)
         amount_due_vendor = expected_total * (1 - commission_rate)
+
         # 1. Create food_order record
         order_resp = (
             await supabase.table("food_orders")
@@ -237,7 +238,7 @@ async def process_successful_food_payment(
                     "delivery_option":delivery_option,
                     "order_status": "PENDING",
                     "payment_status": "PAID",
-                    "escrow_status": "HELD",
+                   
                 }
             )
             .execute()
