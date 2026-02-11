@@ -188,7 +188,10 @@ async def process_successful_food_payment(
     delivery_fee = Decimal(pending.get("delivery_fee", 0))
     order_data = pending["items"]
     name = pending.get("name")
-
+    total_price = Decimal(str(pending["total_price"]))        
+    delivery_option = pending["delivery_option"]             
+    additional_info = pending.get("additional_info")         
+    
     # Idempotency + amount validation
     existing_tx = (
         await supabase.table("transactions").select("id").eq("tx_ref", tx_ref).execute()
@@ -226,12 +229,12 @@ async def process_successful_food_payment(
                 {
                     "customer_id": customer_id,
                     "vendor_id": vendor_id,
-                    "total_price": order_data["total_price"],
+                    "total_price": total_price,
                     "delivery_fee": delivery_fee,
                     "grand_total": expected_total,
                     "amount_due_vendor": amount_due_vendor,
-                    "additional_info": order_data.get("additional_info"),
-                    "delivery_option": order_data["delivery_option"],
+                    "additional_info": additional_info,
+                    "delivery_option":delivery_option,
                     "order_status": "PENDING",
                     "payment_status": "PAID",
                     "escrow_status": "HELD",
@@ -269,6 +272,15 @@ async def process_successful_food_payment(
             },
         ).execute()
 
+        await supabase.rpc(
+            "update_wallet_balance",
+            {
+                "p_user_id": vendor_id,
+                "p_delta": expected_total,
+                "p_field": "escrow_balance",
+            },
+        ).execute()
+
         # 4. Create transaction record (HELD)
         await (
             supabase.table("transactions")
@@ -285,6 +297,26 @@ async def process_successful_food_payment(
                     "payment_method": "FLUTTERWAVE",
                     "order_type":"FOOD",
                     "details": {"flw_ref": flw_ref, "label": "DEBIT"},
+                }
+            )
+            .execute()
+        )
+
+        await (
+            supabase.table("transactions")
+            .insert(
+                {
+                    "tx_ref": tx_ref,
+                    "amount": expected_total,
+                    "from_user_id": customer_id,
+                    "to_user_id": vendor_id,
+                    "order_id": order_id,
+                    "wallet_id": vendor_id,
+                    "transaction_type": "ESCROW_HOLD",
+                    "payment_status": "SUCCESS",
+                    "payment_method": "FLUTTERWAVE",
+                    "order_type":"FOOD",
+                    "details": {"flw_ref": flw_ref, "label": "CREDIT", "from": f"{name}"},
                 }
             )
             .execute()
