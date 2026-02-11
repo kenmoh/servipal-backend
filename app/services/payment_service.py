@@ -288,7 +288,7 @@ async def process_successful_food_payment(
             .insert(
                 {
                     "tx_ref": tx_ref,
-                    "amount": expected_total,
+                    "amount": str(expected_total),
                     "from_user_id": customer_id,
                     "to_user_id": vendor_id,
                     "order_id": order_id,
@@ -308,7 +308,7 @@ async def process_successful_food_payment(
             .insert(
                 {
                     "tx_ref": tx_ref,
-                    "amount": expected_total,
+                    "amount": str(expected_total),
                     "from_user_id": customer_id,
                     "to_user_id": vendor_id,
                     "order_id": order_id,
