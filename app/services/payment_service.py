@@ -237,7 +237,7 @@ async def process_successful_food_payment(
                     "additional_info": additional_info,
                     "delivery_option":delivery_option,
                     "order_status": "PENDING",
-                    "payment_status": "PAID",
+                    "payment_status": "SUCCESS",
                    
                 }
             )
