@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Query, Form, File, UploadFile, Request
+from fastapi import APIRouter, Depends, Query, Form, File, UploadFile, Request, status
 from typing import List, Optional
 from uuid import UUID
 from decimal import Decimal
@@ -20,6 +20,7 @@ from app.schemas.user_schemas import UserType
 from app.services import food_service
 from app.database.supabase import get_supabase_client
 from app.config.logging import logger
+from app.common.order import update_order_status, OrderStatus, OrderUpdateResponse
 
 router = APIRouter(prefix="/api/v1/food", tags=["Food"])
 
@@ -299,3 +300,25 @@ async def vendor_food_earnings(
         "get_vendor_earnings", {"p_vendor_id": str(current_profile["id"])}
     ).execute()
     return earnings.data
+
+
+@router.put('/update-food-order-status', status_code=status.HTTP_202_ACCEPTED)
+async def update_order_status(
+    order_id: UUID,
+    status: OrderStatus,
+    current_profile: dict = Depends(get_current_profile),
+    supabase: AsyncClient = Depends(get_supabase_client),
+    cancellation_reason: Optional[str] = None,
+    request:Request = None
+)-> OrderUpdateResponse:
+    """Vendor updates food order status"""
+    return await update_order_status(
+            order_id=order_id,
+            entity_type='FOOD_ORDER',
+            new_status=status,
+            triggered_by_user_id=current_profile['id'],
+            table_name='food_orders',
+            supabase=supabase,
+            cancellation_reason=cancellation_reason,
+            request=request,
+    )

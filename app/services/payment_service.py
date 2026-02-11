@@ -239,7 +239,8 @@ async def process_successful_food_payment(
                     "delivery_option":delivery_option,
                     "order_status": "PENDING",
                     "payment_status": "SUCCESS",
-                    "order_type":"FOOD"
+                    "order_type":"FOOD",
+                    "tx_ref": f"{tx_ref}"
                    
                 }
             )
@@ -267,20 +268,20 @@ async def process_successful_food_payment(
 
         # 3. Hold full amount in customer escrow (positive delta)
         await supabase.rpc(
-            "update_wallet_balance",
+            "update_user_wallet",
             {
                 "p_user_id": customer_id,
-                "p_delta": expected_total,
-                "p_field": "escrow_balance",
+                "p_balance_change": '0',
+                "p_escrow_balance_change": expected_total,
             },
         ).execute()
 
         await supabase.rpc(
-            "update_wallet_balance",
+            "update_user_wallet",
             {
                 "p_user_id": vendor_id,
-                "p_delta": expected_total,
-                "p_field": "escrow_balance",
+                "p_balance_change": '0',
+                "p_escrow_balance_change": expected_total,
             },
         ).execute()
 
@@ -439,8 +440,9 @@ async def process_successful_topup_payment(
 
         # Add funds to wallet balance (atomic RPC)
         await supabase.rpc(
-            "update_wallet_balance",
-            {"p_user_id": user_id, "p_delta": paid_amount, "p_field": "balance"},
+            "update_user_wallet",
+            {"p_user_id": user_id, "p_balance_change": paid_amount, "p_escrow_balance_change": '0'},
+               
         ).execute()
 
         # Get new balance
@@ -579,7 +581,7 @@ async def process_successful_product_payment(
             "order_status": "PENDING",
             "payment_status": "PAID",
             "escrow_status": "HELD",
-             "order_type":"PRODUCT"
+            "order_type":"PRODUCT"
         }).execute()
 
         order_id = order_resp.data[0]["id"]
@@ -598,11 +600,11 @@ async def process_successful_product_payment(
 
         # Update buyer escrow balance
         await supabase.rpc(
-            "update_wallet_balance",
+            "update_user_wallet",
             {
                 "p_user_id": customer_id,
-                "p_delta": expected_total,
-                "p_field": "escrow_balance",
+                "p_balance_change": '0',
+                "p_escrow_balance_change": expected_total,
             },
         ).execute()
 
@@ -699,7 +701,7 @@ async def process_successful_laundry_payment(
         commission_rate = await get_commission_rate("LAUNDRY", supabase)
 
         # Calculate vendor share (usually on subtotal only)
-        amount_due_vendor = expected_total * (1 - commission_rate)
+        amount_due_vendor = expected_total * (1 - Decimal(str(commission_rate)))
 
         # Platform commission amount (for logging)
         commission_amount = expected_total - amount_due_vendor
@@ -721,7 +723,8 @@ async def process_successful_laundry_payment(
                     "payment_status": "PAID",
                     "escrow_status": "HELD",
                     "amount_due_vendor": amount_due_vendor,
-                     "order_type":"LAUNDRY"
+                    "order_type":"LAUNDRY",
+                    "tx_ref": f"{tx_ref}"
                 }
             )
             .execute()
@@ -731,11 +734,11 @@ async def process_successful_laundry_payment(
 
         # Hold full amount in customer escrow
         await supabase.rpc(
-            "update_wallet_balance",
+            "update_user_wallet",
             {
                 "p_user_id": customer_id,
-                "p_delta": expected_total,
-                "p_field": "escrow_balance",
+                "p_balance_change": str(0),
+                "p_escrow_balance_change": expected_total,
             },
         ).execute()
 
