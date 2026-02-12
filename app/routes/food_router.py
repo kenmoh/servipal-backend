@@ -303,7 +303,7 @@ async def vendor_food_earnings(
 
 
 @router.put('/update-food-order-status', status_code=status.HTTP_202_ACCEPTED)
-async def update_order_status(
+async def update_food_order_status(
     order_id: UUID,
     data: OrderStatusUpdate,
     current_profile: dict = Depends(get_current_profile),
