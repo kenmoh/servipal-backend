@@ -60,11 +60,20 @@ async def update_order_status(
         .single()
         .execute()
     )
-    order = order_resp.data
+    order = order_resp['data']
+
+    print('*', * 100)
+    print(order)
+    print(type(order))
+    print(order['data'])
+    print('*', * 100)
+    print(order.data)
 
     customer_id = order["customer_id"]
     vendor_id = order["vendor_id"]
     current_status = order["order_status"]
+    amount_due_vendor = order['amount_due_vendor']
+
 
     tranx_resp = (
         await supabase.table("transactions")
@@ -72,7 +81,13 @@ async def update_order_status(
         .eq("order_id", order_id)
         .execute()
     )
-    tranx = tranx_resp.data
+    tranx = tranx_resp.data[0]
+
+
+    print('*'*100)
+    print(tranx)
+    print(type(tranx))
+    print('*'*100)
 
     # Authorization checks
     if data.new_status in [
@@ -111,22 +126,20 @@ async def update_order_status(
     # Handle wallet changes
     if data.new_status == OrderStatus.COMPLETED:
         # Release escrow to vendor
-        if tranx.transaction_type != TransactionType.ESCROW_HOLD.value:
+        if tranx['transaction_type'] != TransactionType.ESCROW_HOLD:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Cannot complete order - escrow not held",
             )
 
-        grand_total = Decimal(str(order["grand_total"]))
-        amount_due_vendor = Decimal(str(order["amount_due_vendor"]))
 
         # Deduct from customer escrow
         await supabase.rpc(
             "update_user_wallet",
             {
-                "p_user_id": str(order.customer_id),
+                "p_user_id": str(customer_id),
                 "p_balance_change": "0",
-                "p_escrow_balance_change": f"-{order.grand_total}",
+                "p_escrow_balance_change": f"-{grand_total}",
             },
         ).execute()
 
@@ -135,8 +148,8 @@ async def update_order_status(
             "update_user_wallet",
             {
                 "p_user_id": str(order.vendor_id),
-                "p_balance_change": f"{order.amount_due_vendor}",
-                "p_escrow_balance_change": f"-{order.grand_total}",
+                "p_balance_change": f"{amount_due_vendor}",
+                "p_escrow_balance_change": f"-{grand_total}",
             },
         ).execute()
 
@@ -175,7 +188,7 @@ async def update_order_status(
             action="ORDER_COMPLETED",
             old_value={
                 "status": current_status,
-                "transaction_type": tranx.transaction_type,
+                "transaction_type": tranx['transaction_type'],
             },
             new_value={"status": "COMPLETED", "escrow": "RELEASED"},
             actor_id=str(triggered_by_user_id),
@@ -217,9 +230,9 @@ async def update_order_status(
             await supabase.rpc(
                 "update_user_wallet",
                 {
-                    "p_user_id": str(order.customer_id),
-                    "p_balance_change": f"{order.grand_total}",
-                    "p_escrow_balance_change": f"-{order.grand_total}",
+                    "p_user_id": str(customer_id),
+                    "p_balance_change": f"{grand_total}",
+                    "p_escrow_balance_change": f"-{grand_total}",
                 },
             ).execute()
 
@@ -227,9 +240,9 @@ async def update_order_status(
             await supabase.rpc(
                 "update_user_wallet",
                 {
-                    "p_user_id": str(order.vendor_id),
+                    "p_user_id": str(vendor_id),
                     "p_balance_change": "0",
-                    "p_escrow_balance_change": f"-{order.grand_total}",
+                    "p_escrow_balance_change": f"-{grand_total}",
                 },
             ).execute()
 
@@ -303,7 +316,7 @@ async def update_order_status(
             logger.warning(
                 "food_order_cancelled_no_refund",
                 order_id=order_id,
-                transaction_type=tranx.transaction_type,
+                transaction_type=tranx['transaction_type'],
             )
 
     else:
@@ -656,7 +669,7 @@ async def update_delivery_status(
                     supabase.table("transactions")
                     .insert(
                         {
-                            "amount": delivery_fee,
+                            "amount": f'{delivery_fee}',
                             "from_user_id": f"{sender_id}",
                             "to_user_id": f"{sender_id}",
                             "order_id": f"{delivery_id}",
@@ -702,7 +715,7 @@ async def update_delivery_status(
                         supabase.table("transactions")
                         .insert(
                             {
-                                "amount": delivery_fee,
+                                "amount": f'{delivery_fee}',
                                 "from_user_id": f"{sender_id}",
                                 "to_user_id": f"{sender_id}",
                                 "order_id": f"{delivery_id}",
