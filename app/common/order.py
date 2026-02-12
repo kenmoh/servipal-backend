@@ -25,7 +25,7 @@ class TransactionType(str, Enum):
     REFUNDED = 'REFUNDED'
 
 class OrderStatusUpdate(BaseModel):
-    status?: str = "success"
+    status: str | None = "success"
     new_status: OrderStatus
     cancel_reason: Optional[str] = None
 
