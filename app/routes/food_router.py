@@ -20,7 +20,7 @@ from app.schemas.user_schemas import UserType
 from app.services import food_service
 from app.database.supabase import get_supabase_client
 from app.config.logging import logger
-from app.common.order import update_order_status, OrderStatusUpdate, OrderUpdateResponse
+from app.common.order import update_order_status, OrderStatusUpdate
 
 router = APIRouter(prefix="/api/v1/food", tags=["Food"])
 
