@@ -61,13 +61,14 @@ async def update_order_status(
         .execute()
     )
     order = order_resp['data']
-
+    print(data.new_status)
     print('*', * 100)
     print(order)
     print(type(order))
     print(order['data'])
     print('*', * 100)
     print(order.data)
+    print('*', * 100)
 
     customer_id = order["customer_id"]
     vendor_id = order["vendor_id"]
