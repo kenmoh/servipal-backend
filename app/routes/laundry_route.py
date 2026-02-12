@@ -248,7 +248,7 @@ async def delete_laundry_item_endpoint(
 
 
 @router.put('/update-laundry-order-status', include_in_schema=False)
-async def update_order_status(
+async def update_laundry_order_status(
     order_id: UUID,
     data: OrderStatusUpdate,
     current_profile: dict = Depends(get_current_profile),

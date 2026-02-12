@@ -312,7 +312,7 @@ async def update_food_order_status(
 )-> OrderStatusUpdate:
     """Vendor updates food order status"""
     return await update_order_status(
-            order_id=order_id,
+            order_id=str(order_id),
             entity_type='FOOD_ORDER',
             data=data,
             triggered_by_user_id=current_profile['id'],
