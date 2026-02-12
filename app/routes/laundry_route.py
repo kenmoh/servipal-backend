@@ -22,7 +22,7 @@ from app.schemas.common import (
     VendorOrderActionResponse,
     VendorResponse,
 )
-from app.common.order import update_order_status, OrderStatus, OrderUpdateResponse
+from app.common.order import update_order_status, OrderStatusUpdate
 
 router = APIRouter(prefix="/api/v1/laundry", tags=["Laundry"])
 
@@ -250,20 +250,18 @@ async def delete_laundry_item_endpoint(
 @router.put('/update-laundry-order-status', include_in_schema=False)
 async def update_order_status(
     order_id: UUID,
-    status: OrderStatus,
+    data: OrderStatusUpdate,
     current_profile: dict = Depends(get_current_profile),
     supabase: AsyncClient = Depends(get_supabase_client),
-    cancellation_reason: Optional[str] = None,
     request: Request = None
-)-> OrderUpdateResponse:
+)-> OrderStatusUpdate:
     """Vendor updates food order status"""
     return await update_order_status(
             order_id=order_id,
             entity_type='LAUNDRY_ORDER',
-            new_status=status,
+            data=data.data,
             triggered_by_user_id=current_profile['id'],
             table_name='laundry_orders',
             supabase=supabase,
-            cancellation_reason=cancellation_reason,
             request=request,
     )

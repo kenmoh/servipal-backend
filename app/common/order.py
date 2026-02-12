@@ -24,22 +24,24 @@ class TransactionType(str, Enum):
     ESCROW_HOLD = 'ESCROW_HOLD'
     REFUNDED = 'REFUNDED'
 
-class OrderUpdateResponse(BaseModel):
+class OrderStatusUpdate(BaseModel):
     status: str = "success"
     new_status: OrderStatus
+    cancel_reason: Optional[str] = None
+
+
    
    
 
 async def update_order_status(
     order_id: str,
+    data:OrderStatusUpdate,
     entity_type: str,
-    new_status: OrderStatus,
     triggered_by_user_id: str,
     table_name: str,
     supabase: AsyncClient,
-    cancellation_reason: Optional[str] = None,
     request: Optional[Request] = None,
-)-> OrderUpdateResponse:
+)-> dict:
     """
     Update order status with proper authorization and wallet handling.
     
@@ -61,15 +63,15 @@ async def update_order_status(
     tranx = tranx_resp.data
     
     # Authorization checks
-    if new_status in [OrderStatus.PREPARING, OrderStatus.READY, OrderStatus.IN_TRANSIT, OrderStatus.DELIVERED]:
+    if data.new_status in [OrderStatus.PREPARING, OrderStatus.READY, OrderStatus.IN_TRANSIT, OrderStatus.DELIVERED]:
         if triggered_by_user_id != vendor_id:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail= f"Only vendor can set status to {new_status}")
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail= f"Only vendor can set status to {data.new_status}")
     
-    elif new_status == OrderStatus.COMPLETED:
+    elif data.new_status == OrderStatus.COMPLETED:
         if triggered_by_user_id != customer_id:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only customer can mark order as COMPLETED")
     
-    elif new_status == OrderStatus.CANCELLED:
+    elif data.new_status == OrderStatus.CANCELLED:
         if triggered_by_user_id not in [customer_id, vendor_id]:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only customer or vendor can cancel order")
     
@@ -78,7 +80,7 @@ async def update_order_status(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=f"Cannot change status from {current_status}")
     
     # Handle wallet changes
-    if new_status == OrderStatus.COMPLETED:
+    if data.new_status == OrderStatus.COMPLETED:
         # Release escrow to vendor
         if tranx.transaction_type != TransactionType.ESCROW_HOLD.value:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Cannot complete order - escrow not held")
@@ -111,7 +113,7 @@ async def update_order_status(
         
         # Update order
         await supabase.table(table_name).update({
-            "order_status": OrderStatus.COMPLETED.value,
+            "order_status": OrderStatus.COMPLETED.value, 'cancel_reason':data.cancel_reason
         }).eq("id", order_id).execute()
         
         # Audit log
@@ -131,7 +133,7 @@ async def update_order_status(
         
         logger.info("food_order_completed", order_id=order_id, amount_released=str(amount_due_vendor))
     
-    elif new_status == OrderStatus.CANCELLED:
+    elif data.new_status == OrderStatus.CANCELLED:
         # Refund customer if escrow still held
         if order.transaction_type == TransactionType.ESCROW_HOLD.value:
             grand_total = Decimal(str(order["grand_total"]))
@@ -163,7 +165,7 @@ async def update_order_status(
                 "order_type": "FOOD",
                 "details": {
                     "label": "CREDIT",
-                    "reason": cancellation_reason or "ORDER_CANCELLED",
+                    "reason": data.cancellation_reason or "ORDER_CANCELLED",
                     "cancelled_by": "VENDOR" if triggered_by_user_id == vendor_id else "CUSTOMER"
                 }
             }).execute()
@@ -186,7 +188,7 @@ async def update_order_status(
                 actor_id=triggered_by_user_id,
                 actor_type="USER",
                 change_amount=grand_total,
-                notes=cancellation_reason or "Order cancelled",
+                notes=data.cancellation_reason or "Order cancelled",
                 request=request,
             )
             
@@ -202,7 +204,7 @@ async def update_order_status(
     else:
         # PREPARING, READY, IN_TRANSIT, DELIVERED - just status update
         await supabase.table("food_orders").update({
-            "order_status": new_status
+            "order_status": data.new_status
         }).eq("id", order_id).execute()
         
         # Audit log
@@ -212,13 +214,13 @@ async def update_order_status(
             entity_id=order_id,
             action="STATUS_CHANGED",
             old_value={"status": current_status},
-            new_value={"status": new_status},
+            new_value={"status": data.new_status},
             actor_id=triggered_by_user_id,
             actor_type="USER",
-            notes=f"Order status changed to {new_status}",
+            notes=f"Order status changed to {data.new_status}",
             request=request,
         )
         
-        logger.info("food_order_status_updated", order_id=order_id, new_status=new_status)
+        logger.info("food_order_status_updated", order_id=order_id, new_status=data.new_status)
     
-    return {"status": "success", "new_status": new_status}
+    return {"status": "success", "new_status": data.new_status}
