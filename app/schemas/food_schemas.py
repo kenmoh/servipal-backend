@@ -170,7 +170,7 @@ class CartItem(BaseModel):
     price: Decimal
     quantity: int
     images: List[str] = []
-    sides: List[str] =[]
+    sides: List[str] = []
     sizes: List[str] = []
 
 

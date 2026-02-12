@@ -59,18 +59,17 @@ async def initiate_delivery_payment(
         dict: Payment initiation details.
     """
     logger.info("customer_info_received", customer_info=customer_info)
-    
-    # DEBUG: Log raw coordinate inputs
-    print('*'* 50, "COORDINATES DEBUG INFO ROUTE")
-    logger.info(
-        "initiate_delivery_coords_debug", 
-        pickup_lat=pickup_lat, 
-        pickup_lng=pickup_lng, 
-        dropoff_lat=dropoff_lat, 
-        dropoff_lng=dropoff_lng
-    )
-    print('*'* 50, "COORDINATES DEBUG INFO ROUTE")
 
+    # DEBUG: Log raw coordinate inputs
+    print("*" * 50, "COORDINATES DEBUG INFO ROUTE")
+    logger.info(
+        "initiate_delivery_coords_debug",
+        pickup_lat=pickup_lat,
+        pickup_lng=pickup_lng,
+        dropoff_lat=dropoff_lat,
+        dropoff_lng=dropoff_lng,
+    )
+    print("*" * 50, "COORDINATES DEBUG INFO ROUTE")
 
     # Upload image if provided
     url = None
@@ -102,10 +101,8 @@ async def initiate_delivery_payment(
         delivery_type=delivery_type,
         package_image_url=url,
         distance=distance,
-        duration=duration
+        duration=duration,
     )
-
-  
 
     return await delivery_service.initiate_delivery_payment(
         data, current_profile["id"], supabase, customer_info
@@ -131,7 +128,6 @@ async def assign_rider(
     return await delivery_service.assign_rider_to_order(
         order_id, data, current_profile["id"], supabase
     )
-
 
 
 # ───────────────────────────────────────────────

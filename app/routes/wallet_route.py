@@ -86,7 +86,6 @@ async def pay_with_my_wallet(
 
 @router.post("/withdraw-all", response_model=WithdrawResponse)
 async def withdraw_all_balance(
-   
     current_profile: dict = Depends(get_current_profile),
     supabase: AsyncClient = Depends(get_supabase_client),
     request: Request = None,

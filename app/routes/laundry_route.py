@@ -32,7 +32,7 @@ async def list_laundry_vendors(
     lat: Optional[float] = Query(None),
     lng: Optional[float] = Query(None),
     supabase: AsyncClient = Depends(get_supabase_client),
-    current_user: dict = Depends(get_current_profile)
+    current_user: dict = Depends(get_current_profile),
 ):
     """
     List laundry vendors.
@@ -49,9 +49,9 @@ async def list_laundry_vendors(
 
 @router.get("/vendors/{vendor_id}", response_model=LaundryVendorDetailResponse)
 async def get_laundry_vendor_detail(
-    vendor_id: UUID, 
+    vendor_id: UUID,
     supabase: AsyncClient = Depends(get_supabase_client),
-    current_user: dict = Depends(get_current_profile)
+    current_user: dict = Depends(get_current_profile),
 ):
     """
     Get laundry vendor details and menu.
@@ -247,21 +247,21 @@ async def delete_laundry_item_endpoint(
     )
 
 
-@router.put('/update-laundry-order-status', include_in_schema=False)
+@router.put("/update-laundry-order-status", include_in_schema=False)
 async def update_laundry_order_status(
     order_id: UUID,
     data: OrderStatusUpdate,
     current_profile: dict = Depends(get_current_profile),
     supabase: AsyncClient = Depends(get_supabase_client),
-    request: Request = None
-)-> OrderStatusUpdate:
+    request: Request = None,
+) -> OrderStatusUpdate:
     """Vendor updates food order status"""
     return await update_order_status(
-            order_id=order_id,
-            entity_type='LAUNDRY_ORDER',
-            data=data.data,
-            triggered_by_user_id=current_profile['id'],
-            table_name='laundry_orders',
-            supabase=supabase,
-            request=request,
+        order_id=order_id,
+        entity_type="LAUNDRY_ORDER",
+        data=data.data,
+        triggered_by_user_id=current_profile["id"],
+        table_name="laundry_orders",
+        supabase=supabase,
+        request=request,
     )

@@ -26,17 +26,13 @@ from rq import Worker
 import multiprocessing
 import sentry_sdk
 
-sentry_sdk.init(
-    dsn=settings.SENTRY_DSN,
-    send_default_pii=True,
-    enable_logs=True 
-)
+sentry_sdk.init(dsn=settings.SENTRY_DSN, send_default_pii=True, enable_logs=True)
 
 
 def run_worker():
     """Run the RQ worker"""
     logger.info("Starting RQ worker")
-    worker = Worker(['default'], connection=sync_redis_client)
+    worker = Worker(["default"], connection=sync_redis_client)
     worker.work()
 
 
@@ -45,17 +41,17 @@ async def lifespan(_: FastAPI):
     """Handle application lifespan events"""
     # Startup
     logger.info("Servipal Application Started", version="1.0.0")
-    
+
     # Start worker in a separate process
     logger.info("Starting RQ worker")
     worker_process = multiprocessing.Process(target=run_worker)
     worker_process.start()
-    
+
     yield
-    
+
     # Shutdown
     logger.info("Servipal Application Shutdown")
-    
+
     # Stop worker
     if worker_process.is_alive():
         logger.info("Stopping RQ worker")
@@ -64,6 +60,7 @@ async def lifespan(_: FastAPI):
         if worker_process.is_alive():
             worker_process.kill()
         logger.info("RQ worker stopped")
+
 
 app = FastAPI(
     title="ServiPal API",

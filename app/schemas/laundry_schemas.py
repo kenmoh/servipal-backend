@@ -138,11 +138,10 @@ class LaundryCustomerConfirmResponse(BaseModel):
 
 class LaundryOrderItem(BaseModel):
     name: str
-    price: Decimal 
+    price: Decimal
     item_id: UUID = Field(..., description="ID of the laundry item")
     quantity: int = Field(..., gt=0, description="Number of units (e.g., shirts, kg)")
     images: List[str]
-   
 
 
 class LaundryOrderCreate(BaseModel):

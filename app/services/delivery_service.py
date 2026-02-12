@@ -55,11 +55,12 @@ async def initiate_delivery_payment(
         data=data.model_dump(),
     )
     try:
-      
         # 2. Get charges from DB
         charges = (
             await supabase.table("charges_and_commissions")
-            .select("base_delivery_fee, delivery_fee_per_km, delivery_commission_percentage")
+            .select(
+                "base_delivery_fee, delivery_fee_per_km, delivery_commission_percentage"
+            )
             .single()
             .execute()
         )
@@ -71,17 +72,19 @@ async def initiate_delivery_payment(
 
         base_fee = Decimal(str(charges.data["base_delivery_fee"]))
         per_km_fee = Decimal(str(charges.data["delivery_fee_per_km"]))
-        commission_percentage = Decimal(str(charges.data["delivery_commission_percentage"]))
+        commission_percentage = Decimal(
+            str(charges.data["delivery_commission_percentage"])
+        )
 
         # 3. Calculate final fee
         delivery_fee = Decimal((base_fee + (per_km_fee * Decimal(data.distance))))
         delivery_fee = round(delivery_fee, 2)
-        amount_due_dispatch = round(delivery_fee * (Decimal(1) - Decimal(str(commission_percentage))), 2)
+        amount_due_dispatch = round(
+            delivery_fee * (Decimal(1) - Decimal(str(commission_percentage))), 2
+        )
 
         # 4. Generate unique tx_ref
         tx_ref = f"DELIVERY-{uuid.uuid4().hex[:32].upper()}"
-
-
 
         # 5. Save pending state in Redis
         pending_data = {
@@ -93,9 +96,7 @@ async def initiate_delivery_payment(
             "package_image_url": data.package_image_url,
             "description": data.description,
             "created_at": datetime.datetime.now().isoformat(),
-            
         }
-        
 
         await save_pending(f"pending_delivery_{tx_ref}", pending_data, expire=1800)
 
@@ -114,12 +115,12 @@ async def initiate_delivery_payment(
             customer=PaymentCustomerInfo(
                 email=customer_info.get("email"),
                 phone_number=customer_info.get("phone_number"),
-                full_name=customer_info.get("full_name")  or "N/A",
+                full_name=customer_info.get("full_name") or "N/A",
             ),
             customization=PaymentCustomization(
                 title="Servipal Delivery",
                 description=f"From {data.pickup_location} to {data.destination} ({data.distance} km)",
-                logo="https://mohdelivery.s3.us-east-1.amazonaws.com/favion/favicon.ico"
+                logo="https://mohdelivery.s3.us-east-1.amazonaws.com/favion/favicon.ico",
             ),
             message="Ready for payment",
         ).model_dump()
@@ -141,10 +142,7 @@ async def initiate_delivery_payment(
 # 3. Assign Rider After Payment (RPC already updated earlier)
 # ───────────────────────────────────────────────
 async def assign_rider_to_order(
-    order_id: UUID,
-    data: AssignRiderRequest,
-    sender_id: UUID,
-    supabase: AsyncClient
+    order_id: UUID, data: AssignRiderRequest, sender_id: UUID, supabase: AsyncClient
 ) -> AssignRiderResponse:
     try:
         order = (
@@ -471,9 +469,9 @@ async def sender_confirm_receipt(
 
         # Increment rider total deliveries
         if order.get("rider_id"):
-            await supabase.rpc("increment_rider_total_delivery", {
-                "p_rider_id": str(order["rider_id"])
-            }).execute()
+            await supabase.rpc(
+                "increment_rider_total_delivery", {"p_rider_id": str(order["rider_id"])}
+            ).execute()
 
         # Notify rider/dispatch
         if order.get("rider_id"):
@@ -672,5 +670,3 @@ async def get_delivery_orders(
 
     except Exception as e:
         raise HTTPException(500, f"Failed to fetch delivery orders: {str(e)}")
-
-

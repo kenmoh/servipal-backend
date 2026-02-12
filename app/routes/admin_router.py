@@ -9,6 +9,7 @@ from supabase import AsyncClient
 from uuid import UUID
 from datetime import datetime
 from app.dependencies.auth import require_user_type
+
 router = APIRouter(prefix="/api/v1/admin", tags=["Admin"])
 
 
@@ -354,14 +355,15 @@ async def list_transactions(
 #     return await admin_service.list_wallets(pagination, admin_client)
 
 
-
 @router.get("/wallets", response_model=List[WalletsListResponse])
 async def list_all_wallets(
     limit: int = 50,
     offset: int = 0,
     transactions_per_wallet: int = 10,
-    current_user: dict = Depends(require_user_type(['ADMIN', 'MODERATOR', 'SUPER_ADMIN'])),  # Admin only
-    supabase: AsyncClient = Depends(get_supabase_admin_client)
+    current_user: dict = Depends(
+        require_user_type(["ADMIN", "MODERATOR", "SUPER_ADMIN"])
+    ),  # Admin only
+    supabase: AsyncClient = Depends(get_supabase_admin_client),
 ):
     """List all wallets with their transactions (Admin only)"""
     result = await supabase.rpc(
@@ -369,10 +371,10 @@ async def list_all_wallets(
         {
             "p_limit": limit,
             "p_offset": offset,
-            "p_transactions_per_wallet": transactions_per_wallet
-        }
+            "p_transactions_per_wallet": transactions_per_wallet,
+        },
     ).execute()
-    
+
     return result.data or []
 
 

@@ -1072,4 +1072,3 @@ async def list_audit_logs(
         raise HTTPException(
             status_code=500, detail=f"Failed to list audit logs: {str(e)}"
         )
-

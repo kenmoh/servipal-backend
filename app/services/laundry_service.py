@@ -455,11 +455,11 @@ async def initiate_laundry_payment(
             amount=Decimal(str(grand_total)),
             public_key=settings.FLUTTERWAVE_PUBLIC_KEY,
             currency="NGN",
-            customer=PaymentCustomerInfo(**customer_info), 
+            customer=PaymentCustomerInfo(**customer_info),
             customization=PaymentCustomization(
                 title="Servipal Delivery",
                 description=f"From {data.pickup_location} to {data.destination} ({data.distance} km)",
-                logo="https://mohdelivery.s3.us-east-1.amazonaws.com/favion/favicon.ico"
+                logo="https://mohdelivery.s3.us-east-1.amazonaws.com/favion/favicon.ico",
             ),
             message="Ready for payment",
         ).model_dump()

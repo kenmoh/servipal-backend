@@ -8,7 +8,11 @@ from app.config.logging import logger
 from app.utils.audit import log_audit_event
 from decimal import Decimal
 from app.config.config import redis_client
-from app.utils.utils import check_login_attempts, record_failed_attempt, reset_login_attempts
+from app.utils.utils import (
+    check_login_attempts,
+    record_failed_attempt,
+    reset_login_attempts,
+)
 
 # ───────────────────────────────────────────────
 # 1. Signup (Customer / Vendor / Dispatch)
@@ -114,10 +118,10 @@ async def login_user(
     data: LoginRequest, supabase: AsyncClient, request: Optional[Request] = None
 ) -> TokenResponse:
     logger.info("login_attempt", email=data.email)
-    
+
     # Check for too many failed attempts
     await check_login_attempts(data.email, redis_client)
-    
+
     try:
         # Try phone first, then email
         credentials = {"password": data.password, "email": data.email}
@@ -188,7 +192,9 @@ async def create_rider_by_dispatch(
     # Fetch the dispatcher profile with required fields
     dispatch_profile_resp = (
         await supabase_admin.table("profiles")
-        .select("user_type, business_name, business_address, state, business_registration_number")
+        .select(
+            "user_type, business_name, business_address, state, business_registration_number"
+        )
         .eq("id", current_profile.id)
         .single()
         .execute()
@@ -199,14 +205,18 @@ async def create_rider_by_dispatch(
     # Security: Only DISPATCH can create riders
     if dispatch_profile["user_type"] != UserType.DISPATCH.value:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Only dispatch users can create riders"
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only dispatch users can create riders",
         )
-    
-    riders = await get_my_riders(dispatch_user_id=current_profile.id, supabase=supabase_admin)
+
+    riders = await get_my_riders(
+        dispatch_user_id=current_profile.id, supabase=supabase_admin
+    )
     # Validation: Limit riders if no business registration number
-    if  dispatch_profile['business_registration_number'] is None and len(riders) >= 1:
+    if dispatch_profile["business_registration_number"] is None and len(riders) >= 1:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Rider limit reached. Add a valid business registration number."
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Rider limit reached. Add a valid business registration number.",
         )
 
     # Validation: Dispatch must have completed business details
@@ -817,7 +827,7 @@ async def update_user_location(
     Update user's current location (stored as PostGIS geography point).
     Used for rider/driver proximity matching, nearby vendors, etc.
     """
-    
+
     try:
         # Basic validation (already done by Pydantic, but extra safety)
         if not (-90 <= data.lat <= 90) or not (-180 <= data.lng <= 180):
@@ -893,11 +903,15 @@ async def toggle_online_or_can_pickup(
         )
 
         is_online_msg = "online" if new_status else "offline"
-        can_pickup_and_dropoff_msg = 'Pickup enabled' if new_status else 'Pickup disabled'
+        can_pickup_and_dropoff_msg = (
+            "Pickup enabled" if new_status else "Pickup disabled"
+        )
         key = field == "is_online" and "is_online" or "can_pickup_and_dropoff"
         return {
             "success": True,
-            "message": field == "is_online" and f"You are now {is_online_msg}." or f"{can_pickup_and_dropoff_msg}.",
+            "message": field == "is_online"
+            and f"You are now {is_online_msg}."
+            or f"{can_pickup_and_dropoff_msg}.",
             key: new_status,
         }
 

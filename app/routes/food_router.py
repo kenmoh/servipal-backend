@@ -33,7 +33,7 @@ async def list_food_vendors(
     lat: Optional[float] = Query(None, description="Latitude for nearby search"),
     lng: Optional[float] = Query(None, description="Longitude for nearby search"),
     supabase: AsyncClient = Depends(get_supabase_client),
-    current_user: dict = Depends(get_current_profile)
+    current_user: dict = Depends(get_current_profile),
 ):
     """
     List restaurant vendors.
@@ -50,10 +50,9 @@ async def list_food_vendors(
 
 @router.get("/vendors/{vendor_id}", response_model=VendorDetailResponse)
 async def get_vendor_menu(
-    vendor_id: UUID, 
+    vendor_id: UUID,
     supabase: AsyncClient = Depends(get_supabase_client),
-    current_user: dict = Depends(get_current_profile)
-
+    current_user: dict = Depends(get_current_profile),
 ):
     """
     Get vendor details and full menu.
@@ -302,21 +301,21 @@ async def vendor_food_earnings(
     return earnings.data
 
 
-@router.put('/update-food-order-status', status_code=status.HTTP_202_ACCEPTED)
+@router.put("/update-food-order-status", status_code=status.HTTP_202_ACCEPTED)
 async def update_food_order_status(
     order_id: UUID,
     data: OrderStatusUpdate,
     current_profile: dict = Depends(get_current_profile),
     supabase: AsyncClient = Depends(get_supabase_client),
-    request:Request = None
-)-> OrderStatusUpdate:
+    request: Request = None,
+) -> OrderStatusUpdate:
     """Vendor updates food order status"""
     return await update_order_status(
-            order_id=str(order_id),
-            entity_type='FOOD_ORDER',
-            data=data,
-            triggered_by_user_id=current_profile['id'],
-            table_name='food_orders',
-            supabase=supabase,
-            request=request,
+        order_id=str(order_id),
+        entity_type="FOOD_ORDER",
+        data=data,
+        triggered_by_user_id=current_profile["id"],
+        table_name="food_orders",
+        supabase=supabase,
+        request=request,
     )

@@ -102,10 +102,9 @@ async def create_product_item(
 
 @router.get("/items/{item_id}", response_model=ProductItemResponse)
 async def get_product_item(
-    item_id: UUID, 
+    item_id: UUID,
     supabase: AsyncClient = Depends(get_supabase_client),
-    current_user: dict = Depends(get_current_profile)
-
+    current_user: dict = Depends(get_current_profile),
 ):
     """
     View a single product detail.
@@ -123,7 +122,6 @@ async def get_product_item(
 async def get_my_products(
     current_profile: dict = Depends(get_current_profile),
     supabase: AsyncClient = Depends(get_supabase_client),
-
 ):
     """
     Seller views their own listed products.
@@ -195,9 +193,7 @@ async def initiate_product_payment(
     Returns:
         ProductOrderResponse: Payment details (Flutterwave).
     """
-    return await product_service.initiate_product_payment(
-        data,  customer_info, supabase
-    )
+    return await product_service.initiate_product_payment(data, customer_info, supabase)
 
 
 # ───────────────────────────────────────────────

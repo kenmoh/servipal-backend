@@ -128,7 +128,9 @@ async def get_customer_contact_info(
             "phone_number": profile.get("phone_number", ""),
             "full_name": profile.get("full_name")
             if profile.get("full_name")
-            else profile.get("business_name") if profile.get('business_name') else profile.get('store_name'),
+            else profile.get("business_name")
+            if profile.get("business_name")
+            else profile.get("store_name"),
         }
 
     except Exception as e:

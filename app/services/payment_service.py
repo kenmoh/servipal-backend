@@ -11,10 +11,10 @@ from app.utils.payment import verify_transaction_tx_ref
 from app.services.notification_service import notify_user
 
 
-
 # ───────────────────────────────────────────────
 # Delivery Payment
 # ───────────────────────────────────────────────
+
 
 async def process_successful_delivery_payment(
     tx_ref: str,
@@ -26,7 +26,7 @@ async def process_successful_delivery_payment(
     Process successful delivery payment using atomic database transaction
     """
     logger.info("processing_delivery_payment", tx_ref=tx_ref, paid_amount=paid_amount)
-    
+
     # Verify payment
     verified = await verify_transaction_tx_ref(tx_ref)
     if not verified or verified.get("status") != "success":
@@ -62,8 +62,10 @@ async def process_successful_delivery_payment(
 
     try:
         # Create delivery_order (no rider yet)
-        logger.info("creating_delivery_order", sender_id=sender_id, delivery_data=delivery_data)
-        
+        logger.info(
+            "creating_delivery_order", sender_id=sender_id, delivery_data=delivery_data
+        )
+
         order_resp = (
             await supabase.table("delivery_orders")
             .insert(
@@ -73,22 +75,22 @@ async def process_successful_delivery_payment(
                     "receiver_phone": delivery_data.get("receiver_phone"),
                     "pickup_location": delivery_data["pickup_location"],
                     "destination": delivery_data["destination"],
-                    "pickup_coordinates": delivery_data['pickup_coordinates'],
-                    "dropoff_coordinates": delivery_data['dropoff_coordinates'],
+                    "pickup_coordinates": delivery_data["pickup_coordinates"],
+                    "dropoff_coordinates": delivery_data["dropoff_coordinates"],
                     "additional_info": delivery_data.get("description"),
                     "delivery_type": delivery_data["delivery_type"],
                     "total_price": float(expected_rounded),
                     "amount_due_dispatch": float(amount_due_dispatch),
                     "delivery_fee": float(expected_rounded),
-                    "duration": delivery_data.get('duration'),
+                    "duration": delivery_data.get("duration"),
                     "delivery_status": "PAID_NEEDS_RIDER",
                     "payment_status": "PAID",
                     "escrow_status": "HELD",
-                    "package_image_url": delivery_data.get('package_image_url'),
+                    "package_image_url": delivery_data.get("package_image_url"),
                     "distance": float(pending.get("distance", 0)),
                     "tx_ref": tx_ref,
                     "flw_ref": flw_ref,
-                     "order_type":"DELIVERY"
+                    "order_type": "DELIVERY",
                 }
             )
             .execute()
@@ -98,19 +100,30 @@ async def process_successful_delivery_payment(
         logger.info("delivery_order_created", order_id=order_id)
 
         # Hold fee in sender escrow
-        logger.info("holding_fee_in_sender_escrow", sender_id=sender_id, expected_fee=expected_fee)
+        logger.info(
+            "holding_fee_in_sender_escrow",
+            sender_id=sender_id,
+            expected_fee=expected_fee,
+        )
         await supabase.rpc(
             "update_user_wallet",
             {
                 "p_user_id": str(sender_id),
-                "p_balance_change": '0',
-                "p_escrow_balance_change": f'{expected_rounded}',
+                "p_balance_change": f"{expected_rounded}",
+                "p_escrow_balance_change": "0",
             },
         ).execute()
-        logger.info("fee_held_in_sender_escrow", sender_id=sender_id, expected_fee=expected_fee)
+        logger.info(
+            "fee_held_in_sender_escrow", sender_id=sender_id, expected_fee=expected_fee
+        )
 
         # Create transaction
-        logger.info("creating_transaction", tx_ref=tx_ref, sender_id=sender_id, expected_fee=expected_fee)
+        logger.info(
+            "creating_transaction",
+            tx_ref=tx_ref,
+            sender_id=sender_id,
+            expected_fee=expected_fee,
+        )
         await (
             supabase.table("transactions")
             .insert(
@@ -123,7 +136,7 @@ async def process_successful_delivery_payment(
                     "transaction_type": "ESCROW_HOLD",
                     "payment_status": "SUCCESS",
                     "payment_method": "FLUTTERWAVE",
-                    "order_type":"DELIVERY",
+                    "order_type": "DELIVERY",
                     "details": {"flw_ref": flw_ref},
                 }
             )
@@ -135,9 +148,9 @@ async def process_successful_delivery_payment(
         logger.info("pending_delivery_deleted", tx_ref=tx_ref)
 
         logger.info(
-            event="delivery_payment_processed_success", 
-            tx_ref=tx_ref, 
-            order_id=str(order_id)
+            event="delivery_payment_processed_success",
+            tx_ref=tx_ref,
+            order_id=str(order_id),
         )
 
     except Exception as e:
@@ -189,10 +202,10 @@ async def process_successful_food_payment(
     delivery_fee = Decimal(pending.get("delivery_fee", 0))
     order_data = pending["items"]
     name = pending.get("name")
-    total_price = Decimal(str(pending["total_price"]))        
-    delivery_option = pending["delivery_option"]             
-    additional_info = pending.get("additional_info")         
-    
+    total_price = Decimal(str(pending["total_price"]))
+    delivery_option = pending["delivery_option"]
+    additional_info = pending.get("additional_info")
+
     # Idempotency + amount validation
     existing_tx = (
         await supabase.table("transactions").select("id").eq("tx_ref", tx_ref).execute()
@@ -236,12 +249,11 @@ async def process_successful_food_payment(
                     "grand_total": str(expected_total),
                     "amount_due_vendor": str(amount_due_vendor),
                     "additional_info": additional_info,
-                    "delivery_option":delivery_option,
+                    "delivery_option": delivery_option,
                     "order_status": "PENDING",
                     "payment_status": "SUCCESS",
-                    "order_type":"FOOD",
-                    "tx_ref": f"{tx_ref}"
-                   
+                    "order_type": "FOOD",
+                    "tx_ref": f"{tx_ref}",
                 }
             )
             .execute()
@@ -259,8 +271,8 @@ async def process_successful_food_payment(
                         "item_id": item["item_id"],
                         "quantity": item["quantity"],
                         "sizes": item.get("sizes", []),
-                        "sides": item.get("sides", []), 
-                        "images": item.get("images", []), 
+                        "sides": item.get("sides", []),
+                        "images": item.get("images", []),
                     }
                 )
                 .execute()
@@ -271,7 +283,7 @@ async def process_successful_food_payment(
             "update_user_wallet",
             {
                 "p_user_id": customer_id,
-                "p_balance_change": '0',
+                "p_balance_change": "0",
                 "p_escrow_balance_change": expected_total,
             },
         ).execute()
@@ -280,7 +292,7 @@ async def process_successful_food_payment(
             "update_user_wallet",
             {
                 "p_user_id": vendor_id,
-                "p_balance_change": '0',
+                "p_balance_change": "0",
                 "p_escrow_balance_change": expected_total,
             },
         ).execute()
@@ -299,8 +311,12 @@ async def process_successful_food_payment(
                     "transaction_type": "ESCROW_HOLD",
                     "payment_status": "SUCCESS",
                     "payment_method": "FLUTTERWAVE",
-                    "order_type":"FOOD",
-                    "details": {"flw_ref": flw_ref, "label": "DEBIT", "order_type":"FOOD"},
+                    "order_type": "FOOD",
+                    "details": {
+                        "flw_ref": flw_ref,
+                        "label": "DEBIT",
+                        "order_type": "FOOD",
+                    },
                 }
             )
             .execute()
@@ -319,8 +335,13 @@ async def process_successful_food_payment(
                     "transaction_type": "ESCROW_HOLD",
                     "payment_status": "SUCCESS",
                     "payment_method": "FLUTTERWAVE",
-                    "order_type":"FOOD",
-                    "details": {"flw_ref": flw_ref, "label": "CREDIT", "from": f"{name}",  "order_type":"FOOD"},
+                    "order_type": "FOOD",
+                    "details": {
+                        "flw_ref": flw_ref,
+                        "label": "CREDIT",
+                        "from": f"{name}",
+                        "order_type": "FOOD",
+                    },
                 }
             )
             .execute()
@@ -328,18 +349,20 @@ async def process_successful_food_payment(
 
         # Notify rider on success
         await notify_user(
-                user_id=vendor_id,
-                title="New Order",
-                body=f"You have a new order from {name}",
-                data={"order_id": str(order_id), "type": "FOOD_PAYMENT"},
-                supabase=supabase,
-            )
+            user_id=vendor_id,
+            title="New Order",
+            body=f"You have a new order from {name}",
+            data={"order_id": str(order_id), "type": "FOOD_PAYMENT"},
+            supabase=supabase,
+        )
 
         # 5. Cleanup Redis
         await delete_pending(pending_key)
 
         logger.info(
-            event="food_payment_processed_success", tx_ref=tx_ref, order_id=str(order_id)
+            event="food_payment_processed_success",
+            tx_ref=tx_ref,
+            order_id=str(order_id),
         )
 
         # Audit log
@@ -376,7 +399,10 @@ async def process_successful_food_payment(
     except Exception as e:
         # Critical: attempt refund on error (implement refund_flutterwave if needed)
         logger.error(
-            event="food_payment_processing_error", tx_ref=tx_ref, error=str(e), exc_info=True
+            event="food_payment_processing_error",
+            tx_ref=tx_ref,
+            error=str(e),
+            exc_info=True,
         )
         await delete_pending(pending_key)
         # Optional: await refund_flutterwave(tx_ref)
@@ -441,8 +467,11 @@ async def process_successful_topup_payment(
         # Add funds to wallet balance (atomic RPC)
         await supabase.rpc(
             "update_user_wallet",
-            {"p_user_id": user_id, "p_balance_change": paid_amount, "p_escrow_balance_change": '0'},
-               
+            {
+                "p_user_id": user_id,
+                "p_balance_change": paid_amount,
+                "p_escrow_balance_change": "0",
+            },
         ).execute()
 
         # Get new balance
@@ -468,7 +497,7 @@ async def process_successful_topup_payment(
                     "wallet_id": user_id,
                     "transaction_type": "DEPOSIT",
                     "payment_method": "FLUTTERWAVE",
-                    "order_type":"DEPOSIT",
+                    "order_type": "DEPOSIT",
                     "details": {"flw_ref": flw_ref, "label": "CREDIT"},
                 }
             )
@@ -490,14 +519,14 @@ async def process_successful_topup_payment(
             request=request,
         )
 
-         # Notify rider on success
+        # Notify rider on success
         await notify_user(
-                user_id=user_id,
-                title="Wallet Top up",
-                body=f"Wallet top up successful",
-                data={"user_id": str(user_id), "type": "WALLET TOP UP"},
-                supabase=supabase,
-            )
+            user_id=user_id,
+            title="Wallet Top up",
+            body=f"Wallet top up successful",
+            data={"user_id": str(user_id), "type": "WALLET TOP UP"},
+            supabase=supabase,
+        )
 
         await delete_pending(pending_key)
         logger.info(
@@ -509,7 +538,10 @@ async def process_successful_topup_payment(
 
     except Exception as e:
         logger.error(
-           event="topup_payment_processing_error", tx_ref=tx_ref, error=str(e), exc_info=True
+            event="topup_payment_processing_error",
+            tx_ref=tx_ref,
+            error=str(e),
+            exc_info=True,
         )
         await delete_pending(pending_key)
         raise
@@ -519,16 +551,19 @@ async def process_successful_topup_payment(
 # Product Payment
 # ───────────────────────────────────────────────
 
+
 async def process_successful_product_payment(
     tx_ref: str, paid_amount: float, flw_ref: str, supabase: AsyncClient
 ):
-    logger.info(event="processing_product_payment", tx_ref=tx_ref, paid_amount=paid_amount)
+    logger.info(
+        event="processing_product_payment", tx_ref=tx_ref, paid_amount=paid_amount
+    )
 
     verified = await verify_transaction_tx_ref(tx_ref)
     if not verified or verified.get("status") != "success":
         logger.error(event="delivery_payment_verification_failed", tx_ref=tx_ref)
         return
-    
+
     pending_key = f"pending_product_{tx_ref}"
     pending = await get_pending(pending_key)
 
@@ -555,7 +590,12 @@ async def process_successful_product_payment(
     paid_rounded = Decimal(str(paid_amount)).quantize(Decimal("0.00"))
 
     if paid_rounded != expected_rounded:
-        logger.error(event="payment_amount_mismatch", tx_ref=tx_ref, expected=str(expected_rounded), paid=str(paid_rounded))
+        logger.error(
+            event="payment_amount_mismatch",
+            tx_ref=tx_ref,
+            expected=str(expected_rounded),
+            paid=str(paid_rounded),
+        )
         await delete_pending(pending_key)
         return
 
@@ -563,47 +603,57 @@ async def process_successful_product_payment(
         # 1 Create the main product_order
         product_id = pending["item_id"]
         quantity = int(pending["quantity"])
-        product_name = pending.get("product_name", "Product") 
+        product_name = pending.get("product_name", "Product")
         unit_price = pending.get("price", 0)
-        
-        
+
         # 2. Create the main product_order
-        order_resp = await supabase.table("product_orders").insert({
-            "tx_ref": tx_ref,
-            "customer_id": pending["customer_id"],
-            "vendor_id": pending["vendor_id"],
-            "grand_total": pending["grand_total"],
-            "amount_due_vendor": pending["subtotal"],
-            "shipping_cost": pending.get("shipping_cost", 0),
-            "delivery_option": pending["delivery_option"],
-            "delivery_address": pending["delivery_address"],
-            "additional_info": pending["additional_info"],
-            "order_status": "PENDING",
-            "payment_status": "PAID",
-            "escrow_status": "HELD",
-            "order_type":"PRODUCT"
-        }).execute()
+        order_resp = (
+            await supabase.table("product_orders")
+            .insert(
+                {
+                    "tx_ref": tx_ref,
+                    "customer_id": pending["customer_id"],
+                    "vendor_id": pending["vendor_id"],
+                    "grand_total": pending["grand_total"],
+                    "amount_due_vendor": pending["subtotal"],
+                    "shipping_cost": pending.get("shipping_cost", 0),
+                    "delivery_option": pending["delivery_option"],
+                    "delivery_address": pending["delivery_address"],
+                    "additional_info": pending["additional_info"],
+                    "order_status": "PENDING",
+                    "payment_status": "PAID",
+                    "escrow_status": "HELD",
+                    "order_type": "PRODUCT",
+                }
+            )
+            .execute()
+        )
 
         order_id = order_resp.data[0]["id"]
-        
-        await supabase.table("product_order_items").insert({
-            "order_id": order_id, 
-            "product_id": product_id, 
-            "quantity": quantity,
-            "name": product_name,
-            "images": pending.get("images", None),
-            "price": unit_price,
-            "selected_size": pending.get("selected_size", None),
-            "selected_color": pending.get("selected_color", None)
-        }).execute()
-        
+
+        await (
+            supabase.table("product_order_items")
+            .insert(
+                {
+                    "order_id": order_id,
+                    "product_id": product_id,
+                    "quantity": quantity,
+                    "name": product_name,
+                    "images": pending.get("images", None),
+                    "price": unit_price,
+                    "selected_size": pending.get("selected_size", None),
+                    "selected_color": pending.get("selected_color", None),
+                }
+            )
+            .execute()
+        )
 
         # Update buyer escrow balance
         await supabase.rpc(
             "update_user_wallet",
             {
                 "p_user_id": customer_id,
-                "p_balance_change": '0',
+                "p_balance_change": "0",
                 "p_escrow_balance_change": expected_total,
             },
         ).execute()
@@ -621,7 +671,7 @@ async def process_successful_product_payment(
                     "order_id": order_id,
                     "transaction_type": "ESCROW_HOLD",
                     "payment_method": "FLUTTERWAVE",
-                    "order_type":"PRODUCT",
+                    "order_type": "PRODUCT",
                     "details": {"flw_ref": flw_ref, "label": "DEBIT"},
                 }
             )
@@ -630,23 +680,27 @@ async def process_successful_product_payment(
 
         # Notify rider on success
         await notify_user(
-                user_id=vendor_id,
-                title="New Order",
-                body=f"You have a new order",
-                data={"order_id": str(order_id), "type": "PRODUCT_PAYMENT"},
-                supabase=supabase,
-            )
-
+            user_id=vendor_id,
+            title="New Order",
+            body=f"You have a new order",
+            data={"order_id": str(order_id), "type": "PRODUCT_PAYMENT"},
+            supabase=supabase,
+        )
 
         await delete_pending(pending_key)
 
-
     except Exception as e:
-        logger.error(event="product_payment_processing_error", tx_ref=tx_ref, error=str(e), exc_info=True)
-        # Depending on your failure strategy, you might not want to delete pending here 
+        logger.error(
+            event="product_payment_processing_error",
+            tx_ref=tx_ref,
+            error=str(e),
+            exc_info=True,
+        )
+        # Depending on your failure strategy, you might not want to delete pending here
         # so it can be retried, but keeping it as per your original logic.
-        await delete_pending(pending_key) 
+        await delete_pending(pending_key)
         raise
+
 
 async def process_successful_laundry_payment(
     tx_ref: str,
@@ -663,13 +717,15 @@ async def process_successful_laundry_payment(
     - Logs platform commission
     - Creates transaction record
     """
-    logger.info(event="processing_laundry_payment", tx_ref=tx_ref, paid_amount=paid_amount)
+    logger.info(
+        event="processing_laundry_payment", tx_ref=tx_ref, paid_amount=paid_amount
+    )
 
     verified = await verify_transaction_tx_ref(tx_ref)
     if not verified or verified.get("status") != "success":
         logger.error(event="delivery_payment_verification_failed", tx_ref=tx_ref)
         return
-    
+
     pending_key = f"pending_laundry_{tx_ref}"
     pending = await get_pending(pending_key)
 
@@ -723,8 +779,8 @@ async def process_successful_laundry_payment(
                     "payment_status": "PAID",
                     "escrow_status": "HELD",
                     "amount_due_vendor": amount_due_vendor,
-                    "order_type":"LAUNDRY",
-                    "tx_ref": f"{tx_ref}"
+                    "order_type": "LAUNDRY",
+                    "tx_ref": f"{tx_ref}",
                 }
             )
             .execute()
@@ -755,7 +811,7 @@ async def process_successful_laundry_payment(
                     "wallet_id": customer_id,
                     "transaction_type": "ESCROW_HOLD",
                     "payment_method": "FLUTTERWAVE",
-                    "order_type":"LAUNDRY",
+                    "order_type": "LAUNDRY",
                     "details": {"flw_ref": flw_ref, "label": "DEBIT"},
                 }
             )
@@ -779,12 +835,12 @@ async def process_successful_laundry_payment(
 
         # Notify rider on success
         await notify_user(
-                user_id=vendor_id,
-                title="New Order",
-                body=f"You have a new order",
-                data={"order_id": str(order_id), "type": "LAUNDRY_PAYMENT"},
-                supabase=supabase,
-            )
+            user_id=vendor_id,
+            title="New Order",
+            body=f"You have a new order",
+            data={"order_id": str(order_id), "type": "LAUNDRY_PAYMENT"},
+            supabase=supabase,
+        )
 
         await delete_pending(pending_key)
 
@@ -803,7 +859,9 @@ async def process_successful_laundry_payment(
         )
 
         logger.info(
-            event="laundry_payment_processed_success", tx_ref=tx_ref, order_id=str(order_id)
+            event="laundry_payment_processed_success",
+            tx_ref=tx_ref,
+            order_id=str(order_id),
         )
 
     except Exception as e:

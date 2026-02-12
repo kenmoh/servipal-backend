@@ -195,12 +195,8 @@ class OnlineStatusResponse(BaseModel):
 
 
 class UserLocationUpdate(BaseModel):
-    lat: float = Field(
-        ..., ge=-90, le=90, description="Latitude in decimal degrees"
-    )
-    lng: float = Field(
-        ..., ge=-180, le=180, description="Longitude in decimal degrees"
-    )
+    lat: float = Field(..., ge=-90, le=90, description="Latitude in decimal degrees")
+    lng: float = Field(..., ge=-180, le=180, description="Longitude in decimal degrees")
     accuracy: Optional[float] = Field(
         None, description="Location accuracy in meters (optional)"
     )

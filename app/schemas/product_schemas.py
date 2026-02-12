@@ -69,7 +69,6 @@ class ProductOrderCreate(BaseModel):
     sizes: List[str] = None
     colors: List[str] = None
     images: List[str] = None
-   
 
 
 class ProductOrderResponse(BaseModel):

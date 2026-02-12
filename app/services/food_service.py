@@ -296,8 +296,7 @@ async def customer_confirm_food_order(
                 status=order.data["order_status"],
             )
             raise HTTPException(400, "Order not ready for confirmation yet")
-        
-        
+
         tx = (
             await supabase.table("transactions")
             .select("id, amount, to_user_id, status")
@@ -311,7 +310,9 @@ async def customer_confirm_food_order(
 
         full_amount = tx.data["amount"]
         vendor_id = order.data["vendor_id"] or tx.data["to_user_id"]
-        platform_fee = Decimal(order['grand_total']) - Decimal(order['amount_due_vendor'])
+        platform_fee = Decimal(order["grand_total"]) - Decimal(
+            order["amount_due_vendor"]
+        )
 
         # Atomic release: deduct customer escrow + credit vendor balance
         await supabase.rpc(
@@ -585,9 +586,7 @@ async def delete_food_item(
 
 
 async def initiate_food_payment(
-    data: CheckoutRequest,
-    supabase: AsyncClient,
-    current_profile: dict
+    data: CheckoutRequest, supabase: AsyncClient, current_profile: dict
 ) -> dict:
     """
     Validate items, calculate total, save pending state in Redis,
@@ -596,7 +595,7 @@ async def initiate_food_payment(
     """
     logger.info(
         "initiate_food_payment",
-        customer_id=str(current_profile.get('id')),
+        customer_id=str(current_profile.get("id")),
         vendor_id=str(data.vendor_id),
     )
     try:
@@ -654,16 +653,16 @@ async def initiate_food_payment(
 
         # 5. Save pending state in Redis
         pending_data = {
-            "customer_id": str(current_profile.get('id')),
+            "customer_id": str(current_profile.get("id")),
             "vendor_id": str(data.vendor_id),
-            "items": [item.model_dump(mode='json') for item in data.items],
+            "items": [item.model_dump(mode="json") for item in data.items],
             "total_price": str(Decimal(subtotal)),
             "delivery_fee": str(Decimal(delivery_fee)),
             "grand_total": str(Decimal(grand_total)),
             "delivery_option": data.delivery_option,
             "additional_info": data.instructions,
             "tx_ref": tx_ref,
-            "name":current_profile.get("phone_number"),
+            "name": current_profile.get("phone_number"),
             "created_at": datetime.now().isoformat(),
         }
         await save_pending(f"pending_food_{tx_ref}", pending_data, expire=1800)
@@ -678,14 +677,14 @@ async def initiate_food_payment(
             public_key=settings.FLUTTERWAVE_PUBLIC_KEY,
             currency="NGN",
             customer=PaymentCustomerInfo(
-                    email=current_profile.get("email"),
-                    phone_number=current_profile.get("phone_number"),
-                    full_name=current_profile.get("full_name")
+                email=current_profile.get("email"),
+                phone_number=current_profile.get("phone_number"),
+                full_name=current_profile.get("full_name"),
             ),
             customization=PaymentCustomization(
                 title="Servipal Food Order",
                 description=f"Order from {vendor['store_name']}",
-                logo="https://mohdelivery.s3.us-east-1.amazonaws.com/favion/favicon.ico"
+                logo="https://mohdelivery.s3.us-east-1.amazonaws.com/favion/favicon.ico",
             ),
             message="Ready for payment — use Flutterwave SDK",
         ).model_dump()
@@ -695,7 +694,7 @@ async def initiate_food_payment(
     except Exception as e:
         logger.error(
             "initiate_food_payment_error",
-            customer_id=str(current_profile.get('id')),
+            customer_id=str(current_profile.get("id")),
             error=str(e),
             exc_info=True,
         )

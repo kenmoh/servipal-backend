@@ -162,7 +162,9 @@ async def initiate_product_payment(
         # Fetch the product
         item_resp = (
             await supabase.table("product_items")
-            .select("id, vendor_id, price, stock, name, in_stock, sizes, colors, shipping_cost")
+            .select(
+                "id, vendor_id, price, stock, name, in_stock, sizes, colors, shipping_cost"
+            )
             .eq("id", str(data.item_id))
             .single()
             .execute()
@@ -180,10 +182,10 @@ async def initiate_product_payment(
         subtotal = Decimal(str(item["price"])) * data.quantity
 
         # Delivery fee (from seller profile)
-        shipping_cost = item.get('shipping_cost', 0)
-        
+        shipping_cost = item.get("shipping_cost", 0)
+
         grand_total = subtotal + (shipping_cost if shipping_cost is not None else 0)
-        
+
         # Generate tx_ref
         tx_ref = f"PRODUCT-{uuid.uuid4().hex[:12].upper()}"
 
@@ -195,8 +197,8 @@ async def initiate_product_payment(
             "vendor_id": str(data.vendor_id),
             "item_id": str(data.item_id),
             "quantity": data.quantity,
-            "selected_size": data.sizes,   
-            "selected_color": data.colors, 
+            "selected_size": data.sizes,
+            "selected_color": data.colors,
             "subtotal": str(subtotal),
             "shipping_cost": str(shipping_cost),
             "grand_total": str(grand_total),
@@ -215,16 +217,16 @@ async def initiate_product_payment(
             public_key=settings.FLUTTERWAVE_PUBLIC_KEY,
             currency="NGN",
             receiver_phone=customer_info.get("phone_number"),
-            package_name=item['name'],
+            package_name=item["name"],
             customer=PaymentCustomerInfo(
                 email=customer_info.get("email"),
                 phone_number=customer_info.get("phone_number"),
-                full_name=customer_info.get("full_name")  or "N/A",
+                full_name=customer_info.get("full_name") or "N/A",
             ),
             customization=PaymentCustomization(
                 title="Servipal Delivery",
                 description=f"Payment for {item['name']} ({data.quantity} units)",
-                logo="https://mohdelivery.s3.us-east-1.amazonaws.com/favion/favicon.ico"
+                logo="https://mohdelivery.s3.us-east-1.amazonaws.com/favion/favicon.ico",
             ),
             message="Ready for payment",
         ).model_dump()

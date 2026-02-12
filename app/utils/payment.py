@@ -97,11 +97,14 @@ async def resolve_account_details(
                 return formatted_response
 
         except httpx.HTTPStatusError as e:
-            logger.error(f"Error response from payment gateway: {e.response.status_code} - {e.response.text}")
+            logger.error(
+                f"Error response from payment gateway: {e.response.status_code} - {e.response.text}"
+            )
             raise
         except httpx.RequestError as e:
             logger.error(f"Network error occurred: {str(e)}")
             raise
+
 
 async def verify_transaction_tx_ref(tx_ref: str):
     try:
@@ -114,7 +117,9 @@ async def verify_transaction_tx_ref(tx_ref: str):
             response_data = response.json()
             return response_data
     except httpx.HTTPStatusError as e:
-        logger.error(f"Payment gateway error: {e.response.status_code} - {e.response.text}")
+        logger.error(
+            f"Payment gateway error: {e.response.status_code} - {e.response.text}"
+        )
         raise HTTPException(status_code=502, detail=f"Payment gateway error: {str(e)}")
     except Exception as e:
         logger.error(f"Failed to verify transaction reference: {str(e)}")

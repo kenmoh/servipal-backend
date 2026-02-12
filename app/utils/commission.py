@@ -25,10 +25,10 @@ async def get_commission_rate(order_type: str, supabase: AsyncClient) -> float:
         .maybe_single()
         .execute()
     )
-    
-    print('*'*50)
+
+    print("*" * 50)
     print(resp.data)
-    print('*'*50)
+    print("*" * 50)
 
     if not resp.data:
         logger.warning(

@@ -100,4 +100,3 @@ async def notify_user(
         return False
 
     return await send_push_notification(token, title, body, data)
-

@@ -480,9 +480,7 @@ async def approve_withdrawal(
 
 
 async def withdraw_all_balance(
-    current_profile: dict, 
-    supabase: AsyncClient, 
-    request=None
+    current_profile: dict, supabase: AsyncClient, request=None
 ) -> WithdrawResponse:
     """
     Withdraw ALL available balance to user's bank via Flutterwave Transfer API.
@@ -494,17 +492,17 @@ async def withdraw_all_balance(
     user_id = current_profile["id"]
     balance = None  # Track for refund
     tx_id = None
-    
+
     try:
         # 1. Withdrawal fee (flat ₦100)
         fee = Decimal("100.00")
-        
+
         # 2. Generate reference
         reference = f"WITHDRAW-{uuid4().hex[:20].upper()}"
-        
+
         # 3. Process withdrawal atomically (deduct balance + create transaction)
         logger.info("initiating_withdrawal", user_id=user_id, reference=reference)
-        
+
         withdrawal_result = await supabase.rpc(
             "process_withdrawal",
             {
@@ -515,32 +513,31 @@ async def withdraw_all_balance(
                     "bank_name": current_profile.get("bank_name"),
                     "account_number": current_profile.get("account_number"),
                     "account_name": current_profile.get("account_holder_name"),
-                }
-            }
+                },
+            },
         ).execute()
-        
+
         if not withdrawal_result.data:
             raise HTTPException(
-                status.HTTP_400_BAD_REQUEST, 
-                "Withdrawal initialization failed"
+                status.HTTP_400_BAD_REQUEST, "Withdrawal initialization failed"
             )
-        
+
         result = withdrawal_result.data
         balance = Decimal(str(result["balance_withdrawn"]))
         net_amount = Decimal(str(result["net_amount"]))
         tx_id = result["transaction_id"]
-        
+
         logger.info(
             "withdrawal_initialized",
             user_id=user_id,
             tx_id=tx_id,
             balance=str(balance),
-            net_amount=str(net_amount)
+            net_amount=str(net_amount),
         )
-        
+
         # 4. Call Flutterwave Transfer API
         logger.info("calling_flutterwave_transfer", reference=reference)
-        
+
         async with httpx.AsyncClient(timeout=30.0) as client:
             payload = {
                 "account_bank": current_profile.get("bank_code"),
@@ -552,38 +549,38 @@ async def withdraw_all_balance(
                 "callback_url": f"{settings.API_BASE_URL}/webhooks/flutterwave/transfer",
                 "debit_currency": "NGN",
             }
-            
+
             headers = {
                 "Authorization": f"Bearer {settings.FLUTTERWAVE_SECRET_KEY}",
                 "Content-Type": "application/json",
             }
-            
+
             resp = await client.post(
                 "https://api.flutterwave.com/v3/transfers",
                 json=payload,
                 headers=headers,
             )
-            
+
             fw_response = resp.json()
-            
+
             logger.info(
                 "flutterwave_response",
                 status_code=resp.status_code,
-                response=fw_response
+                response=fw_response,
             )
-            
+
             # 5. Handle Flutterwave response
             if resp.status_code != 200 or fw_response.get("status") != "success":
                 # Transfer failed → refund balance
                 error_msg = fw_response.get("message", "Unknown error")
-                
+
                 logger.error(
                     "flutterwave_transfer_failed",
                     user_id=user_id,
                     error=error_msg,
-                    response=fw_response
+                    response=fw_response,
                 )
-                
+
                 await supabase.rpc(
                     "refund_failed_withdrawal",
                     {
@@ -594,20 +591,20 @@ async def withdraw_all_balance(
                             "flutterwave_error": fw_response,
                             "error_message": error_msg,
                             "failed_at": datetime.now().isoformat(),
-                        }
-                    }
+                        },
+                    },
                 ).execute()
-                
+
                 logger.info("withdrawal_refunded", user_id=user_id, amount=str(balance))
-                
+
                 raise HTTPException(
                     status.HTTP_400_BAD_REQUEST,
-                    f"Transfer failed: {error_msg}. Your balance has been refunded."
+                    f"Transfer failed: {error_msg}. Your balance has been refunded.",
                 )
-            
+
             # 6. Success - Update transaction
             flw_data = fw_response.get("data", {})
-            
+
             await supabase.rpc(
                 "update_withdrawal_status",
                 {
@@ -618,17 +615,17 @@ async def withdraw_all_balance(
                         "flutterwave_id": flw_data.get("id"),
                         "transfer_status": flw_data.get("status"),
                         "completed_at": datetime.utcnow().isoformat(),
-                    }
-                }
+                    },
+                },
             ).execute()
-            
+
             logger.info(
                 "withdrawal_completed",
                 user_id=user_id,
                 tx_id=tx_id,
-                flw_ref=flw_data.get("reference")
+                flw_ref=flw_data.get("reference"),
             )
-            
+
             # 7. Log audit event
             await log_audit_event(
                 entity_type="WITHDRAWAL",
@@ -640,7 +637,7 @@ async def withdraw_all_balance(
                 notes=f"Withdrawal of ₦{balance} (net ₦{net_amount}) completed to {current_profile.get('account_holder_name')}",
                 request=request,
             )
-            
+
             # 8. Notify user
             await notify_user(
                 user_id=user_id,
@@ -649,7 +646,7 @@ async def withdraw_all_balance(
                 notification_type="WITHDRAWAL",
                 request=request,
             )
-            
+
             return WithdrawResponse(
                 success=True,
                 message="Withdrawal successful! Funds sent to your bank.",
@@ -660,10 +657,10 @@ async def withdraw_all_balance(
                 flutterwave_ref=flw_data.get("reference"),
                 status="COMPLETED",
             )
-    
+
     except HTTPException:
         raise
-    
+
     except Exception as e:
         logger.critical(
             "withdrawal_critical_error",
@@ -672,7 +669,7 @@ async def withdraw_all_balance(
             error=str(e),
             exc_info=True,
         )
-        
+
         # Emergency refund if we have balance and tx_id
         if balance and tx_id:
             try:
@@ -686,12 +683,12 @@ async def withdraw_all_balance(
                             "error": str(e),
                             "error_type": "SYSTEM_ERROR",
                             "failed_at": datetime.utcnow().isoformat(),
-                        }
-                    }
+                        },
+                    },
                 ).execute()
-                
+
                 logger.info("emergency_refund_completed", user_id=user_id)
-                
+
                 raise HTTPException(
                     status.HTTP_500_INTERNAL_SERVER_ERROR,
                     f"Withdrawal failed (funds refunded): {str(e)}",
@@ -701,13 +698,13 @@ async def withdraw_all_balance(
                     "refund_failed",
                     user_id=user_id,
                     error=str(refund_error),
-                    exc_info=True
+                    exc_info=True,
                 )
                 raise HTTPException(
                     status.HTTP_500_INTERNAL_SERVER_ERROR,
                     "Critical error - please contact support immediately",
                 )
-        
+
         raise HTTPException(
             status.HTTP_500_INTERNAL_SERVER_ERROR,
             f"Withdrawal failed: {str(e)}",
