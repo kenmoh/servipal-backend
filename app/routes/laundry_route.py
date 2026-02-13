@@ -259,7 +259,7 @@ async def update_laundry_order_status(
     return await update_order_status(
         order_id=order_id,
         entity_type="LAUNDRY_ORDER",
-        data=data.data,
+        data=data,
         triggered_by_user_id=current_profile["id"],
         supabase=supabase,
         request=request,

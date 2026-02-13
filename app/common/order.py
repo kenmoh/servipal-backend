@@ -143,6 +143,12 @@ async def update_order_status(
             
             result_data = result.data
             
+            if not result_data:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Order {order_id} ({order_type}) not found or update ignored."
+                )
+            
             # Audit log
             await log_audit_event(
                 supabase,

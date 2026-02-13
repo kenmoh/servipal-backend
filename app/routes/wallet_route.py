@@ -35,7 +35,6 @@ async def get_my_wallet_details(
 @router.post("/top-up")
 async def top_up_my_wallet(
     data: TopUpRequest,
-    request: Request,
     current_profile: dict = Depends(get_current_profile),
     supabase: AsyncClient = Depends(get_supabase_client),
 ) -> WalletTopUpInitiationResponse:
@@ -54,7 +53,7 @@ async def top_up_my_wallet(
         amount=float(data.amount),
     )
     return await wallet_service.initiate_wallet_top_up(
-        data, current_profile["id"], supabase, request
+        data=data, user_id=current_profile["id"], supabase=supabase, customer_info=current_profile
     )
 
 
