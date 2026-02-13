@@ -315,7 +315,6 @@ async def update_food_order_status(
         entity_type="FOOD_ORDER",
         data=data,
         triggered_by_user_id=current_profile["id"],
-        table_name="food_orders",
         supabase=supabase,
         request=request,
     )
