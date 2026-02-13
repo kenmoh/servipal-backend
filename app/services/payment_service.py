@@ -23,135 +23,86 @@ async def process_successful_delivery_payment(
     supabase: AsyncClient,
 ):
     """
-    Process successful delivery payment using atomic database transaction
+    Process successful delivery payment.
+    DB now handles ALL calculations - backend just passes data!
     """
     logger.info("processing_delivery_payment", tx_ref=tx_ref, paid_amount=paid_amount)
 
-    # Verify payment
+    # 1. Verify payment with Flutterwave
     verified = await verify_transaction_tx_ref(tx_ref)
     if not verified or verified.get("status") != "success":
         logger.error("delivery_payment_verification_failed", tx_ref=tx_ref)
-        return
+        return {"status": "verification_failed"}
 
-    # Get pending data from Redis
+    # 2. Get pending data from Redis
     pending_key = f"pending_delivery_{tx_ref}"
     pending = await get_pending(pending_key)
 
     if not pending:
         logger.warning("delivery_payment_pending_not_found", tx_ref=tx_ref)
-        return
+        return {"status": "pending_not_found"}
 
-    expected_fee = pending["delivery_fee"]
     sender_id = str(pending["sender_id"])
     delivery_data = pending["delivery_data"]
-    amount_due_dispatch = pending["amount_due_dispatch"]
-
-    # Validate amounts
-    expected_rounded = abs(Decimal(str(expected_fee)).quantize(Decimal("0.00")))
-    paid_rounded = Decimal(str(paid_amount)).quantize(Decimal("0.00"))
-
-    if paid_rounded != expected_rounded:
-        logger.warning(
-            event="delivery_payment_amount_mismatch",
-            tx_ref=tx_ref,
-            expected=expected_rounded,
-            paid=paid_rounded,
-        )
-        await delete_pending(pending_key)
-        return
+    distance = Decimal(str(pending.get("distance", 0)))
 
     try:
-        # Create delivery_order (no rider yet)
-        logger.info(
-            "creating_delivery_order", sender_id=sender_id, delivery_data=delivery_data
-        )
-
-        order_resp = (
-            await supabase.table("delivery_orders")
-            .insert(
-                {
-                    "sender_id": sender_id,
-                    "package_name": delivery_data.get("package_name"),
-                    "receiver_phone": delivery_data.get("receiver_phone"),
-                    "pickup_location": delivery_data["pickup_location"],
-                    "destination": delivery_data["destination"],
-                    "pickup_coordinates": delivery_data["pickup_coordinates"],
-                    "dropoff_coordinates": delivery_data["dropoff_coordinates"],
-                    "additional_info": delivery_data.get("description"),
-                    "delivery_type": delivery_data["delivery_type"],
-                    "total_price": float(expected_rounded),
-                    "amount_due_dispatch": float(amount_due_dispatch),
-                    "delivery_fee": float(expected_rounded),
-                    "duration": delivery_data.get("duration"),
-                    "delivery_status": "PAID_NEEDS_RIDER",
-                    "payment_status": "PAID",
-                    "escrow_status": "HELD",
-                    "package_image_url": delivery_data.get("package_image_url"),
-                    "distance": float(pending.get("distance", 0)),
-                    "tx_ref": tx_ref,
-                    "flw_ref": flw_ref,
-                    "order_type": "DELIVERY",
-                }
-            )
-            .execute()
-        )
-
-        order_id = order_resp.data[0]["id"]
-        logger.info("delivery_order_created", order_id=order_id)
-
-        # Hold fee in sender escrow
-        logger.info(
-            "holding_fee_in_sender_escrow",
-            sender_id=sender_id,
-            expected_fee=expected_fee,
-        )
-        await supabase.rpc(
-            "update_user_wallet",
+        # 3. Call RPC - DB does ALL the work! 🚀
+        result = await supabase.rpc(
+            "process_delivery_payment",
             {
-                "p_user_id": str(sender_id),
-                "p_balance_change": f"{expected_rounded}",
-                "p_escrow_balance_change": "0",
+                "p_tx_ref": tx_ref,
+                "p_flw_ref": flw_ref,
+                "p_paid_amount": float(paid_amount),
+                "p_sender_id": sender_id,
+                "p_delivery_data": delivery_data,
+                "p_distance": float(distance),
+           
             },
         ).execute()
-        logger.info(
-            "fee_held_in_sender_escrow", sender_id=sender_id, expected_fee=expected_fee
-        )
 
-        # Create transaction
-        logger.info(
-            "creating_transaction",
-            tx_ref=tx_ref,
-            sender_id=sender_id,
-            expected_fee=expected_fee,
-        )
-        await (
-            supabase.table("transactions")
-            .insert(
-                {
-                    "tx_ref": tx_ref,
-                    "amount": float(expected_rounded),
-                    "from_user_id": str(sender_id),
-                    "order_id": str(order_id),
-                    "wallet_id": str(sender_id),
-                    "transaction_type": "ESCROW_HOLD",
-                    "payment_status": "SUCCESS",
-                    "payment_method": "FLUTTERWAVE",
-                    "order_type": "DELIVERY",
-                    "details": {"flw_ref": flw_ref},
-                }
+        result_data = result.data
+        
+        # Already processed? Just cleanup and return
+        if result_data.get("status") == "already_processed":
+            logger.info(
+                "delivery_payment_already_processed",
+                tx_ref=tx_ref,
+                order_id=result_data.get("order_id"),
             )
-            .execute()
-        )
+            await delete_pending(pending_key)
+            return result_data
 
-        # Delete from Redis after successful DB transaction
+        # Success! Clean up Redis
         await delete_pending(pending_key)
-        logger.info("pending_delivery_deleted", tx_ref=tx_ref)
-
+        
+        order_id = result_data["order_id"]
+        
         logger.info(
             event="delivery_payment_processed_success",
             tx_ref=tx_ref,
             order_id=str(order_id),
+            delivery_fee=result_data["delivery_fee"],
+            platform_commission=result_data["platform_commission"],
         )
+        
+        # Send notification
+        try:
+            await notify_user(
+                sender_id,
+                "Payment Successful",
+                f"Your delivery payment of ₦{result_data['delivery_fee']} has been received.",
+                data={
+                    "type": "DELIVERY_PAYMENT_SUCCESS",
+                    "order_id": str(order_id),
+                    "amount": str(result_data['delivery_fee']),
+                },
+                supabase=supabase,
+            )
+        except Exception as notif_error:
+            logger.error("notification_failed", error=str(notif_error))
+        
+        return result_data
 
     except Exception as e:
         logger.error(
@@ -161,6 +112,152 @@ async def process_successful_delivery_payment(
             exc_info=True,
         )
         raise
+
+# async def process_successful_delivery_payment(
+#     tx_ref: str,
+#     paid_amount: Decimal,
+#     flw_ref: str,
+#     supabase: AsyncClient,
+# ):
+#     """
+#     Process successful delivery payment using atomic database transaction
+#     """
+#     logger.info("processing_delivery_payment", tx_ref=tx_ref, paid_amount=paid_amount)
+
+#     # Verify payment
+#     verified = await verify_transaction_tx_ref(tx_ref)
+#     if not verified or verified.get("status") != "success":
+#         logger.error("delivery_payment_verification_failed", tx_ref=tx_ref)
+#         return
+
+#     # Get pending data from Redis
+#     pending_key = f"pending_delivery_{tx_ref}"
+#     pending = await get_pending(pending_key)
+
+#     if not pending:
+#         logger.warning("delivery_payment_pending_not_found", tx_ref=tx_ref)
+#         return
+
+#     expected_fee = pending["delivery_fee"]
+#     sender_id = str(pending["sender_id"])
+#     delivery_data = pending["delivery_data"]
+#     amount_due_dispatch = pending["amount_due_dispatch"]
+
+#     # Validate amounts
+#     expected_rounded = abs(Decimal(str(expected_fee)).quantize(Decimal("0.00")))
+#     paid_rounded = Decimal(str(paid_amount)).quantize(Decimal("0.00"))
+
+#     if paid_rounded != expected_rounded:
+#         logger.warning(
+#             event="delivery_payment_amount_mismatch",
+#             tx_ref=tx_ref,
+#             expected=expected_rounded,
+#             paid=paid_rounded,
+#         )
+#         await delete_pending(pending_key)
+#         return
+
+#     try:
+#         # Create delivery_order (no rider yet)
+#         logger.info(
+#             "creating_delivery_order", sender_id=sender_id, delivery_data=delivery_data
+#         )
+
+#         order_resp = (
+#             await supabase.table("delivery_orders")
+#             .insert(
+#                 {
+#                     "sender_id": sender_id,
+#                     "package_name": delivery_data.get("package_name"),
+#                     "receiver_phone": delivery_data.get("receiver_phone"),
+#                     "pickup_location": delivery_data["pickup_location"],
+#                     "destination": delivery_data["destination"],
+#                     "pickup_coordinates": delivery_data["pickup_coordinates"],
+#                     "dropoff_coordinates": delivery_data["dropoff_coordinates"],
+#                     "additional_info": delivery_data.get("description"),
+#                     "delivery_type": delivery_data["delivery_type"],
+#                     "total_price": float(expected_rounded),
+#                     "amount_due_dispatch": float(amount_due_dispatch),
+#                     "delivery_fee": float(expected_rounded),
+#                     "duration": delivery_data.get("duration"),
+#                     "delivery_status": "PAID_NEEDS_RIDER",
+#                     "payment_status": "PAID",
+#                     "escrow_status": "HELD",
+#                     "package_image_url": delivery_data.get("package_image_url"),
+#                     "distance": float(pending.get("distance", 0)),
+#                     "tx_ref": tx_ref,
+#                     "flw_ref": flw_ref,
+#                     "order_type": "DELIVERY",
+#                 }
+#             )
+#             .execute()
+#         )
+
+#         order_id = order_resp.data[0]["id"]
+#         logger.info("delivery_order_created", order_id=order_id)
+
+#         # Hold fee in sender escrow
+#         logger.info(
+#             "holding_fee_in_sender_escrow",
+#             sender_id=sender_id,
+#             expected_fee=expected_fee,
+#         )
+#         await supabase.rpc(
+#             "update_user_wallet",
+#             {
+#                 "p_user_id": str(sender_id),
+#                 "p_balance_change": f"{expected_rounded}",
+#                 "p_escrow_balance_change": "0",
+#             },
+#         ).execute()
+#         logger.info(
+#             "fee_held_in_sender_escrow", sender_id=sender_id, expected_fee=expected_fee
+#         )
+
+#         # Create transaction
+#         logger.info(
+#             "creating_transaction",
+#             tx_ref=tx_ref,
+#             sender_id=sender_id,
+#             expected_fee=expected_fee,
+#         )
+#         await (
+#             supabase.table("transactions")
+#             .insert(
+#                 {
+#                     "tx_ref": tx_ref,
+#                     "amount": float(expected_rounded),
+#                     "from_user_id": str(sender_id),
+#                     "order_id": str(order_id),
+#                     "wallet_id": str(sender_id),
+#                     "transaction_type": "ESCROW_HOLD",
+#                     "payment_status": "SUCCESS",
+#                     "payment_method": "FLUTTERWAVE",
+#                     "order_type": "DELIVERY",
+#                     "details": {"flw_ref": flw_ref},
+#                 }
+#             )
+#             .execute()
+#         )
+
+#         # Delete from Redis after successful DB transaction
+#         await delete_pending(pending_key)
+#         logger.info("pending_delivery_deleted", tx_ref=tx_ref)
+
+#         logger.info(
+#             event="delivery_payment_processed_success",
+#             tx_ref=tx_ref,
+#             order_id=str(order_id),
+#         )
+
+#     except Exception as e:
+#         logger.error(
+#             event="delivery_payment_processing_error",
+#             tx_ref=tx_ref,
+#             error=str(e),
+#             exc_info=True,
+#         )
+#         raise
 
 
 # ───────────────────────────────────────────────

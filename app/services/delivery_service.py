@@ -42,70 +42,57 @@ async def initiate_delivery_payment(
     customer_info: dict,
 ) -> dict:
     """
-    Step 1: Calculate delivery fee using PostGIS RPC
+    Step 1: Calculate delivery fee using DB charges
     Step 2: Generate tx_ref
     Step 3: Save pending state in Redis
     Step 4: Return data for Flutterwave RN SDK
     """
-    logger.info(
-        "initiate_delivery_payment",
-        sender_id=str(sender_id),
-        pickup=data.pickup_location,
-        destination=data.destination,
-        data=data.model_dump(),
-    )
+    logger.info("initiate_delivery_payment", sender_id=str(sender_id))
+    
     try:
-        # 2. Get charges from DB
+        # Get charges from DB
         charges = (
             await supabase.table("charges_and_commissions")
-            .select(
-                "base_delivery_fee, delivery_fee_per_km, delivery_commission_percentage"
-            )
+            .select("base_delivery_fee, delivery_fee_per_km, delivery_commission_rate")
             .single()
             .execute()
         )
 
         if not charges.data:
             raise HTTPException(
-                status.HTTP_500_INTERNAL_SERVER_ERROR, "Charges configuration missing"
+                status.HTTP_500_INTERNAL_SERVER_ERROR, 
+                "Charges configuration missing"
             )
 
         base_fee = Decimal(str(charges.data["base_delivery_fee"]))
         per_km_fee = Decimal(str(charges.data["delivery_fee_per_km"]))
-        commission_percentage = Decimal(
-            str(charges.data["delivery_commission_percentage"])
-        )
+        commission_rate = Decimal(str(charges.data["delivery_commission_rate"]))
 
-        # 3. Calculate final fee
-        delivery_fee = Decimal((base_fee + (per_km_fee * Decimal(data.distance))))
+        # Calculate delivery fee
+        distance = Decimal(str(data.distance))
+        delivery_fee = base_fee + (per_km_fee * distance)
         delivery_fee = round(delivery_fee, 2)
-        amount_due_dispatch = round(
-            delivery_fee * (Decimal(1) - Decimal(str(commission_percentage))), 2
-        )
 
-        # 4. Generate unique tx_ref
+        # Generate tx_ref
         tx_ref = f"DELIVERY-{uuid.uuid4().hex[:32].upper()}"
 
-        # 5. Save pending state in Redis
+        # Save to Redis (simpler now - no amount_due_dispatch needed!)
         pending_data = {
             "sender_id": str(sender_id),
             "delivery_data": data.model_dump(),
-            "delivery_fee": str(delivery_fee),
-            "amount_due_dispatch": str(amount_due_dispatch),
+            "distance": str(distance),  # DB will recalculate from this
             "tx_ref": tx_ref,
-            "package_image_url": data.package_image_url,
-            "description": data.description,
             "created_at": datetime.datetime.now().isoformat(),
         }
 
         await save_pending(f"pending_delivery_{tx_ref}", pending_data, expire=1800)
 
-        # 6. Return data for Flutterwave RN SDK
+        # Return for Flutterwave
         return PaymentInitializationResponse(
             tx_ref=tx_ref,
-            amount=Decimal(str(delivery_fee)),
+            amount=delivery_fee,
             public_key=settings.FLUTTERWAVE_PUBLIC_KEY,
-            distance=data.distance,
+            distance=float(distance),
             currency="NGN",
             receiver_phone=data.receiver_phone,
             pickup_location=data.pickup_location,
@@ -119,23 +106,120 @@ async def initiate_delivery_payment(
             ),
             customization=PaymentCustomization(
                 title="Servipal Delivery",
-                description=f"From {data.pickup_location} to {data.destination} ({data.distance} km)",
+                description=f"From {data.pickup_location} to {data.destination} ({distance} km)",
                 logo="https://mohdelivery.s3.us-east-1.amazonaws.com/favion/favicon.ico",
             ),
             message="Ready for payment",
         ).model_dump()
 
     except Exception as e:
-        logger.error(
-            "initiate_delivery_payment_error",
-            sender_id=str(sender_id),
-            error=str(e),
-            exc_info=True,
-        )
+        logger.error("initiate_delivery_payment_error", error=str(e), exc_info=True)
         raise HTTPException(
             status.HTTP_500_INTERNAL_SERVER_ERROR,
             f"Payment initiation failed: {str(e)}",
         )
+
+# async def initiate_delivery_payment(
+#     data: PackageDeliveryCreate,
+#     sender_id: UUID,
+#     supabase: AsyncClient,
+#     customer_info: dict,
+# ) -> dict:
+#     """
+#     Step 1: Calculate delivery fee using PostGIS RPC
+#     Step 2: Generate tx_ref
+#     Step 3: Save pending state in Redis
+#     Step 4: Return data for Flutterwave RN SDK
+#     """
+#     logger.info(
+#         "initiate_delivery_payment",
+#         sender_id=str(sender_id),
+#         pickup=data.pickup_location,
+#         destination=data.destination,
+#         data=data.model_dump(),
+#     )
+#     try:
+#         # 2. Get charges from DB
+#         charges = (
+#             await supabase.table("charges_and_commissions")
+#             .select(
+#                 "base_delivery_fee, delivery_fee_per_km, delivery_commission_percentage"
+#             )
+#             .single()
+#             .execute()
+#         )
+
+#         if not charges.data:
+#             raise HTTPException(
+#                 status.HTTP_500_INTERNAL_SERVER_ERROR, "Charges configuration missing"
+#             )
+
+#         base_fee = Decimal(str(charges.data["base_delivery_fee"]))
+#         per_km_fee = Decimal(str(charges.data["delivery_fee_per_km"]))
+#         commission_percentage = Decimal(
+#             str(charges.data["delivery_commission_percentage"])
+#         )
+
+#         # 3. Calculate final fee
+#         delivery_fee = Decimal((base_fee + (per_km_fee * Decimal(data.distance))))
+#         delivery_fee = round(delivery_fee, 2)
+#         amount_due_dispatch = round(
+#             delivery_fee * (Decimal(1) - Decimal(str(commission_percentage))), 2
+#         )
+
+#         # 4. Generate unique tx_ref
+#         tx_ref = f"DELIVERY-{uuid.uuid4().hex[:32].upper()}"
+
+#         # 5. Save pending state in Redis
+#         pending_data = {
+#             "sender_id": str(sender_id),
+#             "delivery_data": data.model_dump(),
+#             "delivery_fee": str(delivery_fee),
+#             "amount_due_dispatch": str(amount_due_dispatch),
+#             "tx_ref": tx_ref,
+#             "package_image_url": data.package_image_url,
+#             "description": data.description,
+#             "created_at": datetime.datetime.now().isoformat(),
+#         }
+
+#         await save_pending(f"pending_delivery_{tx_ref}", pending_data, expire=1800)
+
+#         # 6. Return data for Flutterwave RN SDK
+#         return PaymentInitializationResponse(
+#             tx_ref=tx_ref,
+#             amount=Decimal(str(delivery_fee)),
+#             public_key=settings.FLUTTERWAVE_PUBLIC_KEY,
+#             distance=data.distance,
+#             currency="NGN",
+#             receiver_phone=data.receiver_phone,
+#             pickup_location=data.pickup_location,
+#             destination=data.destination,
+#             package_name=data.package_name,
+#             duration=data.duration,
+#             customer=PaymentCustomerInfo(
+#                 email=customer_info.get("email"),
+#                 phone_number=customer_info.get("phone_number"),
+#                 full_name=customer_info.get("full_name") or "N/A",
+#             ),
+#             customization=PaymentCustomization(
+#                 title="Servipal Delivery",
+#                 description=f"From {data.pickup_location} to {data.destination} ({data.distance} km)",
+#                 logo="https://mohdelivery.s3.us-east-1.amazonaws.com/favion/favicon.ico",
+#             ),
+#             message="Ready for payment",
+#         ).model_dump()
+
+#     except Exception as e:
+#         logger.error(
+#             "initiate_delivery_payment_error",
+#             sender_id=str(sender_id),
+#             error=str(e),
+#             exc_info=True,
+#         )
+#         raise HTTPException(
+#             status.HTTP_500_INTERNAL_SERVER_ERROR,
+#             f"Payment initiation failed: {str(e)}",
+#         )
 
 
 # ───────────────────────────────────────────────
