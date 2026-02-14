@@ -18,7 +18,7 @@ from app.dependencies.auth import (
 )
 from app.schemas.user_schemas import UserType
 from app.services import food_service
-from app.database.supabase import get_supabase_client
+from app.database.supabase import get_supabase_client,get_supabase_admin_client
 from app.config.logging import logger
 from app.common.order import update_order_status, OrderStatusUpdate
 
@@ -306,7 +306,7 @@ async def update_food_order_status(
     order_id: UUID,
     data: OrderStatusUpdate,
     current_profile: dict = Depends(get_current_profile),
-    supabase: AsyncClient = Depends(get_supabase_client),
+    supabase: AsyncClient = Depends(get_supabase_admin_client),
     request: Request = None,
 ) -> OrderStatusUpdate:
     """Vendor updates food order status"""

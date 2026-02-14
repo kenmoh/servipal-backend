@@ -58,9 +58,9 @@ async def update_order_status(
                     triggered_by=triggered_by_user_id,
                 )
             result = await supabase.rpc("mark_order_as_completed", {
-                "p_order_id": order_id,
+                "p_order_id": f'{order_id}',
                 "p_order_type": order_type,
-                "p_triggered_by_user_id": triggered_by_user_id,
+                "p_triggered_by_user_id": f'{triggered_by_user_id}',
             }).execute()
             
             result_data = result.data
