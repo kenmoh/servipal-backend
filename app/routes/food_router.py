@@ -301,7 +301,7 @@ async def vendor_food_earnings(
     return earnings.data
 
 
-@router.put("/update-food-order-status", status_code=status.HTTP_202_ACCEPTED)
+@router.put("/{order_id}/update-food-order-status", status_code=status.HTTP_202_ACCEPTED)
 async def update_food_order_status(
     order_id: UUID,
     data: OrderStatusUpdate,
@@ -310,6 +310,22 @@ async def update_food_order_status(
     request: Request = None,
 ) -> OrderStatusUpdate:
     """Vendor updates food order status"""
+
+    logger.info(
+        "update_food_order_status_called",
+        order_id=str(order_id),
+        new_status=data.new_status.value,
+        triggered_by=current_profile["id"],
+    )
+
+    logger.info(
+        "ROUTE_HANDLER_DEBUG",
+        order_id_input=str(order_id),
+        order_id_type=type(order_id).__name__,
+        profile_id=current_profile["id"],
+        profile_id_type=type(current_profile["id"]).__name__,
+        data_status=data.new_status.value,
+    )
     return await update_order_status(
         order_id=str(order_id),
         entity_type="FOOD_ORDER",

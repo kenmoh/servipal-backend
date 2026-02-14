@@ -35,10 +35,10 @@ class OrderStatusUpdate(BaseModel):
 
 
 async def update_order_status(
-    order_id: str,
+    order_id: UUID,
     data: OrderStatusUpdate,
     entity_type: str,
-    triggered_by_user_id: str,
+    triggered_by_user_id: UUID,
     supabase: AsyncClient,
     request: Optional[Request] = None,
 ) -> dict:
@@ -49,6 +49,14 @@ async def update_order_status(
     try:
         # Handle COMPLETED status
         if data.new_status == OrderStatus.COMPLETED:
+            logger.info(
+                    "CALLING_COMPLETE_RPC",
+                    order_id=order_id,
+                    order_id_type=type(order_id).__name__,
+                    order_id_repr=repr(order_id),
+                    order_type=order_type,
+                    triggered_by=triggered_by_user_id,
+                )
             result = await supabase.rpc("mark_order_as_completed", {
                 "p_order_id": order_id,
                 "p_order_type": order_type,
