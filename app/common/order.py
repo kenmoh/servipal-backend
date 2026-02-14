@@ -53,7 +53,6 @@ async def update_order_status(
                 "p_order_id": order_id,
                 "p_order_type": order_type,
                 "p_triggered_by_user_id": triggered_by_user_id,
-                "p_cancel_reason": data.cancel_reason,
             }).execute()
             
             result_data = result.data
@@ -103,7 +102,8 @@ async def update_order_status(
             result = await supabase.rpc("mark_order_as_cancelled", {
                 "p_order_id": order_id,
                 "p_order_type": order_type,
-                "p_triggered_by_user_id": triggered_by_user_id
+                "p_triggered_by_user_id": triggered_by_user_id,
+                "p_cancellation_reason": data.cancel_reason,
             }).execute()
             
             result_data = result.data
