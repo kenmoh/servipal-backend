@@ -124,22 +124,22 @@ async def update_delivery_status(
     )
 
 
-# @router.post(
-#     "/delivery-orders/{order_id}/assign-rider", response_model=AssignRiderResponse
-# )
-# async def assign_rider(
-#     order_id: UUID,
-#     data: AssignRiderRequest,
-#     current_profile: dict = Depends(get_current_profile),
-#     supabase=Depends(get_supabase_client),
-# ):
-#     """
-#     Sender chooses rider after successful payment.
-#     Re-checks rider availability.
-#     """
-#     return await delivery_service.assign_rider_to_order(
-#         order_id, data, current_profile["id"], supabase
-#     )
+@router.post(
+    "/delivery-orders/{rider_id}/assign-rider", response_model=AssignRiderResponse
+)
+async def assign_rider(
+    tx_ref: UUID,
+    rider_id: UUID,
+    current_profile: dict = Depends(get_current_profile),
+    supabase=Depends(get_supabase_client),
+):
+    """
+    Sender chooses rider after successful payment.
+    Re-checks rider availability.
+    """
+    return await delivery_service.assign_rider_to_order(
+        tx_ref=tx_ref, rider_id=rider_id, supabase=supabase
+    )
 
 
 # # ───────────────────────────────────────────────

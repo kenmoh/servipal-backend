@@ -252,12 +252,12 @@ async def process_successful_delivery_payment(
                 "label": "CREDIT",
                 "note": "Delivery payment received from Flutterwave",
                 "delivery_fee_breakdown": {
-                    "base_fee": float(base_fee),
-                    "per_km_fee": float(per_km_fee),
-                    "distance_km": float(distance),
-                    "total_fee": float(delivery_fee),
-                    "dispatch_gets": float(amount_due_dispatch),
-                    "platform_commission": float(platform_commission),
+                    "base_fee": str(base_fee),
+                    "per_km_fee": str(per_km_fee),
+                    "distance_km": str(distance),
+                    "total_fee": str(delivery_fee),
+                    "dispatch_gets": str(amount_due_dispatch),
+                    "platform_commission": str(platform_commission),
                 }
             }
         }).execute()
@@ -296,9 +296,9 @@ async def process_successful_delivery_payment(
             "status": "success",
             "order_id": order_id,
             "tx_ref": tx_ref,
-            "delivery_fee": float(delivery_fee),
-            "amount_due_dispatch": float(amount_due_dispatch),
-            "platform_commission": float(platform_commission),
+            "delivery_fee": str(delivery_fee),
+            "amount_due_dispatch": str(amount_due_dispatch),
+            "platform_commission": str(platform_commission),
             "message": "Delivery payment processed successfully",
         }
 

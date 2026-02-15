@@ -549,11 +549,60 @@ async def decline_delivery_assignment(
         )
         raise
 
+    
+
 
 # ───────────────────────────────────────────────
 # 3. Assign Rider After Payment (RPC already updated earlier)
 # ───────────────────────────────────────────────
 async def assign_rider_to_order(
+    tx_ref: UUID, rider_id: UUID, supabase: AsyncClient
+) -> AssignRiderResponse:
+    try:
+
+        assign_resp = await supabase.rpc(
+            "assign_rider_to_delivery",
+            {"p_tx_ref": str(tx_ref), "p_rider_id": str(rider_id)},
+        ).execute()
+
+        if assign_resp.error:
+            raise HTTPException(500, assign_resp.error.message)
+        
+
+        result = assign_resp.data
+
+        # Notify rider on success
+        if assign_resp.data:
+            await notify_user(
+                user_id=rider_id,
+                title="New Delivery Assigned!",
+                body="You have a new order to pickup",
+                data={"order_id": str(tx_ref), "type": "DELIVERY_ASSIGNED"},
+                supabase=supabase,
+            )
+
+        return AssignRiderResponse(
+            success=result["success"],
+            message=result["message"],
+            delivery_status=result.get("delivery_status", "ASSIGNED"),
+            rider_name=result.get("rider_name"),
+        )
+
+    except Exception as e:
+        error_msg = str(e)
+        if (
+            "Rider is currently suspended" in error_msg
+            or "Rider is blocked" in error_msg
+            or "Rider not available" in error_msg
+            or "Rider limited to 1 delivery per day" in error_msg
+        ):
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, error_msg)
+        raise HTTPException(
+            status.HTTP_500_INTERNAL_SERVER_ERROR, f"Failed to assign rider"
+        )
+
+
+async def assign_rider_to_order2(
     order_id: UUID, data: AssignRiderRequest, sender_id: UUID, supabase: AsyncClient
 ) -> AssignRiderResponse:
     try:
