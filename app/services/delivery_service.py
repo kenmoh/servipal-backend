@@ -95,7 +95,7 @@ async def initiate_delivery_payment(
             tx_ref=tx_ref,
             amount=delivery_fee,
             public_key=settings.FLUTTERWAVE_PUBLIC_KEY,
-            distance=float(distance),
+            distance=str(distance),
             currency="NGN",
             receiver_phone=data.receiver_phone,
             pickup_location=data.pickup_location,
