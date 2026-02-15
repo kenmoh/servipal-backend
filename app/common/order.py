@@ -122,7 +122,7 @@ async def update_order_status(
                 entity_type=entity_type,
                 entity_id=str(order_id),
                 action="ORDER_CANCELLED",
-                old_value={"status": "PENDING", "payment_status": "PAID"},
+                old_value={"status": "PENDING", "payment_status": "SUCCESS"},
                 new_value={"status": "CANCELLED", "payment_status": "REFUNDED"},
                 actor_id=str(triggered_by_user_id),
                 actor_type="USER",

@@ -295,7 +295,7 @@ async def process_successful_food_payment(
             "p_paid_amount": float(paid_amount),
             "p_customer_id": pending["customer_id"],
             "p_vendor_id": pending["vendor_id"],
-            "p_order_data": pending["items"],  # Pass as JSONB array
+            "p_order_data": pending["items"],
             "p_total_price": float(Decimal(pending["total_price"])),
             "p_delivery_fee": float(Decimal(pending.get("delivery_fee", 0))),
             "p_grand_total": float(Decimal(pending["grand_total"])),

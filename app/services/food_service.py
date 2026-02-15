@@ -636,8 +636,38 @@ async def initiate_food_payment(
                     400, f"Item {cart_item.name} not available or out of stock"
                 )
 
-            item_total = Decimal(str(db_item["price"])) * cart_item.quantity
+            if cart_item.sizes and len(cart_item.sizes) > 0:
+                # User selected a size - use the size's price
+                selected_size = cart_item.sizes[0]
+                item_price = Decimal(str(selected_size.price))
+                
+                logger.info(
+                    "using_size_price",
+                    item_id=str(cart_item.item_id),
+                    item_name=cart_item.name,
+                    size=selected_size.size,
+                    size_price=str(item_price),
+                    default_price=str(db_item["price"]),
+                )
+            else:
+                # No size selected - use default item price
+                item_price = Decimal(str(db_item["price"]))
+                
+                logger.info(
+                    "using_default_price",
+                    item_id=str(cart_item.item_id),
+                    item_name=cart_item.name,
+                    default_price=str(item_price),
+                )
+
+            item_total = item_price * cart_item.quantity
             subtotal += item_total
+
+        logger.info(
+            "payment_calculation",
+            subtotal=str(subtotal),
+            delivery_option=data.delivery_option,
+        )
 
         # 3. Delivery fee (only if vendor offers self-delivery)
         delivery_fee = Decimal("0")
@@ -647,6 +677,13 @@ async def initiate_food_payment(
             delivery_fee = Decimal(str(vendor["pickup_and_delivery_charge"] or 0))
 
         grand_total = subtotal + delivery_fee
+
+        logger.info(
+            "final_payment_amount",
+            subtotal=str(subtotal),
+            delivery_fee=str(delivery_fee),
+            grand_total=str(grand_total),
+        )
 
         # 4. Generate tx_ref
         tx_ref = f"FOOD-{uuid.uuid4().hex[:32].upper()}"
@@ -667,9 +704,6 @@ async def initiate_food_payment(
         }
         await save_pending(f"pending_food_{tx_ref}", pending_data, expire=1800)
 
-        # # 6. Get real customer info
-        # customer_info = await get_customer_contact_info()
-
         # 7. Return SDK-ready data
         return PaymentInitializationResponse(
             tx_ref=tx_ref,
@@ -679,7 +713,7 @@ async def initiate_food_payment(
             customer=PaymentCustomerInfo(
                 email=current_profile.get("email"),
                 phone_number=current_profile.get("phone_number"),
-                full_name=current_profile.get("full_name"),
+                full_name=current_profile.get("full_name") or "N/A",
             ),
             customization=PaymentCustomization(
                 title="Servipal Food Order",
@@ -699,3 +733,119 @@ async def initiate_food_payment(
             exc_info=True,
         )
         raise HTTPException(500, f"Food payment initiation failed: {str(e)}")
+
+
+# async def initiate_food_payment(
+#     data: CheckoutRequest, supabase: AsyncClient, current_profile: dict
+# ) -> dict:
+#     """
+#     Validate items, calculate total, save pending state in Redis,
+#     return data for Flutterwave RN SDK (no payment link).
+#     Real order is created in webhook after successful payment.
+#     """
+#     logger.info(
+#         "initiate_food_payment",
+#         customer_id=str(current_profile.get("id")),
+#         vendor_id=str(data.vendor_id),
+#     )
+#     try:
+#         # 1. Validate vendor
+#         vendor_resp = (
+#             await supabase.table("profiles")
+#             .select(
+#                 "id, store_name, can_pickup_and_dropoff, pickup_and_delivery_charge"
+#             )
+#             .eq("id", str(data.vendor_id))
+#             .eq("user_type", "RESTAURANT_VENDOR")
+#             .single()
+#             .execute()
+#         )
+
+#         if not vendor_resp.data:
+#             raise HTTPException(404, "Vendor not found")
+
+#         vendor = vendor_resp.data
+
+#         # 2. Validate items & calculate subtotal
+#         item_ids = [str(item.item_id) for item in data.items]
+#         db_items = (
+#             await supabase.table("food_items")
+#             .select("id, name, price, vendor_id")
+#             .in_("id", item_ids)
+#             .eq("vendor_id", str(data.vendor_id))
+#             .execute()
+#         )
+
+#         items_map = {item["id"]: item for item in db_items.data}
+#         subtotal = Decimal("0")
+
+#         for cart_item in data.items:
+#             db_item = items_map.get(str(cart_item.item_id))
+#             if not db_item:
+#                 raise HTTPException(
+#                     400, f"Item {cart_item.name} not available or out of stock"
+#                 )
+
+#             item_total = Decimal(str(db_item["price"])) * cart_item.quantity
+#             subtotal += item_total
+
+#         # 3. Delivery fee (only if vendor offers self-delivery)
+#         delivery_fee = Decimal("0")
+#         if data.delivery_option == "VENDOR_DELIVERY":
+#             if not vendor["can_pickup_and_dropoff"]:
+#                 raise HTTPException(400, "This vendor does not offer delivery")
+#             delivery_fee = Decimal(str(vendor["pickup_and_delivery_charge"] or 0))
+
+#         grand_total = subtotal + delivery_fee
+
+#         # 4. Generate tx_ref
+#         tx_ref = f"FOOD-{uuid.uuid4().hex[:32].upper()}"
+
+#         # 5. Save pending state in Redis
+#         pending_data = {
+#             "customer_id": str(current_profile.get("id")),
+#             "vendor_id": str(data.vendor_id),
+#             "items": [item.model_dump(mode="json") for item in data.items],
+#             "total_price": str(Decimal(subtotal)),
+#             "delivery_fee": str(Decimal(delivery_fee)),
+#             "grand_total": str(Decimal(grand_total)),
+#             "delivery_option": data.delivery_option,
+#             "additional_info": data.instructions,
+#             "tx_ref": tx_ref,
+#             "name": current_profile.get("phone_number"),
+#             "created_at": datetime.now().isoformat(),
+#         }
+#         await save_pending(f"pending_food_{tx_ref}", pending_data, expire=1800)
+
+#         # # 6. Get real customer info
+#         # customer_info = await get_customer_contact_info()
+
+#         # 7. Return SDK-ready data
+#         return PaymentInitializationResponse(
+#             tx_ref=tx_ref,
+#             amount=Decimal(str(grand_total)),
+#             public_key=settings.FLUTTERWAVE_PUBLIC_KEY,
+#             currency="NGN",
+#             customer=PaymentCustomerInfo(
+#                 email=current_profile.get("email"),
+#                 phone_number=current_profile.get("phone_number"),
+#                 full_name=current_profile.get("full_name"),
+#             ),
+#             customization=PaymentCustomization(
+#                 title="Servipal Food Order",
+#                 description=f"Order from {vendor['store_name']}",
+#                 logo="https://mohdelivery.s3.us-east-1.amazonaws.com/favion/favicon.ico",
+#             ),
+#             message="Ready for payment — use Flutterwave SDK",
+#         ).model_dump()
+
+#     except HTTPException:
+#         raise
+#     except Exception as e:
+#         logger.error(
+#             "initiate_food_payment_error",
+#             customer_id=str(current_profile.get("id")),
+#             error=str(e),
+#             exc_info=True,
+#         )
+#         raise HTTPException(500, f"Food payment initiation failed: {str(e)}")

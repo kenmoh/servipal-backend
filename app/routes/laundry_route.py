@@ -15,7 +15,7 @@ from app.services import laundry_service
 from app.dependencies.auth import get_current_profile, require_user_type
 from app.dependencies.auth import get_customer_contact_info
 from app.schemas.user_schemas import UserType
-from app.database.supabase import get_supabase_client
+from app.database.supabase import get_supabase_client, get_supabase_admin_client
 from supabase import AsyncClient
 from app.schemas.common import (
     VendorOrderAction,
@@ -252,7 +252,7 @@ async def update_laundry_order_status(
     order_id: UUID,
     data: OrderStatusUpdate,
     current_profile: dict = Depends(get_current_profile),
-    supabase: AsyncClient = Depends(get_supabase_client),
+    supabase: AsyncClient = Depends(get_supabase_admin_client),
     request: Request = None,
 ) -> OrderStatusUpdate:
     """Vendor updates food order status"""
