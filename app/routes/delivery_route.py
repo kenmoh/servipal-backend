@@ -125,7 +125,7 @@ async def update_delivery_status(
 
 
 @router.post(
-    "/delivery-orders/{rider_id}/assign-rider", response_model=AssignRiderResponse
+    "/{rider_id}/assign-rider", response_model=AssignRiderResponse
 )
 async def assign_rider(
     tx_ref: UUID,
