@@ -30,6 +30,9 @@ from app.config.logging import logger
 from app.utils.audit import log_audit_event
 from decimal import Decimal
 from app.services.notification_service import notify_user
+from decimal import Decimal
+
+
 
 
 # ───────────────────────────────────────────────
@@ -220,6 +223,331 @@ async def initiate_delivery_payment(
 #             status.HTTP_500_INTERNAL_SERVER_ERROR,
 #             f"Payment initiation failed: {str(e)}",
 #         )
+
+
+async def pickup_delivery(
+    delivery_id: str,
+    rider_id: str,
+    supabase: AsyncClient,
+    request: Optional[Request] = None,
+) -> dict:
+    """
+    Rider picks up delivery.
+    - Moves sender balance → sender escrow
+    - Holds dispatch escrow
+    - Creates 2 ESCROW_HOLD transactions (DEBIT + CREDIT)
+    """
+    logger.info(
+        "pickup_delivery_called",
+        delivery_id=delivery_id,
+        rider_id=rider_id,
+    )
+
+    try:
+        # Call atomic RPC
+        result = await supabase.rpc("mark_delivery_as_picked_up", {
+            "p_delivery_id": delivery_id,
+            "p_rider_id": rider_id,
+        }).execute()
+
+        result_data = result.data
+
+        if result.error:
+            raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, result.error.message)
+
+        # Notify sender
+        await notify_user(
+            user_id=result_data["sender_id"],
+            title="Delivery Picked Up",
+            body="Your delivery has been picked up by the rider",
+            data={
+                "delivery_id": delivery_id,
+                "type": "DELIVERY_PICKED_UP",
+                "rider_id": rider_id,
+            },
+            supabase=supabase,
+        )
+
+        # Audit log
+        await log_audit_event(
+            supabase,
+            entity_type="DELIVERY_ORDER",
+            entity_id=delivery_id,
+            action="PICKED_UP",
+            new_value={"status": "PICKED_UP", "escrow": "HELD"},
+            actor_id=rider_id,
+            actor_type="USER",
+            change_amount=Decimal(str(result_data["escrow_amount"])),
+            notes="Delivery picked up by rider, escrow held",
+            request=request,
+        )
+
+        logger.info(
+            "pickup_delivery_success",
+            delivery_id=delivery_id,
+            rider_id=rider_id,
+        )
+
+        return result_data
+
+    except Exception as e:
+        logger.error(
+            "pickup_delivery_error",
+            delivery_id=delivery_id,
+            error=str(e),
+            exc_info=True,
+        )
+        raise
+
+
+async def complete_delivery(
+    delivery_id: str,
+    sender_id: str,
+    supabase: AsyncClient,
+    request: Optional[Request] = None,
+) -> dict:
+    """
+    Sender completes delivery.
+    - Releases both escrows
+    - Pays dispatch
+    - Updates transactions to ESCROW_RELEASE
+    - Logs platform commission
+    - Frees up rider
+    """
+    logger.info(
+        "complete_delivery_called",
+        delivery_id=delivery_id,
+        sender_id=sender_id,
+    )
+
+    try:
+        # Call atomic RPC
+        result = await supabase.rpc("mark_delivery_as_completed", {
+            "p_delivery_id": delivery_id,
+            "p_sender_id": sender_id,
+        }).execute()
+
+        result_data = result.data
+
+        if result.error:
+            raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, result.error.message)
+
+        # Notify dispatch
+        await notify_user(
+            user_id=result_data["dispatch_id"],
+            title="Delivery Completed",
+            body=f"Payment of ₦{result_data['amount_released']} released",
+            data={
+                "delivery_id": delivery_id,
+                "type": "DELIVERY_COMPLETED",
+                "amount": str(result_data["amount_released"]),
+            },
+            supabase=supabase,
+        )
+
+        # Notify rider
+        if result_data.get("rider_id"):
+            await notify_user(
+                user_id=result_data["rider_id"],
+                title="Delivery Completed",
+                body="Delivery marked as completed by sender",
+                data={
+                    "delivery_id": delivery_id,
+                    "type": "DELIVERY_COMPLETED",
+                },
+                supabase=supabase,
+            )
+
+        # Audit log
+        await log_audit_event(
+            supabase,
+            entity_type="DELIVERY_ORDER",
+            entity_id=delivery_id,
+            action="COMPLETED",
+            old_value={"status": "DELIVERED"},
+            new_value={"status": "COMPLETED", "escrow": "RELEASED"},
+            actor_id=sender_id,
+            actor_type="USER",
+            change_amount=Decimal(str(result_data["amount_released"])),
+            notes="Delivery completed, escrow released to dispatch",
+            request=request,
+        )
+
+        logger.info(
+            "complete_delivery_success",
+            delivery_id=delivery_id,
+            amount_released=str(result_data["amount_released"]),
+        )
+
+        return result_data
+
+    except Exception as e:
+        logger.error(
+            "complete_delivery_error",
+            delivery_id=delivery_id,
+            error=str(e),
+            exc_info=True,
+        )
+        raise
+
+
+async def cancel_delivery(
+    delivery_id: str,
+    triggered_by_user_id: str,
+    cancellation_reason: Optional[str],
+    supabase: AsyncClient,
+    request: Optional[Request] = None,
+) -> dict:
+    """
+    Sender or Rider cancels delivery.
+    - If after pickup by sender: Requires return (no refund, delivery continues)
+    - If before pickup or by rider: Full cancellation with refund
+    """
+    logger.info(
+        "cancel_delivery_called",
+        delivery_id=delivery_id,
+        triggered_by=triggered_by_user_id,
+    )
+
+    try:
+        # Call atomic RPC
+        result = await supabase.rpc("mark_delivery_as_cancelled", {
+            "p_delivery_id": delivery_id,
+            "p_triggered_by_user_id": triggered_by_user_id,
+            "p_cancellation_reason": cancellation_reason,
+        }).execute()
+
+        if result.error:
+            raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, result.error.message)
+
+        result_data = result.data
+        cancelled_by = result_data["cancelled_by"]
+        requires_return = result_data.get("requires_return", False)
+
+        # ✅ Send appropriate notifications
+        if requires_return:
+            # Sender cancelled after pickup - notify rider to return
+            if result_data.get("rider_id"):
+                await notify_user(
+                    user_id=result_data["rider_id"],
+                    title="Delivery Cancelled - Return Required",
+                    body="Sender cancelled. Please return the item to sender.",
+                    data={
+                        "delivery_id": delivery_id,
+                        "type": "DELIVERY_CANCELLED_RETURN",
+                        "requires_return": True,
+                    },
+                    supabase=supabase,
+                )
+        else:
+            # Full cancellation - notify both parties
+            if cancelled_by == "RIDER":
+                # Notify sender that rider cancelled
+                await notify_user(
+                    user_id=result_data["sender_id"],
+                    title="Delivery Cancelled",
+                    body=f"Rider cancelled your delivery. Refund: ₦{result_data['refund_amount']}",
+                    data={
+                        "delivery_id": delivery_id,
+                        "type": "DELIVERY_CANCELLED",
+                        "refund_amount": str(result_data["refund_amount"]),
+                    },
+                    supabase=supabase,
+                )
+            else:
+                # Notify rider that sender cancelled
+                if result_data.get("rider_id"):
+                    await notify_user(
+                        user_id=result_data["rider_id"],
+                        title="Delivery Cancelled",
+                        body="Sender cancelled the delivery",
+                        data={
+                            "delivery_id": delivery_id,
+                            "type": "DELIVERY_CANCELLED",
+                        },
+                        supabase=supabase,
+                    )
+
+        # Audit log
+        await log_audit_event(
+            supabase,
+            entity_type="DELIVERY_ORDER",
+            entity_id=delivery_id,
+            action="CANCELLED",
+            new_value={
+                "status": "CANCELLED",
+                "cancelled_by": cancelled_by,
+                "requires_return": requires_return,
+            },
+            actor_id=triggered_by_user_id,
+            actor_type="USER",
+            change_amount=Decimal(str(result_data["refund_amount"])) if result_data["refund_amount"] > 0 else None,
+            notes=result_data["message"],
+            request=request,
+        )
+
+        logger.info(
+            "cancel_delivery_success",
+            delivery_id=delivery_id,
+            cancelled_by=cancelled_by,
+            requires_return=requires_return,
+            refund_amount=str(result_data["refund_amount"]),
+        )
+
+        return result_data
+
+    except Exception as e:
+        logger.error(
+            "cancel_delivery_error",
+            delivery_id=delivery_id,
+            error=str(e),
+            exc_info=True,
+        )
+        raise
+
+
+async def decline_delivery_assignment(
+    delivery_id: str,
+    supabase: AsyncClient,
+    request: Optional[Request] = None,
+) -> dict:
+    """
+    Rider declines delivery assignment.
+    - Clears rider_id and dispatch_id
+    - Sets status back to PENDING
+    - No wallet operations
+    """
+    logger.info(
+        "decline_delivery_called",
+        delivery_id=delivery_id,
+    )
+
+    try:
+        # Call atomic RPC
+        result = await supabase.rpc("clear_rider_assignment", {
+            "p_delivery_id": delivery_id,
+        }).execute()
+
+        result_data = result.data
+
+        if result.error:
+            raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, result.error.message)
+
+        logger.info(
+            "decline_delivery_success",
+            delivery_id=delivery_id,
+        )
+
+        return result_data
+
+    except Exception as e:
+        logger.error(
+            "decline_delivery_error",
+            delivery_id=delivery_id,
+            error=str(e),
+            exc_info=True,
+        )
+        raise
 
 
 # ───────────────────────────────────────────────

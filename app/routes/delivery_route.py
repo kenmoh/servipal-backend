@@ -112,6 +112,8 @@ async def update_delivery_status(
     current_profile: dict = Depends(get_current_profile),
     supabase=Depends(get_supabase_admin_client),
 ):
+   
+    
 
     return await order.update_delivery_status(
         delivery_id=delivery_id,
