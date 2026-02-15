@@ -1,3 +1,4 @@
+import json 
 from app.utils.redis_utils import get_pending, delete_pending
 from uuid import UUID
 from supabase import AsyncClient
@@ -14,6 +15,7 @@ from app.services.notification_service import notify_user
 # ───────────────────────────────────────────────
 # Delivery Payment
 # ───────────────────────────────────────────────
+
 
 
 async def process_successful_delivery_payment(
@@ -47,6 +49,19 @@ async def process_successful_delivery_payment(
     distance = Decimal(str(pending.get("distance", 0)))
 
     try:
+        # Convert delivery_data to JSON string
+        delivery_data_json = json.dumps(delivery_data) if isinstance(delivery_data, dict) else delivery_data
+        
+        logger.info(
+            "calling_delivery_payment_rpc",
+            tx_ref=tx_ref,
+            sender_id=sender_id,
+            delivery_data_type=type(delivery_data).__name__,
+            distance=float(distance),
+            data_json=delivery_data_json,
+            data_raw=delivery_data
+        )
+        
         # 3. Call RPC - DB does ALL the work! 
         result = await supabase.rpc(
             "process_delivery_payment",
@@ -55,9 +70,8 @@ async def process_successful_delivery_payment(
                 "p_flw_ref": flw_ref,
                 "p_paid_amount": float(paid_amount),
                 "p_sender_id": sender_id,
-                "p_delivery_data": delivery_data,
+                "p_delivery_data": delivery_data_json,
                 "p_distance": float(distance),
-           
             },
         ).execute()
 
@@ -112,7 +126,7 @@ async def process_successful_delivery_payment(
             exc_info=True,
         )
         raise
-
+    
 # async def process_successful_delivery_payment(
 #     tx_ref: str,
 #     paid_amount: Decimal,
