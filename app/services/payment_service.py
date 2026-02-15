@@ -57,6 +57,7 @@ async def process_successful_delivery_payment(
             tx_ref=tx_ref,
             sender_id=sender_id,
             delivery_data_type=type(delivery_data).__name__,
+            delivery_data_json_type=type(delivery_data_json).__name__,
             distance=float(distance),
             data_json=delivery_data_json,
             data_raw=delivery_data
@@ -70,7 +71,7 @@ async def process_successful_delivery_payment(
                 "p_flw_ref": flw_ref,
                 "p_paid_amount": str(paid_amount),
                 "p_sender_id": sender_id,
-                "p_delivery_data": delivery_data,
+                "p_delivery_data": delivery_data_json,
                 "p_distance": str(distance),
             },
         ).execute()
