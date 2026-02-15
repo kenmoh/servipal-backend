@@ -424,7 +424,7 @@ async def cancel_delivery(
         cancelled_by = result_data["cancelled_by"]
         requires_return = result_data.get("requires_return", False)
 
-        # ✅ Send appropriate notifications
+        # Send appropriate notifications
         if requires_return:
             # Sender cancelled after pickup - notify rider to return
             if result_data.get("rider_id"):
