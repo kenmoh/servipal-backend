@@ -214,7 +214,7 @@ async def process_successful_delivery_payment(
             "delivery_fee": str(delivery_fee),
             "duration": delivery_data.get("duration"),
             "delivery_status": "PENDING",
-            "payment_status": "SUCCESS",
+            "payment_status": "PAID",
             "package_image_url": delivery_data.get("package_image_url"),
             "distance": str(distance),
             "tx_ref": tx_ref,
