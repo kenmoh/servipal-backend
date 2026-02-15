@@ -68,12 +68,17 @@ async def process_successful_delivery_payment(
             {
                 "p_tx_ref": tx_ref,
                 "p_flw_ref": flw_ref,
-                "p_paid_amount": float(paid_amount),
+                "p_paid_amount": str(paid_amount),
                 "p_sender_id": sender_id,
                 "p_delivery_data": delivery_data_json,
-                "p_distance": float(distance),
+                "p_distance": str(distance),
             },
         ).execute()
+
+        if result.error:
+            print('*'*100)
+            print(result.error)
+            print('*'*100)
 
         result_data = result.data
         
@@ -126,7 +131,7 @@ async def process_successful_delivery_payment(
             exc_info=True,
         )
         raise
-    
+
 # async def process_successful_delivery_payment(
 #     tx_ref: str,
 #     paid_amount: Decimal,
