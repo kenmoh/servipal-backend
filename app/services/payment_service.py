@@ -70,15 +70,10 @@ async def process_successful_delivery_payment(
                 "p_flw_ref": flw_ref,
                 "p_paid_amount": str(paid_amount),
                 "p_sender_id": sender_id,
-                "p_delivery_data": delivery_data_json,
+                "p_delivery_data": delivery_data,
                 "p_distance": str(distance),
             },
         ).execute()
-
-        if result.error:
-            print('*'*100)
-            print(result.error)
-            print('*'*100)
 
         result_data = result.data
         
