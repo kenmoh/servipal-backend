@@ -105,9 +105,9 @@ async def initiate_delivery_payment(
 # ───────────────────────────────────────────────
 
 
-@router.put("/{tx_ref}/update-delivery-status")
+@router.put("/{delivery_id}/update-delivery-status")
 async def update_delivery_status(
-    tx_ref: str,
+    delivery_id: UUID,
     data: order.DeliveryStatusUpdate,
     request: Request,
     current_profile: dict = Depends(get_current_profile),
@@ -117,7 +117,7 @@ async def update_delivery_status(
     
 
     return await delivery_service.update_delivery_status(
-        tx_ref=tx_ref,
+        delivery_id=delivery_id,
         data=data,
         triggered_by_user_id=current_profile["id"],
         supabase=supabase,

@@ -138,7 +138,7 @@ async def initiate_delivery_payment(
 # ============================================================
 
 async def update_delivery_status(
-    tx_ref: str,
+    delivery_id: UUID,
     data: DeliveryStatusUpdate,
     triggered_by_user_id: str,
     supabase: AsyncClient,
@@ -150,15 +150,15 @@ async def update_delivery_status(
     """
     logger.info(
         "update_delivery_status_called",
-        tx_ref=tx_ref,
+        delivery_id=delivery_id,
         new_status=data.new_status.value,
         triggered_by=triggered_by_user_id,
     )
     
     try:
         # Fetch delivery for validation
-        delivery = await _get_delivery(tx_ref, supabase)
-        delivery_id = delivery["id"]
+        delivery = await _get_delivery(delivery_id, supabase)
+        # delivery_id = delivery["id"]
         
         # Validate authorization
         _validate_authorization(
@@ -204,7 +204,7 @@ async def update_delivery_status(
         
         logger.info(
             "update_delivery_status_success",
-            tx_ref=tx_ref,
+            delivery_id=delivery_id,
             new_status=data.new_status.value,
         )
         
@@ -215,7 +215,7 @@ async def update_delivery_status(
     except Exception as e:
         logger.error(
             "update_delivery_status_failed",
-            tx_ref=tx_ref,
+            delivery_id=delivery_id,
             error=str(e),
             exc_info=True,
         )
@@ -249,11 +249,10 @@ async def _get_delivery(tx_ref: str, supabase: AsyncClient) -> dict:
 # ============================================================
 
 async def assign_rider(
-    tx_ref: str,
+    delivery_id: str,
     rider_id: str,
     sender_id: str,
     supabase: AsyncClient,
-    request: Optional[Request] = None,
 ) -> dict:
     """
     Sender assigns a rider to delivery.
@@ -271,7 +270,7 @@ async def assign_rider(
     # Get tx_ref
     delivery = await supabase.table("delivery_orders").select(
         "tx_ref, order_number"
-    ).eq("tx_ref", tx_ref).single().execute()
+    ).eq("id", delivery_id).single().execute()
     
     tx_ref = delivery.data["tx_ref"]
     order_number = delivery.data["order_number"]
