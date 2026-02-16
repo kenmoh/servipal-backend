@@ -8,6 +8,7 @@ from enum import Enum
 
 class DeliveryStatus(str, Enum):
     PENDING = "PENDING"
+    ACCEPTED = "ACCEPTED"
     PAID_NEEDS_RIDER = "PAID_NEEDS_RIDER"
     ASSIGNED = "ASSIGNED"
     PICKED_UP = "PICKED_UP"
@@ -17,8 +18,27 @@ class DeliveryStatus(str, Enum):
     CANCELLED = "CANCELLED"
 
 
+# class DeliveryStatus(str, Enum):
+#     PENDING = "PENDING"
+#     ASSIGNED = "ASSIGNED"
+#     DECLINED = "DECLINED"
+#     PICKED_UP = "PICKED_UP"
+#     IN_TRANSIT = "IN_TRANSIT"
+#     DELIVERED = "DELIVERED"
+#     COMPLETED = "COMPLETED"
+#     CANCELLED = "CANCELLED"
+
+
+class DeliveryStatusUpdate(BaseModel):
+    new_status: DeliveryStatus
+    rider_id: Optional[UUID] = None 
+    cancellation_reason: Optional[str] = None
+    decline_reason: Optional[str] = None
+
+
 class PackageDeliveryCreate(BaseModel):
     receiver_phone: str
+    sender_phone_number: str
     package_name: str
     pickup_location: str
     destination: str

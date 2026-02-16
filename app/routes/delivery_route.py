@@ -83,6 +83,7 @@ async def initiate_delivery_payment(
     data = PackageDeliveryCreate(
         package_name=package_name,
         receiver_phone=receiver_phone,
+        sender_phone_number=customer_info["phone_number"],
         pickup_location=pickup_location,
         destination=destination,
         pickup_coordinates=(pickup_lat, pickup_lng),
@@ -104,9 +105,9 @@ async def initiate_delivery_payment(
 # ───────────────────────────────────────────────
 
 
-@router.put("/{delivery_id}/update-delivery-status")
+@router.put("/{tx_ref}/update-delivery-status")
 async def update_delivery_status(
-    delivery_id: str,
+    tx_ref: str,
     data: order.DeliveryStatusUpdate,
     request: Request,
     current_profile: dict = Depends(get_current_profile),
@@ -115,8 +116,8 @@ async def update_delivery_status(
    
     
 
-    return await order.update_delivery_status(
-        delivery_id=delivery_id,
+    return await delivery_service.update_delivery_status(
+        tx_ref=tx_ref,
         data=data,
         triggered_by_user_id=current_profile["id"],
         supabase=supabase,
@@ -124,22 +125,22 @@ async def update_delivery_status(
     )
 
 
-@router.post(
-    "/{rider_id}/assign-rider", response_model=AssignRiderResponse
-)
-async def assign_rider(
-    tx_ref: UUID,
-    rider_id: UUID,
-    current_profile: dict = Depends(get_current_profile),
-    supabase=Depends(get_supabase_client),
-):
-    """
-    Sender chooses rider after successful payment.
-    Re-checks rider availability.
-    """
-    return await delivery_service.assign_rider_to_order(
-        tx_ref=tx_ref, rider_id=rider_id, supabase=supabase
-    )
+# @router.post(
+#     "/{rider_id}/assign-rider", response_model=AssignRiderResponse
+# )
+# async def assign_rider(
+#     tx_ref: UUID,
+#     rider_id: UUID,
+#     current_profile: dict = Depends(get_current_profile),
+#     supabase=Depends(get_supabase_client),
+# ):
+#     """
+#     Sender chooses rider after successful payment.
+#     Re-checks rider availability.
+#     """
+#     return await delivery_service.assign_rider_to_order(
+#         tx_ref=tx_ref, rider_id=rider_id, supabase=supabase
+#     )
 
 
 # # ───────────────────────────────────────────────
