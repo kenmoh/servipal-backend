@@ -1,7 +1,6 @@
 from fastapi import HTTPException, status, Request
 from typing import Optional
 import uuid
-from uuid import UUID
 import datetime
 
 
@@ -17,23 +16,14 @@ from app.schemas.delivery_schemas import (
     PackageDeliveryCreate,
     DeliveryStatus,
     DeliveryStatusUpdate,
-    AssignRiderRequest,
-    AssignRiderResponse,
-    DeliveryCancelRequest,
-    DeliveryCancelResponse,
-    DeliveryAction,
-    DeliveryActionResponse,
-    DeliveryOrdersResponse,
-    DeliveryOrderListItem,
+
 )
 from app.schemas.common import (
     PaymentInitializationResponse,
     PaymentCustomerInfo,
     PaymentCustomization,
 )
-from supabase import AsyncClient
 from app.utils.redis_utils import save_pending
-from app.utils.commission import get_commission_rate
 from app.config.config import settings
 from app.config.logging import logger
 from app.utils.audit import log_audit_event
@@ -185,7 +175,7 @@ async def update_delivery_status(
             result = await mark_in_transit(delivery_id, triggered_by_user_id, supabase)
             
         elif data.new_status == DeliveryStatus.DELIVERED:
-            result = await mark_delivered(delivery_id, triggered_by_user_id, supabase, request)
+            result = await mark_delivered(delivery_id, triggered_by_user_id, supabase)
             
         elif data.new_status == DeliveryStatus.COMPLETED:
             result = await complete_delivery(delivery_id, triggered_by_user_id, supabase, request)
