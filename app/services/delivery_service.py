@@ -241,16 +241,6 @@ async def _get_delivery(tx_ref: str, supabase: AsyncClient) -> dict:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Delivery not found"
         )
-
-    logger.error("***************************************************************")
-
-    logger.info(
-        "update_delivery_status_success",
-        data=delivery_resp.data,
-    )
-
-    logger.error("***************************************************************")
-
     return delivery_resp.data
 
 
@@ -363,7 +353,6 @@ async def accept_delivery(
             }
         )
         .eq("id", delivery_id)
-        .select("id, sender_id, rider_id, dispatch_id, delivery_status, order_number")
         .maybe_single()
         .execute()
     )
@@ -451,7 +440,6 @@ async def mark_in_transit(
             }
         )
         .eq("id", delivery_id)
-        .select("id, sender_id, rider_id, dispatch_id, delivery_status, order_number")
         .maybe_single()
         .execute()
     )
@@ -497,7 +485,6 @@ async def mark_delivered(
                 "delivery_status": DeliveryStatus.DELIVERED.value,
             }
         )
-        .select("id, sender_id, rider_id, dispatch_id, delivery_status, order_number")
         .maybe_single()
         .eq("id", delivery_id)
         .execute()
