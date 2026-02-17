@@ -395,10 +395,10 @@ async def pickup_delivery(
         "p_rider_id": rider_id,
     }).execute()
     
-    if result.error:
+    if not result.data:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=result.error.message
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail='Delivery order not found'
         )
     
     result_data = result.data
@@ -442,10 +442,10 @@ async def mark_in_transit(
         "delivery_status": DeliveryStatus.IN_TRANSIT.value,
     }).eq("id", delivery_id).execute()
 
-    if result.error:
+    if not result.data:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=result.error.message
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail='Delivery order not found'
         )
     
     result_data = result.data
@@ -492,10 +492,10 @@ async def mark_delivered(
         "delivery_status": DeliveryStatus.DELIVERED.value,
     }).eq("id", delivery_id).execute()
     
-    if result.error:
+    if not result.data:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=result.error.message
+             status_code=status.HTTP_404_NOT_FOUND,
+            detail='Delivery order not found'
         )
     
     result_data = result.data
@@ -537,10 +537,10 @@ async def complete_delivery(
         "p_sender_id": sender_id,
     }).execute()
     
-    if result.error:
+    if not result.data:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=result.error.message
+             status_code=status.HTTP_404_NOT_FOUND,
+            detail='Delivery order not found'
         )
     
     result_data = result.data
@@ -592,10 +592,10 @@ async def cancel_delivery(
         "p_cancellation_reason": cancellation_reason,
     }).execute()
     
-    if result.error:
+    if not result.data:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=result.error.message
+             status_code=status.HTTP_404_NOT_FOUND,
+            detail='Delivery order not found'
         )
     
     result_data = result.data
@@ -645,10 +645,10 @@ async def decline_delivery(
         "p_delivery_id": delivery_id,
     }).execute()
     
-    if result.error:
+    if not result.data:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=result.error.message
+             status_code=status.HTTP_404_NOT_FOUND,
+            detail='Delivery order not found'
         )
     
     result_data = result.data
@@ -1018,7 +1018,7 @@ async def _send_delivery_notifications(
 
 #         result_data = result.data
 
-#         if result.error:
+#         if not result.data:
 #             raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, result.error.message)
 
 #         # Notify sender
