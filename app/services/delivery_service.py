@@ -179,10 +179,10 @@ async def update_delivery_status(
             result = await accept_delivery(delivery_id, triggered_by_user_id, supabase)
             
         elif data.new_status == DeliveryStatus.PICKED_UP:
-            result = await pickup_delivery(delivery_id, triggered_by_user_id, supabase, request)
+            result = await pickup_delivery(delivery_id, triggered_by_user_id, supabase)
             
         elif data.new_status == DeliveryStatus.IN_TRANSIT:
-            result = await mark_in_transit(delivery_id, triggered_by_user_id, supabase, request)
+            result = await mark_in_transit(delivery_id, triggered_by_user_id, supabase)
             
         elif data.new_status == DeliveryStatus.DELIVERED:
             result = await mark_delivered(delivery_id, triggered_by_user_id, supabase, request)
