@@ -163,15 +163,18 @@ class FoodItemDetailResponse(FoodItemResponse):
     vendor_id: UUID
     is_deleted: bool = False
 
+
 class SizesEnum(str, Enum):
     SMALL = "SMALL"
     MEDIUM = "MEDIUM"
     LARGE = "LARGE"
     EXTRA_LARGE = "EXTRA_LARGE"
 
+
 class Sizes(BaseModel):
     size: SizesEnum
     price: Decimal
+
 
 class CartItem(BaseModel):
     item_id: UUID

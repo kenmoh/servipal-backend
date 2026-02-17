@@ -12,11 +12,11 @@ from supabase import AsyncClient
 from app.utils.audit import log_audit_event
 from app.config.logging import logger
 
+
 from app.schemas.delivery_schemas import (
     PackageDeliveryCreate,
     DeliveryStatus,
     DeliveryStatusUpdate,
-
 )
 from app.schemas.common import (
     PaymentInitializationResponse,
@@ -30,8 +30,6 @@ from app.utils.audit import log_audit_event
 from decimal import Decimal
 from app.services.notification_service import notify_user
 from decimal import Decimal
-
-
 
 
 # ───────────────────────────────────────────────
@@ -50,7 +48,7 @@ async def initiate_delivery_payment(
     Step 4: Return data for Flutterwave RN SDK
     """
     logger.info("initiate_delivery_payment", sender_id=str(sender_id))
-    
+
     try:
         # Get charges from DB
         charges = (
@@ -62,8 +60,7 @@ async def initiate_delivery_payment(
 
         if not charges.data:
             raise HTTPException(
-                status.HTTP_500_INTERNAL_SERVER_ERROR, 
-                "Charges configuration missing"
+                status.HTTP_500_INTERNAL_SERVER_ERROR, "Charges configuration missing"
             )
 
         base_fee = Decimal(str(charges.data["base_delivery_fee"]))
@@ -122,10 +119,10 @@ async def initiate_delivery_payment(
         )
 
 
-
 # ============================================================
 # MAIN ENTRY POINT - Routes to specific handlers
 # ============================================================
+
 
 async def update_delivery_status(
     tx_ref: str,
@@ -144,62 +141,72 @@ async def update_delivery_status(
         new_status=data.new_status.value,
         triggered_by=triggered_by_user_id,
     )
-    
+
     try:
         # Fetch delivery for validation
         delivery = await _get_delivery(tx_ref, supabase)
-        delivery_id = delivery["id"]     
-        
+        delivery_id = delivery["id"]
+
         # Validate authorization
         _validate_authorization(
             new_status=data.new_status,
             triggered_by_user_id=triggered_by_user_id,
             sender_id=delivery["sender_id"],
-            rider_id=delivery["rider_id"] or None
+            rider_id=delivery["rider_id"] or None,
         )
-        
+
         # Validate state transition
         _validate_state_transition(delivery["delivery_status"], data.new_status.value)
-        
+
         # Route to specific handler
         if data.new_status == DeliveryStatus.ASSIGNED:
-            result = await assign_rider(delivery_id, data.rider_id, triggered_by_user_id, supabase)
-            
+            result = await assign_rider(
+                delivery_id, data.rider_id, triggered_by_user_id, supabase
+            )
+
         elif data.new_status == DeliveryStatus.ACCEPTED:
             result = await accept_delivery(delivery_id, triggered_by_user_id, supabase)
-            
+
         elif data.new_status == DeliveryStatus.PICKED_UP:
             result = await pickup_delivery(delivery_id, triggered_by_user_id, supabase)
-            
+
         elif data.new_status == DeliveryStatus.IN_TRANSIT:
             result = await mark_in_transit(delivery_id, triggered_by_user_id, supabase)
-            
+
         elif data.new_status == DeliveryStatus.DELIVERED:
             result = await mark_delivered(delivery_id, triggered_by_user_id, supabase)
-            
+
         elif data.new_status == DeliveryStatus.COMPLETED:
-            result = await complete_delivery(delivery_id, triggered_by_user_id, supabase, request)
-            
+            result = await complete_delivery(
+                delivery_id, triggered_by_user_id, supabase, request
+            )
+
         elif data.new_status == DeliveryStatus.CANCELLED:
-            result = await cancel_delivery(delivery_id, triggered_by_user_id, data.cancellation_reason, supabase, request)
-            
+            result = await cancel_delivery(
+                delivery_id,
+                triggered_by_user_id,
+                data.cancellation_reason,
+                supabase,
+                request,
+            )
+
         elif data.new_status == DeliveryStatus.DECLINED:
             result = await decline_delivery(delivery_id, supabase, request)
-            
+
         else:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid status: {data.new_status.value}"
+                detail=f"Invalid status: {data.new_status.value}",
             )
-        
+
         logger.info(
             "update_delivery_status_success",
             delivery_id=delivery_id,
             new_status=data.new_status.value,
         )
-        
+
         return result
-    
+
     except HTTPException:
         raise
     except Exception as e:
@@ -211,7 +218,7 @@ async def update_delivery_status(
         )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to update delivery status: {str(e)}"
+            detail=f"Failed to update delivery status: {str(e)}",
         )
 
 
@@ -219,35 +226,38 @@ async def update_delivery_status(
 # HELPER: GET DELIVERY
 # ============================================================
 
+
 async def _get_delivery(tx_ref: str, supabase: AsyncClient) -> dict:
     """Fetch delivery details"""
-    delivery_resp = await supabase.table("delivery_orders").select(
-        "id, sender_id, rider_id, delivery_status, order_number"
-    ).eq("tx_ref", tx_ref).maybe_single().execute()
-    
+    delivery_resp = (
+        await supabase.table("delivery_orders")
+        .select("id, sender_id, rider_id, delivery_status, order_number")
+        .eq("tx_ref", tx_ref)
+        .maybe_single()
+        .execute()
+    )
+
     if not delivery_resp.data:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Delivery not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Delivery not found"
         )
 
-    logger.error('***************************************************************')
+    logger.error("***************************************************************")
 
-     
     logger.info(
         "update_delivery_status_success",
         data=delivery_resp.data,
-       
     )
 
-    logger.error('***************************************************************')
-    
+    logger.error("***************************************************************")
+
     return delivery_resp.data
 
 
 # ============================================================
 # 1. ASSIGN RIDER
 # ============================================================
+
 
 async def assign_rider(
     delivery_id: str,
@@ -264,37 +274,43 @@ async def assign_rider(
     """
     if not rider_id:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="rider_id is required"
+            status_code=status.HTTP_400_BAD_REQUEST, detail="rider_id is required"
         )
-    
+
     # Get tx_ref
-    delivery = await supabase.table("delivery_orders").select(
-        "tx_ref, order_number"
-    ).eq("id", delivery_id).single().execute()
-    
+    delivery = (
+        await supabase.table("delivery_orders")
+        .select("tx_ref, order_number")
+        .eq("id", delivery_id)
+        .single()
+        .execute()
+    )
+
     tx_ref = delivery.data["tx_ref"]
     order_number = delivery.data["order_number"]
-    
+
     # Update delivery with rider_id first
     # await supabase.table("delivery_orders").update({
     #     "rider_id": rider_id
     # }).eq("id", delivery_id).execute()
-    
+
     # Call RPC
-    result = await supabase.rpc("assign_rider_to_delivery", {
-        "p_tx_ref": tx_ref,
-        "p_rider_id": rider_id,
-    }).execute()
-    
+    result = await supabase.rpc(
+        "assign_rider_to_delivery",
+        {
+            "p_tx_ref": tx_ref,
+            "p_rider_id": rider_id,
+        },
+    ).execute()
+
     if result.error:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to assign rider: {result.error.message}"
+            detail=f"Failed to assign rider: {result.error.message}",
         )
-    
+
     result_data = result.data
-    
+
     # Send notifications
     await _send_delivery_notifications(
         order_number=order_number,
@@ -304,7 +320,7 @@ async def assign_rider(
         dispatch_id=result_data.get("dispatch_id"),
         supabase=supabase,
     )
-    
+
     # Audit log
     # await log_audit_event(
     #     supabase,
@@ -317,7 +333,7 @@ async def assign_rider(
     #     notes=f"Rider assigned to delivery",
     #     request=request,
     # )
-    
+
     return {
         "status": "success",
         "delivery_status": "ASSIGNED",
@@ -331,24 +347,34 @@ async def assign_rider(
 # 2. ACCEPT DELIVERY
 # ============================================================
 
+
 async def accept_delivery(
     delivery_id: str,
     rider_id: str,
     supabase: AsyncClient,
 ) -> dict:
     """Rider accepts delivery - simple status update"""
-    
-    result = await supabase.table("delivery_orders").update({
-        "delivery_status": DeliveryStatus.ACCEPTED.value,
-    }).eq("id", delivery_id).execute()
+
+    result = (
+        await supabase.table("delivery_orders")
+        .update(
+            {
+                "delivery_status": DeliveryStatus.ACCEPTED.value,
+            }
+        )
+        .eq("id", delivery_id)
+        .select("id, sender_id, rider_id, dispatch_id, delivery_status, order_number")
+        .maybe_single()
+        .execute()
+    )
 
     if not result.data:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to update delivery status"
+            detail="Failed to update delivery status",
         )
 
-    result_data = result.data[0]
+    result_data = result.data
 
     await _send_delivery_notifications(
         order_number=result_data["order_number"],
@@ -370,29 +396,30 @@ async def accept_delivery(
 # 3. PICKUP DELIVERY (Money operation)
 # ============================================================
 
+
 async def pickup_delivery(
-    delivery_id: str,
-    rider_id: str,
-    supabase: AsyncClient
+    delivery_id: str, rider_id: str, supabase: AsyncClient
 ) -> dict:
     """
     Rider picks up delivery.
     - Creates escrow holds
     - Starts tracking
     """
-    result = await supabase.rpc("mark_delivery_as_picked_up", {
-        "p_delivery_id": delivery_id,
-        "p_rider_id": rider_id,
-    }).execute()
-    
+    result = await supabase.rpc(
+        "mark_delivery_as_picked_up",
+        {
+            "p_delivery_id": delivery_id,
+            "p_rider_id": rider_id,
+        },
+    ).execute()
+
     if not result.data:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail='Delivery order not found'
+            status_code=status.HTTP_404_NOT_FOUND, detail="Delivery order not found"
         )
-    
+
     result_data = result.data
-    
+
     await _send_delivery_notifications(
         order_number=result_data.get("order_number", ""),
         new_status=DeliveryStatus.PICKED_UP.value,
@@ -401,7 +428,7 @@ async def pickup_delivery(
         dispatch_id=result_data.get("dispatch_id"),
         supabase=supabase,
     )
-       
+
     return result_data
 
 
@@ -409,24 +436,33 @@ async def pickup_delivery(
 # 4. MARK IN TRANSIT
 # ============================================================
 
+
 async def mark_in_transit(
     delivery_id: str,
     rider_id: str,
     supabase: AsyncClient,
 ) -> dict:
     """Rider marks delivery as in transit"""
-    result = await supabase.table("delivery_orders").update({
-        "delivery_status": DeliveryStatus.IN_TRANSIT.value,
-    }).eq("id", delivery_id).execute()
+    result = (
+        await supabase.table("delivery_orders")
+        .update(
+            {
+                "delivery_status": DeliveryStatus.IN_TRANSIT.value,
+            }
+        )
+        .eq("id", delivery_id)
+        .select("id, sender_id, rider_id, dispatch_id, delivery_status, order_number")
+        .maybe_single()
+        .execute()
+    )
 
     if not result.data:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail='Delivery order not found'
+            status_code=status.HTTP_404_NOT_FOUND, detail="Delivery order not found"
         )
-    
+
     result_data = result.data
-    
+
     await _send_delivery_notifications(
         order_number=result_data["order_number"],
         new_status=DeliveryStatus.IN_TRANSIT.value,
@@ -435,7 +471,7 @@ async def mark_in_transit(
         dispatch_id=result_data.get("dispatch_id"),
         supabase=supabase,
     )
-        
+
     return {
         "status": "success",
         "delivery_status": "IN_TRANSIT",
@@ -447,24 +483,33 @@ async def mark_in_transit(
 # 5. MARK DELIVERED
 # ============================================================
 
+
 async def mark_delivered(
     delivery_id: str,
     rider_id: str,
     supabase: AsyncClient,
 ) -> dict:
     """Rider marks delivery as delivered"""
-    result = await supabase.table("delivery_orders").update({
-        "delivery_status": DeliveryStatus.DELIVERED.value,
-    }).eq("id", delivery_id).execute()
-    
+    result = (
+        await supabase.table("delivery_orders")
+        .update(
+            {
+                "delivery_status": DeliveryStatus.DELIVERED.value,
+            }
+        )
+        .select("id, sender_id, rider_id, dispatch_id, delivery_status, order_number")
+        .maybe_single()
+        .eq("id", delivery_id)
+        .execute()
+    )
+
     if not result.data:
         raise HTTPException(
-             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Delivery order not found'
+            status_code=status.HTTP_404_NOT_FOUND, detail="Delivery order not found"
         )
-    
+
     result_data = result.data
-    
+
     await _send_delivery_notifications(
         order_number=result_data["order_number"],
         new_status=DeliveryStatus.DELIVERED,
@@ -473,7 +518,7 @@ async def mark_delivered(
         dispatch_id=result_data.get("dispatch_id"),
         supabase=supabase,
     )
-        
+
     return {
         "status": "success",
         "delivery_status": "DELIVERED",
@@ -484,6 +529,7 @@ async def mark_delivered(
 # ============================================================
 # 6. COMPLETE DELIVERY (Money operation)
 # ============================================================
+
 
 async def complete_delivery(
     delivery_id: str,
@@ -497,19 +543,21 @@ async def complete_delivery(
     - Pays dispatch
     - Frees up rider
     """
-    result = await supabase.rpc("mark_delivery_as_completed", {
-        "p_delivery_id": delivery_id,
-        "p_sender_id": sender_id,
-    }).execute()
-    
+    result = await supabase.rpc(
+        "mark_delivery_as_completed",
+        {
+            "p_delivery_id": delivery_id,
+            "p_sender_id": sender_id,
+        },
+    ).execute()
+
     if not result.data:
         raise HTTPException(
-             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Delivery order not found'
+            status_code=status.HTTP_404_NOT_FOUND, detail="Delivery order not found"
         )
-    
+
     result_data = result.data
-    
+
     await _send_delivery_notifications(
         order_number=result_data.get("order_number", ""),
         new_status=DeliveryStatus.COMPLETED,
@@ -518,7 +566,7 @@ async def complete_delivery(
         dispatch_id=result_data["dispatch_id"],
         supabase=supabase,
     )
-    
+
     await log_audit_event(
         supabase,
         entity_type="DELIVERY_ORDER",
@@ -531,13 +579,14 @@ async def complete_delivery(
         notes="Delivery completed, escrow released",
         request=request,
     )
-    
+
     return result_data
 
 
 # ============================================================
 # 7. CANCEL DELIVERY (Money operation)
 # ============================================================
+
 
 async def cancel_delivery(
     delivery_id: str,
@@ -551,20 +600,22 @@ async def cancel_delivery(
     - Handles refunds if escrow held
     - Handles returns if picked up
     """
-    result = await supabase.rpc("mark_delivery_as_cancelled", {
-        "p_delivery_id": delivery_id,
-        "p_triggered_by_user_id": triggered_by_user_id,
-        "p_cancellation_reason": cancellation_reason,
-    }).execute()
-    
+    result = await supabase.rpc(
+        "mark_delivery_as_cancelled",
+        {
+            "p_delivery_id": delivery_id,
+            "p_triggered_by_user_id": triggered_by_user_id,
+            "p_cancellation_reason": cancellation_reason,
+        },
+    ).execute()
+
     if not result.data:
         raise HTTPException(
-             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Delivery order not found'
+            status_code=status.HTTP_404_NOT_FOUND, detail="Delivery order not found"
         )
-    
+
     result_data = result.data
-    
+
     await _send_delivery_notifications(
         order_number=result_data.get("order_number", ""),
         new_status=DeliveryStatus.CANCELLED,
@@ -575,7 +626,7 @@ async def cancel_delivery(
         cancelled_by_rider=result_data["cancelled_by"] == "RIDER",
         supabase=supabase,
     )
-    
+
     await log_audit_event(
         supabase,
         entity_type="DELIVERY_ORDER",
@@ -588,11 +639,13 @@ async def cancel_delivery(
         },
         actor_id=triggered_by_user_id,
         actor_type="USER",
-        change_amount=Decimal(str(result_data["refund_amount"])) if result_data["refund_amount"] > 0 else None,
+        change_amount=Decimal(str(result_data["refund_amount"]))
+        if result_data["refund_amount"] > 0
+        else None,
         notes=result_data["message"],
         request=request,
     )
-    
+
     return result_data
 
 
@@ -600,24 +653,27 @@ async def cancel_delivery(
 # 8. DECLINE DELIVERY
 # ============================================================
 
+
 async def decline_delivery(
     delivery_id: str,
     supabase: AsyncClient,
     request: Optional[Request] = None,
 ) -> dict:
     """Rider declines delivery assignment"""
-    result = await supabase.rpc("clear_rider_assignment", {
-        "p_delivery_id": delivery_id,
-    }).execute()
-    
+    result = await supabase.rpc(
+        "clear_rider_assignment",
+        {
+            "p_delivery_id": delivery_id,
+        },
+    ).execute()
+
     if not result.data:
         raise HTTPException(
-             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Delivery order not found'
+            status_code=status.HTTP_404_NOT_FOUND, detail="Delivery order not found"
         )
-    
+
     result_data = result.data
-    
+
     await _send_delivery_notifications(
         order_number=result_data.get("order_number", ""),
         new_status=DeliveryStatus.DECLINED,
@@ -626,7 +682,7 @@ async def decline_delivery(
         dispatch_id=result_data.get("dispatch_id"),
         supabase=supabase,
     )
-    
+
     await log_audit_event(
         supabase,
         entity_type="DELIVERY_ORDER",
@@ -638,27 +694,28 @@ async def decline_delivery(
         notes="Rider declined assignment",
         request=request,
     )
-    
+
     return result_data
 
 
 # ============================================================
-# REUSABLE VALIDATORS 
+# REUSABLE VALIDATORS
 # ============================================================
 
 # ============================================================
 # AUTHORIZATION VALIDATION
 # ============================================================
 
+
 def _validate_authorization(
     new_status: DeliveryStatus,
     triggered_by_user_id: str,
     sender_id: str,
-    rider_id: Optional[str]
+    rider_id: Optional[str],
 ):
     """
     Validate that the user has permission to set this status.
-    
+
     Authorization Matrix:
     - ASSIGNED: Sender only
     - ACCEPTED: Rider only
@@ -669,48 +726,52 @@ def _validate_authorization(
     - CANCELLED: Sender OR Rider
     - DECLINED: Rider only
     """
-    
+
     if new_status == DeliveryStatus.ASSIGNED:
         if triggered_by_user_id != sender_id:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Only sender can assign a rider"
+                detail="Only sender can assign a rider",
             )
-    
+
     elif new_status == DeliveryStatus.ACCEPTED:
         if not rider_id or triggered_by_user_id != rider_id:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Only the assigned rider can accept delivery"
+                detail="Only the assigned rider can accept delivery",
             )
-    
-    elif new_status in [DeliveryStatus.PICKED_UP, DeliveryStatus.IN_TRANSIT, DeliveryStatus.DELIVERED]:
+
+    elif new_status in [
+        DeliveryStatus.PICKED_UP,
+        DeliveryStatus.IN_TRANSIT,
+        DeliveryStatus.DELIVERED,
+    ]:
         if not rider_id or triggered_by_user_id != rider_id:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Only the assigned rider can set status to {new_status.value}"
+                detail=f"Only the assigned rider can set status to {new_status.value}",
             )
-    
+
     elif new_status == DeliveryStatus.COMPLETED:
         if triggered_by_user_id != sender_id:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Only sender can mark delivery as completed"
+                detail="Only sender can mark delivery as completed",
             )
-    
+
     elif new_status == DeliveryStatus.CANCELLED:
         # Sender OR Rider can cancel
         if triggered_by_user_id not in [sender_id, rider_id]:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Only sender or rider can cancel delivery"
+                detail="Only sender or rider can cancel delivery",
             )
-    
+
     elif new_status == DeliveryStatus.DECLINED:
         if not rider_id or triggered_by_user_id != rider_id:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Only the assigned rider can decline delivery"
+                detail="Only the assigned rider can decline delivery",
             )
 
 
@@ -718,10 +779,11 @@ def _validate_authorization(
 # STATE TRANSITION VALIDATION (State Machine)
 # ============================================================
 
+
 def _validate_state_transition(current_status: str, new_status: str):
     """
     Validate that the status transition is allowed.
-    
+
     State Machine:
     PENDING → ASSIGNED
     ASSIGNED → ACCEPTED | DECLINED
@@ -729,10 +791,10 @@ def _validate_state_transition(current_status: str, new_status: str):
     PICKED_UP → IN_TRANSIT | DELIVERED | CANCELLED
     IN_TRANSIT → DELIVERED | CANCELLED
     DELIVERED → COMPLETED | CANCELLED
-    
+
     Terminal states: COMPLETED, CANCELLED (cannot transition from these)
     """
-    
+
     # Define allowed transitions
     ALLOWED_TRANSITIONS = {
         "PENDING": ["ASSIGNED", "CANCELLED"],
@@ -745,13 +807,13 @@ def _validate_state_transition(current_status: str, new_status: str):
         "COMPLETED": [],  # Terminal state
         "CANCELLED": [],  # Terminal state
     }
-    
+
     allowed = ALLOWED_TRANSITIONS.get(current_status, [])
-    
+
     if new_status not in allowed:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Cannot transition from {current_status} to {new_status}. Allowed transitions: {', '.join(allowed) if allowed else 'None (terminal state)'}"
+            detail=f"Cannot transition from {current_status} to {new_status}. Allowed transitions: {', '.join(allowed) if allowed else 'None (terminal state)'}",
         )
 
 

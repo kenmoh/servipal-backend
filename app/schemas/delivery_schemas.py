@@ -31,7 +31,7 @@ class DeliveryStatus(str, Enum):
 
 class DeliveryStatusUpdate(BaseModel):
     new_status: DeliveryStatus
-    rider_id: Optional[UUID] = None 
+    rider_id: Optional[UUID] = None
     cancellation_reason: Optional[str] = None
     decline_reason: Optional[str] = None
 

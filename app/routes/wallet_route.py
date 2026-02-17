@@ -53,7 +53,10 @@ async def top_up_my_wallet(
         amount=float(data.amount),
     )
     return await wallet_service.initiate_wallet_top_up(
-        data=data, user_id=current_profile["id"], supabase=supabase, customer_info=current_profile
+        data=data,
+        user_id=current_profile["id"],
+        supabase=supabase,
+        customer_info=current_profile,
     )
 
 

@@ -115,30 +115,38 @@ async def initiate_wallet_top_up(
     Validates balance limit before proceeding.
     """
     MAX_BALANCE = Decimal("50000")  # ₦50,000
-    
+
     # Get current balance
-    wallet_resp = await supabase.table("wallets").select("balance").eq("user_id", user_id).single().execute()
-    current_balance = Decimal(str(wallet_resp.data["balance"])) if wallet_resp.data else Decimal("0")
-    
+    wallet_resp = (
+        await supabase.table("wallets")
+        .select("balance")
+        .eq("user_id", user_id)
+        .single()
+        .execute()
+    )
+    current_balance = (
+        Decimal(str(wallet_resp.data["balance"])) if wallet_resp.data else Decimal("0")
+    )
+
     # Check if current balance already at limit
     if current_balance >= MAX_BALANCE:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Wallet balance limit reached (₦{current_balance:,.2f}). Maximum allowed is ₦{MAX_BALANCE:,.2f}. Please withdraw or spend before adding more funds."
+            detail=f"Wallet balance limit reached (₦{current_balance:,.2f}). Maximum allowed is ₦{MAX_BALANCE:,.2f}. Please withdraw or spend before adding more funds.",
         )
-    
+
     # Check if top-up would exceed limit
     new_balance = current_balance + data.amount
     if new_balance > MAX_BALANCE:
         max_topup_allowed = MAX_BALANCE - current_balance
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Top-up of ₦{amount:,.2f} would exceed wallet limit. Current balance: ₦{current_balance:,.2f}. Maximum top-up allowed: ₦{max_topup_allowed:,.2f}."
+            detail=f"Top-up of ₦{amount:,.2f} would exceed wallet limit. Current balance: ₦{current_balance:,.2f}. Maximum top-up allowed: ₦{max_topup_allowed:,.2f}.",
         )
-    
+
     # Generate tx_ref
     tx_ref = f"TOPUP-{uuid.uuid4().hex[:32].upper()}"
-    
+
     # Save to Redis
     pending_data = {
         "user_id": str(user_id),
@@ -147,7 +155,7 @@ async def initiate_wallet_top_up(
         "created_at": datetime.datetime.now().isoformat(),
     }
     await save_pending(f"pending_topup_{tx_ref}", pending_data, expire=1800)
-    
+
     # Return for Flutterwave
     return PaymentInitializationResponse(
         tx_ref=tx_ref,

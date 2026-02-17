@@ -18,7 +18,7 @@ from app.dependencies.auth import (
 )
 from app.schemas.user_schemas import UserType
 from app.services import food_service
-from app.database.supabase import get_supabase_client,get_supabase_admin_client
+from app.database.supabase import get_supabase_client, get_supabase_admin_client
 from app.config.logging import logger
 from app.common.order import update_order_status, OrderStatusUpdate
 
@@ -301,7 +301,9 @@ async def vendor_food_earnings(
     return earnings.data
 
 
-@router.put("/{order_id}/update-food-order-status", status_code=status.HTTP_202_ACCEPTED)
+@router.put(
+    "/{order_id}/update-food-order-status", status_code=status.HTTP_202_ACCEPTED
+)
 async def update_food_order_status(
     order_id: UUID,
     data: OrderStatusUpdate,

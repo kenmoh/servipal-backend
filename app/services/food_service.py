@@ -640,7 +640,7 @@ async def initiate_food_payment(
                 # User selected a size - use the size's price
                 selected_size = cart_item.sizes[0]
                 item_price = Decimal(str(selected_size.price))
-                
+
                 logger.info(
                     "using_size_price",
                     item_id=str(cart_item.item_id),
@@ -652,7 +652,7 @@ async def initiate_food_payment(
             else:
                 # No size selected - use default item price
                 item_price = Decimal(str(db_item["price"]))
-                
+
                 logger.info(
                     "using_default_price",
                     item_id=str(cart_item.item_id),

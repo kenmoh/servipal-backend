@@ -10,7 +10,6 @@ from pydantic import BaseModel
 from app.services.notification_service import notify_user
 
 
-
 class OrderStatus(str, Enum):
     PENDING = "PENDING"
     PREPARING = "PREPARING"
@@ -19,6 +18,7 @@ class OrderStatus(str, Enum):
     CANCELLED = "CANCELLED"
     IN_TRANSIT = "IN_TRANSIT"
     DELIVERED = "DELIVERED"
+
 
 class TransactionType(str, Enum):
     DEPOSIT = "DEPOSIT"
@@ -43,28 +43,31 @@ async def update_order_status(
     request: Optional[Request] = None,
 ) -> dict:
     """Update order status with proper authorization and wallet handling."""
-    
-    order_type = entity_type.replace('_ORDER', '')  # 'FOOD_ORDER' -> 'FOOD'
-    
+
+    order_type = entity_type.replace("_ORDER", "")  # 'FOOD_ORDER' -> 'FOOD'
+
     try:
         # Handle COMPLETED status
         if data.new_status == OrderStatus.COMPLETED:
             logger.info(
-                    "CALLING_COMPLETE_RPC",
-                    order_id=order_id,
-                    order_id_type=type(order_id).__name__,
-                    order_id_repr=repr(order_id),
-                    order_type=order_type,
-                    triggered_by=triggered_by_user_id,
-                )
-            result = await supabase.rpc("mark_order_as_completed", {
-                "p_order_id": f'{order_id}',
-                "p_order_type": order_type,
-                "p_triggered_by_user_id": f'{triggered_by_user_id}',
-            }).execute()
-            
+                "CALLING_COMPLETE_RPC",
+                order_id=order_id,
+                order_id_type=type(order_id).__name__,
+                order_id_repr=repr(order_id),
+                order_type=order_type,
+                triggered_by=triggered_by_user_id,
+            )
+            result = await supabase.rpc(
+                "mark_order_as_completed",
+                {
+                    "p_order_id": f"{order_id}",
+                    "p_order_type": order_type,
+                    "p_triggered_by_user_id": f"{triggered_by_user_id}",
+                },
+            ).execute()
+
             result_data = result.data
-            
+
             # Audit log
             await log_audit_event(
                 supabase,
@@ -75,47 +78,50 @@ async def update_order_status(
                 new_value={"status": "COMPLETED", "escrow": "RELEASED"},
                 actor_id=str(triggered_by_user_id),
                 actor_type="USER",
-                change_amount=Decimal(str(result_data['amount_released'])),
+                change_amount=Decimal(str(result_data["amount_released"])),
                 notes="Order completed by customer, escrow released to vendor",
                 request=request,
             )
-            
+
             # Notify participants
             await notify_user(
-                result_data['customer_id'],
+                result_data["customer_id"],
                 "Order Completed",
                 "Transaction completed",
                 data={"SUCCESS": "Transaction completed"},
                 supabase=supabase,
             )
-            
+
             await notify_user(
-                result_data['vendor_id'],
+                result_data["vendor_id"],
                 "Order Completed",
                 "Transaction completed",
                 data={"SUCCESS": "Transaction completed"},
                 supabase=supabase,
             )
-            
+
             logger.info(
                 "order_completed",
                 order_id=order_id,
-                amount_released=str(result_data['amount_released']),
+                amount_released=str(result_data["amount_released"]),
             )
-            
+
             return result_data
-        
+
         # Handle CANCELLED status
         elif data.new_status == OrderStatus.CANCELLED:
-            result = await supabase.rpc("mark_order_as_cancelled", {
-                "p_order_id": order_id,
-                "p_order_type": order_type,
-                "p_triggered_by_user_id": triggered_by_user_id,
-                "p_cancellation_reason": data.cancel_reason,
-            }).execute()
-            
+            result = await supabase.rpc(
+                "mark_order_as_cancelled",
+                {
+                    "p_order_id": order_id,
+                    "p_order_type": order_type,
+                    "p_triggered_by_user_id": triggered_by_user_id,
+                    "p_cancellation_reason": data.cancel_reason,
+                },
+            ).execute()
+
             result_data = result.data
-            
+
             # Audit log
             await log_audit_event(
                 supabase,
@@ -126,36 +132,39 @@ async def update_order_status(
                 new_value={"status": "CANCELLED", "payment_status": "REFUNDED"},
                 actor_id=str(triggered_by_user_id),
                 actor_type="USER",
-                change_amount=Decimal(str(result_data.get('refund_amount', 0))),
+                change_amount=Decimal(str(result_data.get("refund_amount", 0))),
                 notes=data.cancel_reason or "Order cancelled",
                 request=request,
             )
-            
+
             logger.info(
                 "order_cancelled",
                 order_id=order_id,
-                refund_amount=str(result_data.get('refund_amount', 0)),
+                refund_amount=str(result_data.get("refund_amount", 0)),
             )
-            
+
             return result_data
-        
+
         # Handle simple status updates (PREPARING, READY, IN_TRANSIT, DELIVERED)
         else:
-            result = await supabase.rpc("update_order_status_simple", {
-                "p_order_id": order_id,
-                "p_order_type": order_type,
-                "p_new_status": data.new_status.value,
-                "p_triggered_by_user_id": triggered_by_user_id,
-            }).execute()
-            
+            result = await supabase.rpc(
+                "update_order_status_simple",
+                {
+                    "p_order_id": order_id,
+                    "p_order_type": order_type,
+                    "p_new_status": data.new_status.value,
+                    "p_triggered_by_user_id": triggered_by_user_id,
+                },
+            ).execute()
+
             result_data = result.data
-            
+
             if not result_data:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"Order {order_id} ({order_type}) not found or update ignored."
+                    detail=f"Order {order_id} ({order_type}) not found or update ignored.",
                 )
-            
+
             # Audit log
             await log_audit_event(
                 supabase,
@@ -169,20 +178,19 @@ async def update_order_status(
                 notes=f"Order status changed to {data.new_status.value}",
                 request=request,
             )
-            
+
             logger.info(
                 "order_status_updated",
                 order_id=order_id,
-                new_status=data.new_status.value
+                new_status=data.new_status.value,
             )
-            
+
             return result_data
-    
+
     except Exception as e:
         logger.error(f"Order update failed: {str(e)}", exc_info=True)
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e)
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
         )
 
 
@@ -199,10 +207,9 @@ class DeliveryStatus(str, Enum):
 
 
 class DeliveryStatusUpdate(BaseModel):
-    new_status: DeliveryStatus 
+    new_status: DeliveryStatus
     cancellation_reason: Optional[str] = None
     decline_reason: Optional[str] = None
-
 
 
 async def update_delivery_status(
@@ -222,22 +229,27 @@ async def update_delivery_status(
         new_status=data.new_status.value,
         triggered_by=triggered_by_user_id,
     )
-    
+
     try:
         # FIRST: Fetch delivery to check authorization
-        delivery_resp = await supabase.table("delivery_orders").select(
-            "id, sender_id, rider_id, dispatch_id, delivery_status, order_number"
-        ).eq("id", delivery_id).single().execute()
-        
+        delivery_resp = (
+            await supabase.table("delivery_orders")
+            .select(
+                "id, sender_id, rider_id, dispatch_id, delivery_status, order_number"
+            )
+            .eq("id", delivery_id)
+            .single()
+            .execute()
+        )
+
         if not delivery_resp.data:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Delivery not found"
+                status_code=status.HTTP_404_NOT_FOUND, detail="Delivery not found"
             )
-        
+
         delivery = delivery_resp.data
         current_status = delivery["delivery_status"]
-        
+
         # AUTHORIZATION CHECKS
         _validate_authorization(
             new_status=data.new_status,
@@ -246,39 +258,51 @@ async def update_delivery_status(
             rider_id=delivery["rider_id"],
             dispatch_id=delivery["dispatch_id"],
         )
-        
+
         # STATE TRANSITION VALIDATION
         _validate_state_transition(current_status, data.new_status.value)
-        
+
         # Route to appropriate handler
         if data.new_status == DeliveryStatus.PICKED_UP:
-            result_data = await _handle_pickup(delivery_id, triggered_by_user_id, supabase, request)
-            
+            result_data = await _handle_pickup(
+                delivery_id, triggered_by_user_id, supabase, request
+            )
+
         elif data.new_status == DeliveryStatus.COMPLETED:
-            result_data = await _handle_completion(delivery_id, triggered_by_user_id, supabase, request)
-            
+            result_data = await _handle_completion(
+                delivery_id, triggered_by_user_id, supabase, request
+            )
+
         elif data.new_status == DeliveryStatus.CANCELLED:
             result_data = await _handle_cancellation(
-                delivery_id, triggered_by_user_id, data.cancellation_reason, supabase, request
+                delivery_id,
+                triggered_by_user_id,
+                data.cancellation_reason,
+                supabase,
+                request,
             )
-            
+
         elif data.new_status == DeliveryStatus.DECLINED:
             result_data = await _handle_decline(delivery_id, supabase, request)
-            
+
         else:
             # Simple status updates (ASSIGNED, ACCEPTED, IN_TRANSIT, DELIVERED)
             result_data = await _handle_simple_status(
-                delivery_id, data.new_status.value, triggered_by_user_id, supabase, request
+                delivery_id,
+                data.new_status.value,
+                triggered_by_user_id,
+                supabase,
+                request,
             )
-        
+
         logger.info(
             "update_delivery_status_success",
             delivery_id=delivery_id,
             new_status=data.new_status.value,
         )
-        
+
         return result_data
-    
+
     except HTTPException:
         raise
     except Exception as e:
@@ -290,13 +314,14 @@ async def update_delivery_status(
         )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to update delivery status: {str(e)}"
+            detail=f"Failed to update delivery status: {str(e)}",
         )
 
 
 # ============================================================
 # AUTHORIZATION VALIDATION
 # ============================================================
+
 
 def _validate_authorization(
     new_status: DeliveryStatus,
@@ -307,7 +332,7 @@ def _validate_authorization(
 ):
     """
     Validate that the user has permission to set this status.
-    
+
     Authorization Matrix:
     - ASSIGNED: Sender only
     - ACCEPTED: Rider only
@@ -318,48 +343,52 @@ def _validate_authorization(
     - CANCELLED: Sender OR Rider
     - DECLINED: Rider only
     """
-    
+
     if new_status == DeliveryStatus.ASSIGNED:
         if triggered_by_user_id != sender_id:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Only sender can assign a rider"
+                detail="Only sender can assign a rider",
             )
-    
+
     elif new_status == DeliveryStatus.ACCEPTED:
         if not rider_id or triggered_by_user_id != rider_id:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Only the assigned rider can accept delivery"
+                detail="Only the assigned rider can accept delivery",
             )
-    
-    elif new_status in [DeliveryStatus.PICKED_UP, DeliveryStatus.IN_TRANSIT, DeliveryStatus.DELIVERED]:
+
+    elif new_status in [
+        DeliveryStatus.PICKED_UP,
+        DeliveryStatus.IN_TRANSIT,
+        DeliveryStatus.DELIVERED,
+    ]:
         if not rider_id or triggered_by_user_id != rider_id:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Only the assigned rider can set status to {new_status.value}"
+                detail=f"Only the assigned rider can set status to {new_status.value}",
             )
-    
+
     elif new_status == DeliveryStatus.COMPLETED:
         if triggered_by_user_id != sender_id:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Only sender can mark delivery as completed"
+                detail="Only sender can mark delivery as completed",
             )
-    
+
     elif new_status == DeliveryStatus.CANCELLED:
         # Sender OR Rider can cancel
         if triggered_by_user_id not in [sender_id, rider_id]:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Only sender or rider can cancel delivery"
+                detail="Only sender or rider can cancel delivery",
             )
-    
+
     elif new_status == DeliveryStatus.DECLINED:
         if not rider_id or triggered_by_user_id != rider_id:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Only the assigned rider can decline delivery"
+                detail="Only the assigned rider can decline delivery",
             )
 
 
@@ -367,10 +396,11 @@ def _validate_authorization(
 # STATE TRANSITION VALIDATION (State Machine)
 # ============================================================
 
+
 def _validate_state_transition(current_status: str, new_status: str):
     """
     Validate that the status transition is allowed.
-    
+
     State Machine:
     PENDING → ASSIGNED
     ASSIGNED → ACCEPTED | DECLINED
@@ -378,10 +408,10 @@ def _validate_state_transition(current_status: str, new_status: str):
     PICKED_UP → IN_TRANSIT | DELIVERED | CANCELLED
     IN_TRANSIT → DELIVERED | CANCELLED
     DELIVERED → COMPLETED | CANCELLED
-    
+
     Terminal states: COMPLETED, CANCELLED (cannot transition from these)
     """
-    
+
     # Define allowed transitions
     ALLOWED_TRANSITIONS = {
         "PENDING": ["ASSIGNED", "CANCELLED"],
@@ -394,19 +424,20 @@ def _validate_state_transition(current_status: str, new_status: str):
         "COMPLETED": [],  # Terminal state
         "CANCELLED": [],  # Terminal state
     }
-    
+
     allowed = ALLOWED_TRANSITIONS.get(current_status, [])
-    
+
     if new_status not in allowed:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Cannot transition from {current_status} to {new_status}. Allowed transitions: {', '.join(allowed) if allowed else 'None (terminal state)'}"
+            detail=f"Cannot transition from {current_status} to {new_status}. Allowed transitions: {', '.join(allowed) if allowed else 'None (terminal state)'}",
         )
 
 
 # ============================================================
 # INTERNAL HANDLERS (Same as before, no changes)
 # ============================================================
+
 
 async def _handle_pickup(
     delivery_id: str,
@@ -415,15 +446,21 @@ async def _handle_pickup(
     request: Optional[Request] = None,
 ) -> dict:
     """Rider picks up delivery - creates escrow holds"""
-    result = await supabase.rpc("mark_delivery_as_picked_up", {
-        "p_delivery_id": delivery_id,
-        "p_rider_id": rider_id,
-    }).execute()
-    
+    result = await supabase.rpc(
+        "mark_delivery_as_picked_up",
+        {
+            "p_delivery_id": delivery_id,
+            "p_rider_id": rider_id,
+        },
+    ).execute()
+
     result_data = result.data
     if result.error:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error: {result.error.message}")
-    
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error: {result.error.message}",
+        )
+
     await notify_user(
         user_id=result_data["sender_id"],
         title="Delivery Picked Up",
@@ -431,7 +468,7 @@ async def _handle_pickup(
         data={"delivery_id": delivery_id, "type": "DELIVERY_PICKED_UP"},
         supabase=supabase,
     )
-    
+
     return result_data
 
 
@@ -442,16 +479,22 @@ async def _handle_completion(
     request: Optional[Request] = None,
 ) -> dict:
     """Sender completes delivery - releases escrow and pays dispatch"""
-    result = await supabase.rpc("mark_delivery_as_completed", {
-        "p_delivery_id": delivery_id,
-        "p_sender_id": sender_id,
-    }).execute()
-    
+    result = await supabase.rpc(
+        "mark_delivery_as_completed",
+        {
+            "p_delivery_id": delivery_id,
+            "p_sender_id": sender_id,
+        },
+    ).execute()
+
     result_data = result.data
 
     if result.error:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error: {result.error.message}")
-    
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error: {result.error.message}",
+        )
+
     await notify_user(
         user_id=result_data["dispatch_id"],
         title="Delivery Completed",
@@ -463,7 +506,7 @@ async def _handle_completion(
         },
         supabase=supabase,
     )
-    
+
     if result_data.get("rider_id"):
         await notify_user(
             user_id=result_data["rider_id"],
@@ -472,7 +515,7 @@ async def _handle_completion(
             data={"delivery_id": delivery_id, "type": "DELIVERY_COMPLETED"},
             supabase=supabase,
         )
-    
+
     await log_audit_event(
         supabase,
         entity_type="DELIVERY_ORDER",
@@ -485,7 +528,7 @@ async def _handle_completion(
         notes="Delivery completed, escrow released to dispatch",
         request=request,
     )
-    
+
     return result_data
 
 
@@ -497,19 +540,25 @@ async def _handle_cancellation(
     request: Optional[Request] = None,
 ) -> dict:
     """Sender or Rider cancels delivery - handles refunds and returns"""
-    result = await supabase.rpc("mark_delivery_as_cancelled", {
-        "p_delivery_id": delivery_id,
-        "p_triggered_by_user_id": triggered_by_user_id,
-        "p_cancellation_reason": cancellation_reason,
-    }).execute()
+    result = await supabase.rpc(
+        "mark_delivery_as_cancelled",
+        {
+            "p_delivery_id": delivery_id,
+            "p_triggered_by_user_id": triggered_by_user_id,
+            "p_cancellation_reason": cancellation_reason,
+        },
+    ).execute()
 
     if result.error:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error: {result.error.message}")
-    
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error: {result.error.message}",
+        )
+
     result_data = result.data
     cancelled_by = result_data["cancelled_by"]
     requires_return = result_data.get("requires_return", False)
-    
+
     if requires_return:
         if result_data.get("rider_id"):
             await notify_user(
@@ -545,7 +594,7 @@ async def _handle_cancellation(
                     data={"delivery_id": delivery_id, "type": "DELIVERY_CANCELLED"},
                     supabase=supabase,
                 )
-    
+
     await log_audit_event(
         supabase,
         entity_type="DELIVERY_ORDER",
@@ -558,11 +607,13 @@ async def _handle_cancellation(
         },
         actor_id=triggered_by_user_id,
         actor_type="USER",
-        change_amount=Decimal(str(result_data["refund_amount"])) if result_data["refund_amount"] > 0 else None,
+        change_amount=Decimal(str(result_data["refund_amount"]))
+        if result_data["refund_amount"] > 0
+        else None,
         notes=result_data["message"],
         request=request,
     )
-    
+
     return result_data
 
 
@@ -572,15 +623,18 @@ async def _handle_decline(
     request: Optional[Request] = None,
 ) -> dict:
     """Rider declines assignment - clears rider details"""
-    result = await supabase.rpc("clear_rider_assignment", {
-        "p_delivery_id": delivery_id,
-    }).execute()
-    
+    result = await supabase.rpc(
+        "clear_rider_assignment",
+        {
+            "p_delivery_id": delivery_id,
+        },
+    ).execute()
+
     result_data = result.data
 
     if result.error:
         raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, result.error.message)
-    
+
     await log_audit_event(
         supabase,
         entity_type="DELIVERY_ORDER",
@@ -592,7 +646,7 @@ async def _handle_decline(
         notes="Rider declined assignment",
         request=request,
     )
-    
+
     return result_data
 
 
@@ -604,17 +658,20 @@ async def _handle_simple_status(
     request: Optional[Request] = None,
 ) -> dict:
     """Handle simple status updates (ASSIGNED, ACCEPTED, IN_TRANSIT, DELIVERED)"""
-    result = await supabase.rpc("update_delivery_status_simple", {
-        "p_delivery_id": delivery_id,
-        "p_new_status": new_status,
-        "p_triggered_by_user_id": triggered_by_user_id,
-    }).execute()
+    result = await supabase.rpc(
+        "update_delivery_status_simple",
+        {
+            "p_delivery_id": delivery_id,
+            "p_new_status": new_status,
+            "p_triggered_by_user_id": triggered_by_user_id,
+        },
+    ).execute()
 
     if result.error:
         raise HTTPException(status_code=500, detail=f"Error: {result.error.message}")
-    
+
     result_data = result.data
-    
+
     return result_data
 
 

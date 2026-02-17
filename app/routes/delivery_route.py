@@ -107,7 +107,7 @@ async def update_delivery_status(
     request: Request,
     current_profile: dict = Depends(get_current_profile),
     supabase=Depends(get_supabase_admin_client),
-):   
+):
 
     return await delivery_service.update_delivery_status(
         tx_ref=tx_ref,
