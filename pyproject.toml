@@ -7,6 +7,7 @@ dependencies = [
     "exponent-server-sdk>=2.2.0",
     "fastapi[standard]>=0.128.0",
     "logfire[fastapi]>=4.19.0",
+    "postgrest>=2.27.2",
     "pydantic-settings>=2.12.0",
     "pytest>=9.0.2",
     "redis>=7.1.0",

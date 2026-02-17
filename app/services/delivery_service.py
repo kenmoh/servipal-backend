@@ -2,17 +2,11 @@ from fastapi import HTTPException, status, Request
 from typing import Optional
 import uuid
 import datetime
-
-
-from typing import Optional
 from uuid import UUID
 from decimal import Decimal
 from fastapi import Request, HTTPException, status
 from supabase import AsyncClient
-from app.utils.audit import log_audit_event
-from app.config.logging import logger
-
-
+from postgrest.exceptions import APIError
 from app.schemas.delivery_schemas import (
     PackageDeliveryCreate,
     DeliveryStatus,
@@ -229,19 +223,30 @@ async def update_delivery_status(
 
 async def _get_delivery(tx_ref: str, supabase: AsyncClient) -> dict:
     """Fetch delivery details"""
-    delivery_resp = (
-        await supabase.table("delivery_orders")
-        .select("id, sender_id, rider_id, delivery_status, order_number")
-        .eq("tx_ref", tx_ref)
-        .maybe_single()
-        .execute()
-    )
 
-    if not delivery_resp.data:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Delivery not found"
+    try:
+        delivery_resp = (
+            await supabase.table("delivery_orders")
+            .select("id, sender_id, rider_id, delivery_status, order_number")
+            .eq("tx_ref", tx_ref)
+            .maybe_single()
+            .execute()
         )
-    return delivery_resp.data
+
+        if not delivery_resp.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Delivery not found"
+            )
+        return delivery_resp.data
+    except APIError as e:
+        logger.error("fetch_delivery_error", error=str(e), errorr_message=f'{e.message}', exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Database error fetching delivery: {e.message}",
+        )
+        
+
+
 
 
 # ============================================================
@@ -266,71 +271,62 @@ async def assign_rider(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="rider_id is required"
         )
+    
+    try:
 
     # Get tx_ref
-    delivery = (
-        await supabase.table("delivery_orders")
-        .select("tx_ref, order_number")
-        .eq("id", delivery_id)
-        .single()
-        .execute()
-    )
-
-    tx_ref = delivery.data["tx_ref"]
-    order_number = delivery.data["order_number"]
-
-    # Update delivery with rider_id first
-    # await supabase.table("delivery_orders").update({
-    #     "rider_id": rider_id
-    # }).eq("id", delivery_id).execute()
-
-    # Call RPC
-    result = await supabase.rpc(
-        "assign_rider_to_delivery",
-        {
-            "p_tx_ref": tx_ref,
-            "p_rider_id": rider_id,
-        },
-    ).execute()
-
-    if result.error:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to assign rider: {result.error.message}",
+        delivery = (
+            await supabase.table("delivery_orders")
+            .select("tx_ref, order_number")
+            .eq("id", delivery_id)
+            .single()
+            .execute()
         )
 
-    result_data = result.data
+        tx_ref = delivery.data["tx_ref"]
+        order_number = delivery.data["order_number"]
 
-    # Send notifications
-    await _send_delivery_notifications(
-        order_number=order_number,
-        new_status=DeliveryStatus.ASSIGNED,
-        sender_id=sender_id,
-        rider_id=rider_id,
-        dispatch_id=result_data.get("dispatch_id"),
-        supabase=supabase,
-    )
+        # Call RPC
+        result = await supabase.rpc(
+            "assign_rider_to_delivery",
+            {
+                "p_tx_ref": tx_ref,
+                "p_rider_id": rider_id,
+            },
+        ).execute()
 
-    # Audit log
-    # await log_audit_event(
-    #     supabase,
-    #     entity_type="DELIVERY_ORDER",
-    #     entity_id=delivery_id,
-    #     action="RIDER_ASSIGNED",
-    #     new_value={"status": "ASSIGNED", "rider_id": rider_id},
-    #     actor_id=sender_id,
-    #     actor_type="USER",
-    #     notes=f"Rider assigned to delivery",
-    #     request=request,
-    # )
+        if result.error:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to assign rider: {result.error.message}",
+            )
 
-    return {
-        "status": "success",
-        "delivery_status": "ASSIGNED",
-        "tx_ref": tx_ref,
-        "rider_id": rider_id,
-        "dispatch_id": result_data.get("dispatch_id"),
-    }
+        result_data = result.data
+
+        # Send notifications
+        await _send_delivery_notifications(
+            order_number=order_number,
+            new_status=DeliveryStatus.ASSIGNED,
+            sender_id=f'{sender_id}',
+            rider_id=f'{rider_id}',
+            dispatch_id=f'{result_data.get("dispatch_id")}',
+            supabase=supabase,
+        )
+
+        return {
+            "status": "success",
+            "delivery_status": "ASSIGNED",
+            "tx_ref": tx_ref,
+            "rider_id": f'{rider_id}',
+            "dispatch_id": f'{result_data.get("dispatch_id")}',
+        }
+
+    except APIError as e:
+        logger.error("assign_rider_error", error=str(e), error_message=f'{e.message}', exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Something went wrong!",
+        )
 
 
 # ============================================================
@@ -355,12 +351,6 @@ async def accept_delivery(
         .eq("id", delivery_id)
         .execute()
     )
-
-    if not result.data:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to update delivery status",
-        )
 
     result_data = result.data[0]
 
@@ -401,11 +391,6 @@ async def pickup_delivery(
         },
     ).execute()
 
-    if not result.data:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Delivery order not found"
-        )
-
     result_data = result.data
 
     await _send_delivery_notifications(
@@ -442,12 +427,7 @@ async def mark_in_transit(
         .execute()
     )
 
-    if not result.data[0]:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Delivery order not found"
-        )
-
-    result_data = result.data
+    result_data = result.data[0]
 
     await _send_delivery_notifications(
         order_number=result_data["order_number"],
