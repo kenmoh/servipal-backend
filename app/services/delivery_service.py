@@ -158,22 +158,14 @@ async def update_delivery_status(
     try:
         # Fetch delivery for validation
         delivery = await _get_delivery(tx_ref, supabase)
-        delivery_id = delivery["id"]
-
-
-        logger.info('****************************************************')
-        logger.info('delivery_id', delivery_id=delivery_id)
-        logger.info('delivery', delivery=delivery)
-        logger.info('****************************************************')
-
-       
+        delivery_id = delivery["id"]     
         
         # Validate authorization
         _validate_authorization(
             new_status=data.new_status,
             triggered_by_user_id=triggered_by_user_id,
             sender_id=delivery["sender_id"],
-            rider_id=data.rider_id or None
+            rider_id=delivery["rider_id"] or None
         )
         
         # Validate state transition
@@ -240,7 +232,7 @@ async def update_delivery_status(
 async def _get_delivery(tx_ref: str, supabase: AsyncClient) -> dict:
     """Fetch delivery details"""
     delivery_resp = await supabase.table("delivery_orders").select(
-        "id, sender_id, delivery_status, order_number"
+        "id, sender_id, rider_id, delivery_status, order_number"
     ).eq("tx_ref", tx_ref).maybe_single().execute()
     
     if not delivery_resp.data:
