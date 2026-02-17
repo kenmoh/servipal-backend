@@ -159,6 +159,10 @@ async def update_delivery_status(
         # Fetch delivery for validation
         delivery = await _get_delivery(tx_ref, supabase)
         delivery_id = delivery["id"]
+
+        logger.info('*************************** DELIVERY_ID ***************************')
+        logger.info(f"Delivery ID: {delivery_id}")
+        logger.info('*************************** DELIVERY_ID ***************************')
         
         # Validate authorization
         _validate_authorization(
@@ -240,6 +244,17 @@ async def _get_delivery(tx_ref: str, supabase: AsyncClient) -> dict:
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Delivery not found"
         )
+
+    logger.error('***************************************************************')
+
+     
+    logger.info(
+        "update_delivery_status_success",
+        data=delivery_resp.data,
+       
+    )
+
+    logger.error('***************************************************************')
     
     return delivery_resp.data
 
