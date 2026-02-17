@@ -163,7 +163,7 @@ async def update_delivery_status(
         
         # Route to specific handler
         if data.new_status == DeliveryStatus.ASSIGNED:
-            result = await assign_rider(delivery_id, data.rider_id, triggered_by_user_id, supabase, request)
+            result = await assign_rider(delivery_id, data.rider_id, triggered_by_user_id, supabase)
             
         elif data.new_status == DeliveryStatus.ACCEPTED:
             result = await accept_delivery(delivery_id, triggered_by_user_id, supabase)
