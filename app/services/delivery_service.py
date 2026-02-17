@@ -350,7 +350,7 @@ async def accept_delivery(
     
     result = await supabase.table("delivery_orders").update({
         "delivery_status": "ACCEPTED",
-        "updated_at": datetime.now().isoformat(),
+        "updated_at": datetime.datetime.now(),
     }).eq("id", delivery_id).execute()
 
     if not result.data:
@@ -441,7 +441,7 @@ async def mark_in_transit(
     """Rider marks delivery as in transit"""
     result = await supabase.table("delivery_orders").update({
         "delivery_status": DeliveryStatus.IN_TRANSIT.value,
-        "updated_at": datetime.now().isoformat(),
+        "updated_at": datetime.datetime.now(),
     }).eq("id", delivery_id).execute()
 
     if result.error:
@@ -492,7 +492,7 @@ async def mark_delivered(
     """Rider marks delivery as delivered"""
     result = await supabase.table("delivery_orders").update({
         "delivery_status": DeliveryStatus.DELIVERED.value,
-        "updated_at": datetime.now().isoformat(),
+        "updated_at": datetime.datetime.now(),
     }).eq("id", delivery_id).execute()
     
     if result.error:
