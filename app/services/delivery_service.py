@@ -160,9 +160,13 @@ async def update_delivery_status(
         delivery = await _get_delivery(tx_ref, supabase)
         delivery_id = delivery["id"]
 
-        logger.info('*************************** DELIVERY_ID ***************************')
-        logger.info(f"Delivery ID: {delivery_id}")
-        logger.info('*************************** DELIVERY_ID ***************************')
+
+        logger.info('****************************************************')
+        logger.info('delivery_id', delivery_id=delivery_id)
+        logger.info('delivery', delivery=delivery)
+        logger.info('****************************************************')
+
+       
         
         # Validate authorization
         _validate_authorization(
@@ -180,7 +184,7 @@ async def update_delivery_status(
             result = await assign_rider(delivery_id, data.rider_id, triggered_by_user_id, supabase, request)
             
         elif data.new_status == DeliveryStatus.ACCEPTED:
-            result = await accept_delivery(delivery_id, triggered_by_user_id, supabase, request)
+            result = await accept_delivery(delivery_id, triggered_by_user_id, supabase)
             
         elif data.new_status == DeliveryStatus.PICKED_UP:
             result = await pickup_delivery(delivery_id, triggered_by_user_id, supabase, request)
@@ -334,7 +338,7 @@ async def assign_rider(
     
     return {
         "status": "success",
-        "new_status": "ASSIGNED",
+        "delivery_status": "ASSIGNED",
         "tx_ref": tx_ref,
         "rider_id": rider_id,
         "dispatch_id": result_data.get("dispatch_id"),
@@ -349,24 +353,22 @@ async def accept_delivery(
     delivery_id: str,
     rider_id: str,
     supabase: AsyncClient,
-
 ) -> dict:
-    """Rider accepts delivery"""
-    result = await supabase.rpc("update_delivery_status_simple", {
-        "p_delivery_id": delivery_id,
-        "p_new_status": "ACCEPTED",
-        "p_triggered_by_user_id": rider_id,
-    }).execute()
+    """Rider accepts delivery - simple status update"""
     
-    if result.error:
-        logger.error("accept_delivery_failed", error=result.error.message)
+    result = await supabase.table("delivery_orders").update({
+        "delivery_status": "ACCEPTED",
+        "updated_at": datetime.utcnow().isoformat(),
+    }).eq("id", delivery_id).execute()
+
+    if not result.data:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=result.error.message
+            detail="Failed to update delivery status"
         )
-    
-    result_data = result.data
-    
+
+    result_data = result.data[0]
+
     await _send_delivery_notifications(
         order_number=result_data["order_number"],
         new_status=DeliveryStatus.ACCEPTED,
@@ -375,8 +377,12 @@ async def accept_delivery(
         dispatch_id=result_data.get("dispatch_id"),
         supabase=supabase,
     )
-    
-    return result_data
+
+    return {
+        "status": "success",
+        "delivery_status": "ACCEPTED",
+        "order_number": result_data["order_number"],
+    }
 
 
 # ============================================================
@@ -386,8 +392,7 @@ async def accept_delivery(
 async def pickup_delivery(
     delivery_id: str,
     rider_id: str,
-    supabase: AsyncClient,
-    request: Optional[Request] = None,
+    supabase: AsyncClient
 ) -> dict:
     """
     Rider picks up delivery.
@@ -440,15 +445,13 @@ async def mark_in_transit(
     delivery_id: str,
     rider_id: str,
     supabase: AsyncClient,
-    request: Optional[Request] = None,
 ) -> dict:
     """Rider marks delivery as in transit"""
-    result = await supabase.rpc("update_delivery_status_simple", {
-        "p_delivery_id": delivery_id,
-        "p_new_status": "IN_TRANSIT",
-        "p_triggered_by_user_id": rider_id,
-    }).execute()
-    
+    result = await supabase.table("delivery_orders").update({
+        "delivery_status": DeliveryStatus.IN_TRANSIT.value,
+        "updated_at": datetime.utcnow().isoformat(),
+    }).eq("id", delivery_id).execute()
+
     if result.error:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -459,7 +462,7 @@ async def mark_in_transit(
     
     await _send_delivery_notifications(
         order_number=result_data["order_number"],
-        new_status=DeliveryStatus.IN_TRANSIT,
+        new_status=DeliveryStatus.IN_TRANSIT.value,
         sender_id=result_data["sender_id"],
         rider_id=rider_id,
         dispatch_id=result_data.get("dispatch_id"),
@@ -478,7 +481,11 @@ async def mark_in_transit(
     #     request=request,
     # )
     
-    return result_data
+    return {
+        "status": "success",
+        "delivery_status": "IN_TRANSIT",
+        "order_number": result_data["order_number"],
+    }
 
 
 # ============================================================
@@ -489,14 +496,12 @@ async def mark_delivered(
     delivery_id: str,
     rider_id: str,
     supabase: AsyncClient,
-    request: Optional[Request] = None,
 ) -> dict:
     """Rider marks delivery as delivered"""
-    result = await supabase.rpc("update_delivery_status_simple", {
-        "p_delivery_id": delivery_id,
-        "p_new_status": "DELIVERED",
-        "p_triggered_by_user_id": rider_id,
-    }).execute()
+    result = await supabase.table("delivery_orders").update({
+        "delivery_status": DeliveryStatus.DELIVERED.value,
+        "updated_at": datetime.utcnow().isoformat(),
+    }).eq("id", delivery_id).execute()
     
     if result.error:
         raise HTTPException(
@@ -514,20 +519,12 @@ async def mark_delivered(
         dispatch_id=result_data.get("dispatch_id"),
         supabase=supabase,
     )
-    
-    # await log_audit_event(
-    #     supabase,
-    #     entity_type="DELIVERY_ORDER",
-    #     entity_id=delivery_id,
-    #     action="DELIVERED",
-    #     new_value={"status": "DELIVERED"},
-    #     actor_id=rider_id,
-    #     actor_type="USER",
-    #     notes="Delivery marked as delivered",
-    #     request=request,
-    # )
-    
-    return result_data
+        
+    return {
+        "status": "success",
+        "delivery_status": "DELIVERED",
+        "order_number": result_data["order_number"],
+    }
 
 
 # ============================================================
