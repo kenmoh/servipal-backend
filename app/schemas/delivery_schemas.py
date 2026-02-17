@@ -9,6 +9,7 @@ from enum import Enum
 class DeliveryStatus(str, Enum):
     PENDING = "PENDING"
     ACCEPTED = "ACCEPTED"
+    DECLINED = "DECLINED"
     PAID_NEEDS_RIDER = "PAID_NEEDS_RIDER"
     ASSIGNED = "ASSIGNED"
     PICKED_UP = "PICKED_UP"
@@ -21,7 +22,6 @@ class DeliveryStatus(str, Enum):
 # class DeliveryStatus(str, Enum):
 #     PENDING = "PENDING"
 #     ASSIGNED = "ASSIGNED"
-#     DECLINED = "DECLINED"
 #     PICKED_UP = "PICKED_UP"
 #     IN_TRANSIT = "IN_TRANSIT"
 #     DELIVERED = "DELIVERED"
