@@ -102,7 +102,7 @@ async def initiate_delivery_payment(
 
 @router.put("/{tx_ref}/update-delivery-status")
 async def update_delivery_status(
-    tx_ref: UUID,
+    tx_ref: str,
     data: DeliveryStatusUpdate,
     request: Request,
     current_profile: dict = Depends(get_current_profile),
