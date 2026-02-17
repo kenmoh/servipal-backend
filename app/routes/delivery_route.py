@@ -7,12 +7,7 @@ from decimal import Decimal
 
 from app.schemas.delivery_schemas import (
     PackageDeliveryCreate,
-    AssignRiderRequest,
-    AssignRiderResponse,
-    DeliveryAction,
-    DeliveryActionResponse,
-    DeliveryCancelRequest,
-    DeliveryCancelResponse,
+    DeliveryStatusUpdate,
     DeliveryType,
 )
 from app.services import delivery_service
@@ -105,10 +100,10 @@ async def initiate_delivery_payment(
 # ───────────────────────────────────────────────
 
 
-@router.put("/{delivery_id}/update-delivery-status")
+@router.put("/{tx_ref}/update-delivery-status")
 async def update_delivery_status(
-    delivery_id: UUID,
-    data: order.DeliveryStatusUpdate,
+    tx_ref: UUID,
+    data: DeliveryStatusUpdate,
     request: Request,
     current_profile: dict = Depends(get_current_profile),
     supabase=Depends(get_supabase_admin_client),
@@ -117,7 +112,7 @@ async def update_delivery_status(
     
 
     return await delivery_service.update_delivery_status(
-        delivery_id=delivery_id,
+        tx_ref=tx_ref,
         data=data,
         triggered_by_user_id=current_profile["id"],
         supabase=supabase,

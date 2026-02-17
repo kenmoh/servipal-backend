@@ -138,7 +138,7 @@ async def initiate_delivery_payment(
 # ============================================================
 
 async def update_delivery_status(
-    delivery_id: UUID,
+    tx_ref: str,
     data: DeliveryStatusUpdate,
     triggered_by_user_id: str,
     supabase: AsyncClient,
@@ -150,15 +150,15 @@ async def update_delivery_status(
     """
     logger.info(
         "update_delivery_status_called",
-        delivery_id=delivery_id,
+        tx_ref=tx_ref,
         new_status=data.new_status.value,
         triggered_by=triggered_by_user_id,
     )
     
     try:
         # Fetch delivery for validation
-        delivery = await _get_delivery(delivery_id, supabase)
-        # delivery_id = delivery["id"]
+        delivery = await _get_delivery(tx_ref, supabase)
+        delivery_id = delivery["id"]
         
         # Validate authorization
         _validate_authorization(
@@ -233,7 +233,7 @@ async def _get_delivery(tx_ref: str, supabase: AsyncClient) -> dict:
     """Fetch delivery details"""
     delivery_resp = await supabase.table("delivery_orders").select(
         "id, sender_id, delivery_status, order_number"
-    ).eq("tx_ref", tx_ref).single().execute()
+    ).eq("tx_ref", tx_ref).maybe_single().execute()
     
     if not delivery_resp.data:
         raise HTTPException(
@@ -334,7 +334,7 @@ async def accept_delivery(
     delivery_id: str,
     rider_id: str,
     supabase: AsyncClient,
-    request: Optional[Request] = None,
+
 ) -> dict:
     """Rider accepts delivery"""
     result = await supabase.rpc("update_delivery_status_simple", {
