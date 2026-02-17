@@ -353,7 +353,6 @@ async def accept_delivery(
             }
         )
         .eq("id", delivery_id)
-        .maybe_single()
         .execute()
     )
 
@@ -363,7 +362,7 @@ async def accept_delivery(
             detail="Failed to update delivery status",
         )
 
-    result_data = result.data
+    result_data = result.data[0]
 
     await _send_delivery_notifications(
         order_number=result_data["order_number"],
@@ -440,11 +439,10 @@ async def mark_in_transit(
             }
         )
         .eq("id", delivery_id)
-        .maybe_single()
         .execute()
     )
 
-    if not result.data:
+    if not result.data[0]:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Delivery order not found"
         )
@@ -485,7 +483,6 @@ async def mark_delivered(
                 "delivery_status": DeliveryStatus.DELIVERED.value,
             }
         )
-        .maybe_single()
         .eq("id", delivery_id)
         .execute()
     )
@@ -495,7 +492,7 @@ async def mark_delivered(
             status_code=status.HTTP_404_NOT_FOUND, detail="Delivery order not found"
         )
 
-    result_data = result.data
+    result_data = result.data[0]
 
     await _send_delivery_notifications(
         order_number=result_data["order_number"],
