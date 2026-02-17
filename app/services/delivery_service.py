@@ -215,7 +215,7 @@ async def update_delivery_status(
     except Exception as e:
         logger.error(
             "update_delivery_status_failed",
-            delivery_id=delivery_id,
+            tx_ref=tx_ref,
             error=str(e),
             exc_info=True,
         )
@@ -344,6 +344,7 @@ async def accept_delivery(
     }).execute()
     
     if result.error:
+        logger.error("accept_delivery_failed", error=result.error.message)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=result.error.message
@@ -359,18 +360,6 @@ async def accept_delivery(
         dispatch_id=result_data.get("dispatch_id"),
         supabase=supabase,
     )
-    
-    # await log_audit_event(
-    #     supabase,
-    #     entity_type="DELIVERY_ORDER",
-    #     entity_id=delivery_id,
-    #     action="ACCEPTED",
-    #     new_value={"status": "ACCEPTED"},
-    #     actor_id=rider_id,
-    #     actor_type="USER",
-    #     notes="Rider accepted delivery",
-    #     request=request,
-    # )
     
     return result_data
 
