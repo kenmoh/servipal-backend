@@ -1,9 +1,10 @@
-from pydantic import BaseModel, EmailStr, Field, UUID4
+from pydantic import BaseModel, EmailStr, Field, UUID4, field_validator
 from typing import Optional, Literal
 from datetime import datetime
 from uuid import UUID
 from decimal import Decimal
 from enum import Enum
+import re
 
 
 class UserType(str, Enum):
@@ -20,17 +21,31 @@ class UserType(str, Enum):
 # Signup
 class UserCreate(BaseModel):
     email: Optional[EmailStr] = None
-    phone: str = Field(..., pattern=r"^\+\d{10,15}$")  # E.164 format
+    phone: str = Field(..., pattern=r"^\+234\d{10,15}$")
     password: str = Field(..., min_length=8)
     user_type: Literal["CUSTOMER", "DISPATCH", "RESTAURANT_VENDOR", "LAUNDRY_VENDOR"]
+
+    @field_validator("phone")
+    @classmethod
+    def validate_phone_format(cls, v: str) -> str:
+        if not re.match(r"^\+234\d{10,15}$", v):
+            raise ValueError("Phone number must start with '+234' followed by 10-15 digits (e.g., +2348012345678)")
+        return v
 
 
 class RiderCreateByDispatch(BaseModel):
     email: EmailStr
     full_name: str
-    phone: str = Field(..., pattern=r"^\+\d{10,15}$")
+    phone: str = Field(..., pattern=r"^\+234\d{10,15}$")
     password: str = Field(..., min_length=8)
-    bike_number: Optional[str] = None
+    bike_number: str
+
+    @field_validator("phone")
+    @classmethod
+    def validate_phone_format(cls, v: str) -> str:
+        if not re.match(r"^\+234\d{10,15}$", v):
+            raise ValueError("Phone number must start with '+234' followed by 10-15 digits (e.g., +2348012345678)")
+        return v
 
 
 # Login
