@@ -133,7 +133,7 @@ async def update_delivery_status(
         "update_delivery_status_called",
         tx_ref=tx_ref,
         new_status=data.new_status.value,
-        triggered_by=triggered_by_user_id,
+        triggered_by=f'{triggered_by_user_id}',
     )
 
     try:
@@ -195,7 +195,7 @@ async def update_delivery_status(
 
         logger.info(
             "update_delivery_status_success",
-            delivery_id=delivery_id,
+            delivery_id=f'{delivery_id}',
             new_status=data.new_status.value,
         )
 
