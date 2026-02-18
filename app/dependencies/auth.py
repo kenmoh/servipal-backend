@@ -5,6 +5,15 @@ from app.database.supabase import get_supabase_client
 from app.schemas.user_schemas import UserType
 from supabase import AsyncClient
 from app.config.logging import logger
+from pydantic import BaseModel, EmailStr
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class ResetPasswordRequest(BaseModel):
+    access_token: str  
+    new_password: str
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/token")
 
@@ -146,3 +155,96 @@ def is_admin_user(current_profile: dict = Depends(get_current_profile)) -> bool:
         UserType.SUPER_ADMIN.value,
         UserType.MODERATOR.value,
     ]
+
+
+
+
+# ============================================================
+# REQUEST PASSWORD RESET (Send email)
+# ============================================================
+async def forgot_password(
+    data: ForgotPasswordRequest,
+    supabase: AsyncClient,
+):
+    """
+    Sends password reset email to user.
+    """
+    try:
+        # Supabase handles email sending automatically
+        result = await supabase.auth.reset_password_email(
+            email=data.email,
+            options={
+                "redirect_to": "servipal://reset-password"  # Deep link to servipal
+            }
+        )
+
+        logger.info(
+            "password_reset_email_sent",
+            email=data.email,
+        )
+
+        return {
+            "status": "success",
+            "message": "If an account exists with this email, you will receive a password reset link."
+        }
+
+    except Exception as e:
+        logger.error(
+            "forgot_password_error",
+            email=data.email,
+            error=str(e),
+            exc_info=True,
+        )
+        # Don't reveal if email exists or not (security)
+        return {
+            "status": "success",
+            "message": "If an account exists with this email, you will receive a password reset link."
+        }
+
+
+# ============================================================
+# 2. RESET PASSWORD (Update with new password)
+# ============================================================
+async def reset_password(
+    data: ResetPasswordRequest,
+    supabase: AsyncClient,
+):
+    """
+    Updates user password using access token from reset link.
+    """
+    try:
+        # Set session with the access token from email link
+        await supabase.auth.set_session(data.access_token, "")  
+
+        # Update password
+        result = await supabase.auth.update_user({
+            "password": data.new_password
+        })
+
+        if not result.user:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid or expired reset token"
+            )
+
+        logger.info(
+            "password_reset_success",
+            user_id=result.user.id,
+        )
+
+        return {
+            "status": "success",
+            "message": "Password updated successfully"
+        }
+
+    except Exception as e:
+        logger.error(
+            "reset_password_error",
+            error=str(e),
+            exc_info=True,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Failed to reset password. Link may be invalid or expired."
+        )
+

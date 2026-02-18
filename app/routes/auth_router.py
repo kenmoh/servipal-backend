@@ -1,9 +1,11 @@
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
 from app.services import user_service
 from app.schemas.user_schemas import UserCreate, LoginRequest, TokenResponse
 from app.database.supabase import get_supabase_client, get_supabase_admin_client
 from app.config.logging import logger
+from app.dependencies import auth
+from supabase import AsyncClient
 
 router = APIRouter(prefix="/api/v1/auth", tags=["Authentication"])
 
@@ -56,3 +58,19 @@ async def login_for_access_token(
     logger.info("token_endpoint_called", username=form_data.username)
     login_data = LoginRequest(email=form_data.username, password=form_data.password)
     return await user_service.login_user(login_data, supabase, request)
+
+
+@router.post("/forgot-password", status_code=status.HTTP_200_OK, include_in_schema=False)
+async def forgot_password(
+    data: auth.ForgotPasswordRequest,
+    supabase: AsyncClient = Depends(get_supabase_client),
+):
+    return await auth.forgot_password(data, supabase)
+
+
+@router.post("/reset-password", status_code=status.HTTP_200_OK, include_in_schema=False)
+async def reset_password(
+    data: auth.ResetPasswordRequest,
+    supabase: AsyncClient = Depends(get_supabase_client),
+):
+    return await auth.reset_password(data, supabase)
