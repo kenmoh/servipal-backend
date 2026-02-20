@@ -373,6 +373,7 @@ async def create_laundry_item_with_images(
 # ───────────────────────────────────────────────
 async def initiate_laundry_payment(
     data: LaundryOrderCreate,
+    customer_id: UUID,
     customer_info: dict,
     supabase: AsyncClient,
 ) -> dict:
@@ -435,7 +436,7 @@ async def initiate_laundry_payment(
 
         # Save pending in Redis
         pending_data = {
-            "customer_id":f'{customer_info.get("id")}',
+            "customer_id": str(customer_id),
             "vendor_id": str(data.vendor_id),
             "items": [item.model_dump() for item in data.items],
             "subtotal": str(subtotal),
