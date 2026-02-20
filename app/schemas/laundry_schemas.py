@@ -147,11 +147,10 @@ class LaundryOrderItem(BaseModel):
 class LaundryOrderCreate(BaseModel):
     vendor_id: UUID = Field(..., description="ID of the laundry vendor")
     items: List[LaundryOrderItem] = Field(description="List of laundry items to order")
-    additional_info: Optional[str]
     delivery_option: Literal["PICKUP", "VENDOR_DELIVERY"] = Field(
         ..., description="Pickup at shop or vendor delivers"
     )
     instructions: Optional[str] = Field(
         None, description="Special instructions for washing"
     )
-    delivery_address: Optional[str]
+    delivery_address: Optional[str] = None

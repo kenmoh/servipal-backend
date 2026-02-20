@@ -443,7 +443,7 @@ async def initiate_laundry_payment(
             "delivery_fee": str(delivery_fee),
             "grand_total": str(grand_total),
             "delivery_option": data.delivery_option,
-            "additional_info": data.additional_info,
+            "additional_info": data.instructions,
             "delivery_address": data.delivery_address,
             "tx_ref": tx_ref,
             
