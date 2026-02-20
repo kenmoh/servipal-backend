@@ -255,6 +255,7 @@ async def process_successful_delivery_payment(
                 "p_escrow_balance_change": "0",
             },
         ).execute()
+        
 
         logger.info(
             "sender_wallet_credited", sender_id=sender_id, amount=str(delivery_fee)
@@ -557,7 +558,6 @@ async def process_successful_food_payment(
             data={"order_id": str(order_id), "type": "FOOD_PAYMENT"},
             supabase=supabase,
         )
-
         # Audit log
         await log_audit_event(
             supabase,
@@ -1152,7 +1152,7 @@ async def process_successful_product_payment(
                     "delivery_address": pending["delivery_address"],
                     "additional_info": pending["additional_info"],
                     "order_status": "PENDING",
-                    "payment_status": "PAID",
+                    "payment_status": "SUCCESS",
                     "escrow_status": "HELD",
                     "order_type": "PRODUCT",
                 }
@@ -1267,6 +1267,7 @@ async def process_successful_laundry_payment(
                 "p_paid_amount": str(paid_amount),
                 "p_customer_id": pending["customer_id"],
                 "p_vendor_id": pending["vendor_id"],
+                "p_order_data": pending["items"],
                 "p_subtotal": str(Decimal(pending["subtotal"])),
                 "p_delivery_fee": str(Decimal(pending.get("delivery_fee", 0))),
                 "p_grand_total": str(Decimal(pending["grand_total"])),
