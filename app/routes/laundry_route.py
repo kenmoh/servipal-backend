@@ -104,7 +104,7 @@ async def vendor_laundry_order_action_endpoint(
         VendorOrderActionResponse: Action result.
     """
     return await laundry_service.vendor_laundry_order_action(
-        order_id, data, current_profile["id"], supabase
+        order_id, data, current_profile, supabase
     )
 
 

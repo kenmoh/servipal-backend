@@ -373,7 +373,6 @@ async def create_laundry_item_with_images(
 # ───────────────────────────────────────────────
 async def initiate_laundry_payment(
     data: LaundryOrderCreate,
-    customer_id: UUID,
     customer_info: dict,
     supabase: AsyncClient,
 ) -> dict:
@@ -386,7 +385,7 @@ async def initiate_laundry_payment(
         vendor = (
             await supabase.table("profiles")
             .select(
-                "id, company_name, can_pickup_and_dropoff, pickup_and_delivery_charge"
+                "id, business_name, can_pickup_and_dropoff, pickup_and_delivery_charge"
             )
             .eq("id", str(data.vendor_id))
             .eq("user_type", "LAUNDRY_VENDOR")
@@ -398,6 +397,7 @@ async def initiate_laundry_payment(
             raise HTTPException(404, "Laundry vendor not found")
 
         vendor = vendor.data
+        can_pickup = vendor["can_pickup_and_dropoff"]
 
         # Validate items & calculate subtotal
         item_ids = [str(item.item_id) for item in data.items]
@@ -421,7 +421,7 @@ async def initiate_laundry_payment(
         # Delivery fee
         delivery_fee = Decimal("0")
         if data.delivery_option == "VENDOR_DELIVERY":
-            if not vendor["can_pickup_and_dropoff"]:
+            if not can_pickup:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="Vendor does not offer delivery",
@@ -435,17 +435,17 @@ async def initiate_laundry_payment(
 
         # Save pending in Redis
         pending_data = {
-            "customer_id": str(customer_id),
+            "customer_id":f'{customer_info.get("id")}',
             "vendor_id": str(data.vendor_id),
             "items": [item.model_dump() for item in data.items],
-            "subtotal": float(subtotal),
-            "delivery_fee": float(delivery_fee),
-            "grand_total": float(grand_total),
+            "subtotal": str(subtotal),
+            "delivery_fee": str(delivery_fee),
+            "grand_total": str(grand_total),
             "delivery_option": data.delivery_option,
             "washing_instructions": data.washing_instructions,
             "delivery_address": data.delivery_address,
             "tx_ref": tx_ref,
-            "created_at": datetime.now().isoformat(),
+            
         }
         await save_pending(f"pending_laundry_{tx_ref}", pending_data, expire=1800)
 
@@ -455,7 +455,11 @@ async def initiate_laundry_payment(
             amount=Decimal(str(grand_total)),
             public_key=settings.FLUTTERWAVE_PUBLIC_KEY,
             currency="NGN",
-            customer=PaymentCustomerInfo(**customer_info),
+            customer=PaymentCustomerInfo(
+                email=customer_info.get("email"),
+                phone_number=customer_info.get("phone_number"),
+                full_name=customer_info.get("full_name") or "N/A",
+            ),
             customization=PaymentCustomization(
                 title="Servipal Delivery",
                 description=f"From {data.pickup_location} to {data.destination} ({data.distance} km)",
