@@ -463,7 +463,7 @@ async def initiate_laundry_payment(
             ),
             customization=PaymentCustomization(
                 title="Servipal Delivery",
-                description=f"From {data.pickup_location} to {data.destination} ({data.distance} km)",
+                description=f"{vendor['business_name']} - Laundry Order",
                 logo="https://mohdelivery.s3.us-east-1.amazonaws.com/favion/favicon.ico",
             ),
             message="Ready for payment",
