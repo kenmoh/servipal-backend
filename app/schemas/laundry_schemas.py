@@ -140,7 +140,6 @@ class LaundryOrderItem(BaseModel):
     name: str
     price: Decimal
     item_id: UUID = Field(..., description="ID of the laundry item")
-    additional_info: Optional[str]
     quantity: int = Field(..., gt=0, description="Number of units (e.g., shirts, kg)")
     images: List[str]
 
@@ -148,6 +147,7 @@ class LaundryOrderItem(BaseModel):
 class LaundryOrderCreate(BaseModel):
     vendor_id: UUID = Field(..., description="ID of the laundry vendor")
     items: List[LaundryOrderItem] = Field(description="List of laundry items to order")
+    additional_info: Optional[str]
     delivery_option: Literal["PICKUP", "VENDOR_DELIVERY"] = Field(
         ..., description="Pickup at shop or vendor delivers"
     )
