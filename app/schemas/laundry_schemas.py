@@ -140,6 +140,7 @@ class LaundryOrderItem(BaseModel):
     name: str
     price: Decimal
     item_id: UUID = Field(..., description="ID of the laundry item")
+    additional_info: Optional[str]
     quantity: int = Field(..., gt=0, description="Number of units (e.g., shirts, kg)")
     images: List[str]
 
