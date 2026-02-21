@@ -637,7 +637,7 @@ async def process_successful_topup_payment(
             {
                 "p_tx_ref": tx_ref,
                 "p_flw_ref": flw_ref,
-                "p_paid_amount": float(paid_rounded),
+                "p_paid_amount": str(paid_rounded),
                 "p_user_id": user_id,
             },
         ).execute()
@@ -672,8 +672,8 @@ async def process_successful_topup_payment(
             entity_type="WALLET",
             entity_id=user_id,
             action="TOP_UP",
-            old_value={"balance": float(result_data["old_balance"])},
-            new_value={"balance": float(result_data["new_balance"])},
+            old_value={"balance": str(result_data["old_balance"])},
+            new_value={"balance": str(result_data["new_balance"])},
             change_amount=Decimal(str(paid_rounded)),
             actor_id=user_id,
             actor_type="USER",
@@ -699,141 +699,6 @@ async def process_successful_topup_payment(
             exc_info=True,
         )
         raise
-
-
-# async def process_successful_topup_payment(
-#     tx_ref: str,
-#     paid_amount: float,
-#     flw_ref: str,
-#     supabase: AsyncClient,
-#     request: Optional[Request] = None,
-# ):
-#     logger.info("processing_topup_payment", tx_ref=tx_ref, paid_amount=paid_amount)
-
-#     verified = await verify_transaction_tx_ref(tx_ref)
-#     if not verified or verified.get("status") != "success":
-#         logger.error(event="delivery_payment_verification_failed", tx_ref=tx_ref)
-#         return
-#     pending_key = f"pending_topup_{tx_ref}"
-#     pending = await get_pending(pending_key)
-
-#     if not pending:
-#         logger.warning(event="topup_payment_pending_not_found", tx_ref=tx_ref)
-#         return  # already processed
-
-#     expected_amount = pending["amount"]
-#     user_id = pending["user_id"]
-
-#     expected_rounded = Decimal(str(expected_amount)).quantize(Decimal("0.00"))
-#     paid_rounded = Decimal(str(paid_amount)).quantize(Decimal("0.00"))
-
-#     if paid_rounded != expected_rounded:
-#         logger.warning(
-#             event="topup_payment_amount_mismatch",
-#             tx_ref=tx_ref,
-#             expected=expected_rounded,
-#             paid=paid_rounded,
-#         )
-#         await delete_pending(pending_key)
-#         return
-
-#     try:
-#         # Get current balance for audit
-#         wallet_resp = (
-#             await supabase.table("wallets")
-#             .select("balance")
-#             .eq("user_id", user_id)
-#             .single()
-#             .execute()
-#         )
-
-#         old_balance = (
-#             Decimal(str(wallet_resp.data["balance"]))
-#             if wallet_resp.data
-#             else Decimal("0")
-#         )
-
-#         # Add funds to wallet balance (atomic RPC)
-#         await supabase.rpc(
-#             "update_user_wallet",
-#             {
-#                 "p_user_id": user_id,
-#                 "p_balance_change": paid_amount,
-#                 "p_escrow_balance_change": "0",
-#             },
-#         ).execute()
-
-#         # Get new balance
-#         wallet_resp_after = (
-#             await supabase.table("wallets")
-#             .select("balance")
-#             .eq("user_id", user_id)
-#             .single()
-#             .execute()
-#         )
-
-#         new_balance = Decimal(str(wallet_resp_after.data["balance"]))
-
-#         # Record transaction
-#         await (
-#             supabase.table("transactions")
-#             .insert(
-#                 {
-#                     "tx_ref": tx_ref,
-#                     "amount": paid_amount,
-#                     "from_user_id": user_id,
-#                     "to_user_id": user_id,
-#                     "wallet_id": user_id,
-#                     "transaction_type": "DEPOSIT",
-#                     "payment_method": "FLUTTERWAVE",
-#                     "order_type": "DEPOSIT",
-#                     "details": {"flw_ref": flw_ref, "label": "CREDIT"},
-#                 }
-#             )
-#             .execute()
-#         )
-
-#         # Audit log
-#         await log_audit_event(
-#             supabase,
-#             entity_type="WALLET",
-#             entity_id=user_id,
-#             action="TOP_UP",
-#             old_value={"balance": float(old_balance)},
-#             new_value={"balance": float(new_balance)},
-#             change_amount=Decimal(str(paid_amount)),
-#             actor_id=user_id,
-#             actor_type="USER",
-#             notes=f"Top-up of {paid_amount} via Flutterwave",
-#             request=request,
-#         )
-
-#         # Notify rider on success
-#         await notify_user(
-#             user_id=user_id,
-#             title="Wallet Top up",
-#             body=f"Wallet top up successful",
-#             data={"user_id": str(user_id), "type": "WALLET TOP UP"},
-#             supabase=supabase,
-#         )
-
-#         await delete_pending(pending_key)
-#         logger.info(
-#             "topup_payment_processed_success",
-#             tx_ref=tx_ref,
-#             user_id=user_id,
-#             amount=paid_amount,
-#         )
-
-#     except Exception as e:
-#         logger.error(
-#             event="topup_payment_processing_error",
-#             tx_ref=tx_ref,
-#             error=str(e),
-#             exc_info=True,
-#         )
-#         await delete_pending(pending_key)
-#         raise
 
 
 # ───────────────────────────────────────────────

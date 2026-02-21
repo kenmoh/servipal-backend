@@ -149,7 +149,6 @@ async def initiate_wallet_top_up(
         "user_id": str(user_id),
         "amount": str(data.amount),
         "tx_ref": tx_ref,
-        "created_at": datetime.datetime.now().isoformat(),
     }
     await save_pending(f"pending_topup_{tx_ref}", pending_data, expire=1800)
 
@@ -172,113 +171,6 @@ async def initiate_wallet_top_up(
         message="Ready for payment",
     ).model_dump()
 
-
-# MAX_WALLET_LIMIT = Decimal("50000.00")
-
-
-# async def initiate_wallet_top_up(
-#     data: TopUpRequest,
-#     user_id: UUID,
-#     supabase: AsyncClient,
-# ) -> WalletTopUpInitiationResponse:
-#     logger.info(
-#         "wallet_topup_initiated", user_id=str(user_id), amount=float(data.amount)
-#     )
-#     """
-#     Initiate wallet top-up via Flutterwave RN SDK.
-#     Enforces max wallet balance of ₦50,000.
-#     """
-#     try:
-#         # Minimum amount validation
-#         if data.amount < Decimal("1000"):
-#             raise HTTPException(
-#                 status_code=status.HTTP_400_BAD_REQUEST,
-#                 detail="Minimum top-up amount is ₦1000",
-#             )
-
-#         # Get current wallet balance
-#         wallet = (
-#             await supabase.table("wallets")
-#             .select("balance")
-#             .eq("user_id", str(user_id))
-#             .single()
-#             .execute()
-#         )
-
-#         if not wallet.data:
-#             raise HTTPException(
-#                 status_code=status.HTTP_404_NOT_FOUND, detail="Wallet not found"
-#             )
-
-#         current_balance = Decimal(str(wallet.data["balance"]))
-
-#         # Check max limit
-#         new_balance = current_balance + data.amount
-#         if new_balance > MAX_WALLET_LIMIT:
-#             raise HTTPException(
-#                 status_code=status.HTTP_400_BAD_REQUEST,
-#                 detail=f"Top-up would exceed the maximum wallet balance of ₦{MAX_WALLET_LIMIT:,.2f}. "
-#                 f"Current balance: ₦{current_balance:,.2f}. "
-#                 f"Maximum you can top up now: ₦{(MAX_WALLET_LIMIT - current_balance):,.2f}",
-#             )
-
-#         # Generate unique tx_ref
-#         tx_ref = f"TOPUP-{uuid.uuid4().hex[:12].upper()}"
-
-#         # Save pending state in Redis
-#         pending_data = {
-#             "user_id": str(user_id),
-#             "amount": float(data.amount),
-#             "tx_ref": tx_ref,
-#             "payment_method": data.payment_method,
-#             "created_at": datetime.now().isoformat(),
-#         }
-#         await save_pending(f"pending_topup_{tx_ref}", pending_data, expire=1800)
-
-#         # Get real customer info
-#         customer_info = await get_customer_contact_info()
-
-#         # Return SDK-ready data
-#         result = WalletTopUpInitiationResponse(
-#             tx_ref=tx_ref,
-#             amount=float(data.amount),
-#             public_key=settings.FLUTTERWAVE_PUBLIC_KEY,
-#             currency="NGN",
-#             customer=CustomerInfo(
-#                 email=customer_info["email"], name=customer_info["phone"]
-#             ),
-#             customization=Customization(
-#                 title="Servipal Wallet Top-up",
-#                 description=f"Top up ₦{data.amount:,.2f} to your wallet",
-#             ),
-#         )
-
-#         logger.info(
-#             "wallet_topup_initiation_success",
-#             user_id=str(user_id),
-#             tx_ref=tx_ref,
-#             amount=float(data.amount),
-#         )
-#         return result
-
-#     except HTTPException as he:
-#         logger.error(
-#             "wallet_topup_initiation_failed",
-#             user_id=str(user_id),
-#             error=str(he.detail),
-#             exc_info=True,
-#         )
-#         raise he
-#     except Exception as e:
-#         logger.error(
-#             "wallet_topup_initiation_error",
-#             user_id=str(user_id),
-#             error=str(e),
-#             exc_info=True,
-#         )
-#         raise HTTPException(
-#             status.HTTP_500_INTERNAL_SERVER_ERROR, f"Top-up initiation failed: {str(e)}"
-#         )
 
 
 # ───────────────────────────────────────────────
