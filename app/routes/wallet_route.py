@@ -32,7 +32,7 @@ async def get_my_wallet_details(
     return await wallet_service.get_wallet_details(current_profile["id"], supabase)
 
 
-@router.post("/top-up")
+@router.post("/initiate-wallet-topup", response_model=WalletTopUpInitiationResponse)
 async def top_up_my_wallet(
     data: TopUpRequest,
     current_profile: dict = Depends(get_current_profile),
