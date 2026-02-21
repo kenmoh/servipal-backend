@@ -697,6 +697,7 @@ async def initiate_food_payment(
             "delivery_fee": str(Decimal(delivery_fee)),
             "grand_total": str(Decimal(grand_total)),
             "delivery_option": data.delivery_option,
+            "delivery_address": data.delivery_address,
             "additional_info": data.instructions,
             "tx_ref": tx_ref,
             "name": current_profile.get("phone_number"),
