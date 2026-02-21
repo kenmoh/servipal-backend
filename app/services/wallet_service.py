@@ -14,9 +14,6 @@ from app.schemas.wallet_schema import (
     WalletTransactionResponse,
     TopUpRequest,
     PayWithWalletRequest,
-    WalletTopUpInitiationResponse,
-    CustomerInfo,
-    Customization,
     PayWithWalletResponse,
     WithdrawalCreate,
     WithdrawalResponse,
@@ -25,7 +22,6 @@ from app.schemas.wallet_schema import (
 from app.config.config import settings
 from app.utils.redis_utils import save_pending
 from app.config.logging import logger
-from app.dependencies.auth import get_customer_contact_info
 from fastapi import HTTPException, status
 from uuid import UUID
 from decimal import Decimal
@@ -34,6 +30,7 @@ from app.utils.audit import log_audit_event
 from app.config.logging import logger
 from supabase import AsyncClient
 from app.schemas.wallet_schema import WithdrawResponse
+from app.schemas.common import PaymentInitializationResponse, PaymentCustomerInfo, PaymentCustomization
 
 
 # ───────────────────────────────────────────────
@@ -106,7 +103,7 @@ async def get_wallet_details(
 
 async def initiate_wallet_top_up(
     data: TopUpRequest,
-    user_id: UUID,
+    user_id: str,
     supabase: AsyncClient,
     customer_info: dict,
 ) -> dict:
@@ -141,7 +138,7 @@ async def initiate_wallet_top_up(
         max_topup_allowed = MAX_BALANCE - current_balance
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Top-up of ₦{amount:,.2f} would exceed wallet limit. Current balance: ₦{current_balance:,.2f}. Maximum top-up allowed: ₦{max_topup_allowed:,.2f}.",
+            detail=f"Top-up of ₦{data.amount:,.2f} would exceed wallet limit. Current balance: ₦{current_balance:,.2f}. Maximum top-up allowed: ₦{max_topup_allowed:,.2f}.",
         )
 
     # Generate tx_ref
@@ -150,7 +147,7 @@ async def initiate_wallet_top_up(
     # Save to Redis
     pending_data = {
         "user_id": str(user_id),
-        "amount": str(amount),
+        "amount": str(data.amount),
         "tx_ref": tx_ref,
         "created_at": datetime.datetime.now().isoformat(),
     }
@@ -159,7 +156,7 @@ async def initiate_wallet_top_up(
     # Return for Flutterwave
     return PaymentInitializationResponse(
         tx_ref=tx_ref,
-        amount=amount,
+        amount=data.amount,
         public_key=settings.FLUTTERWAVE_PUBLIC_KEY,
         currency="NGN",
         customer=PaymentCustomerInfo(
@@ -169,7 +166,7 @@ async def initiate_wallet_top_up(
         ),
         customization=PaymentCustomization(
             title="Wallet Top-up",
-            description=f"Add ₦{amount:,.2f} to your wallet",
+            description=f"Add ₦{data.amount:,.2f} to your wallet",
             logo="https://mohdelivery.s3.us-east-1.amazonaws.com/favion/favicon.ico",
         ),
         message="Ready for payment",

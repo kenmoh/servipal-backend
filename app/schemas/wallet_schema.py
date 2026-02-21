@@ -33,7 +33,6 @@ class TopUpRequest(BaseModel):
     amount: Decimal = Field(
         ..., description="Amount to be charged (in NGN)", min=1000, max=25_000
     )
-    payment_method: str = "FLUTTERWAVE"
 
 
 class PayWithWalletRequest(BaseModel):
