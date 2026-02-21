@@ -249,7 +249,7 @@ async def delete_laundry_item_endpoint(
 
 @router.put("/{order_id}/update-laundry-order-status", include_in_schema=False)
 async def update_laundry_order_status(
-    order_id: UUID,
+    order_id: str,
     data: OrderStatusUpdate,
     current_profile: dict = Depends(get_current_profile),
     supabase: AsyncClient = Depends(get_supabase_admin_client),
@@ -260,7 +260,7 @@ async def update_laundry_order_status(
         order_id=order_id,
         entity_type="LAUNDRY_ORDER",
         data=data,
-        triggered_by_user_id=current_profile["id"],
+        triggered_by_user_id=f'{current_profile["id"]}',
         supabase=supabase,
         request=request,
     )
