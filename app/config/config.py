@@ -22,6 +22,10 @@ class Settings(BaseSettings):
     # LOGFIRE
     LOGFIRE_TOKEN: Optional[str] = None
 
+    # Internal API keys (for secure communication between services)
+    INTERNAL_API_KEY: Optional[str] = None
+    INTERNAL_API_KEY_HEADER: str = "X-Internal-API-Key"
+
     # FLUTTERWAVE
     FLW_PUBLIC_KEY: Optional[str] = None
     FLW_SECRET_KEY: Optional[str] = None

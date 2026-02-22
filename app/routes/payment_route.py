@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Request, HTTPException, Depends, status
+from fastapi import APIRouter, Request, HTTPException, Depends, status, Header
 from supabase import AsyncClient
 from app.services.payment_service import (
     process_successful_delivery_payment,
@@ -9,11 +9,12 @@ from app.services.payment_service import (
 )
 from app.config.config import settings
 from app.config.logging import logger
-from app.database.supabase import get_supabase_client
+from app.database.supabase import get_supabase_client, get_supabase_admin_client
 from app.worker import enqueue_job
 from rq import Retry
 from pydantic import BaseModel
 import hmac
+from app.common import order
 
 
 class PaymentWebhookResponse(BaseModel):
@@ -165,3 +166,12 @@ async def flutterwave_webhook(
     return PaymentWebhookResponse(
         status="queued_with_retry", trx_ref=tx_ref, message="Payment processing queued"
     )
+
+
+@router.post("/process-successful-order", status_code=status.HTTP_200_OK)
+async def process_successful_order_payment(
+    data: order.ProcessPaymentRequest,
+    x_internal_key: str = Header(...),
+    supabase: AsyncClient = Depends(get_supabase_client),
+):
+    return await order.process_payment(data, x_internal_key, supabase)

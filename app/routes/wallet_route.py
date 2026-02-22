@@ -11,7 +11,7 @@ from app.services import wallet_service
 from app.dependencies.auth import get_current_profile
 import hmac
 from app.routes.payment_route import PaymentWebhookResponse
-from app.database.supabase import get_supabase_client
+from app.database.supabase import get_supabase_client, get_supabase_admin_client
 from supabase import AsyncClient
 from app.config.logging import logger
 from app.config.config import settings
@@ -192,6 +192,23 @@ async def pay_with_wallet(
         payment_method="WALLET",
         retry=Retry(max=5, interval=[30, 60, 120, 300, 600]),
     )
+
+    message = {
+        'tx_ref': str(tx_ref),
+        'paid_amount': paid_amount,
+        'flw_ref': f"WALLET-{tx_ref}",
+        'payment_method': "WALLET",
+    }
+    # Supabase Que
+    await supabase.schema("pgmq_public").rpc(
+        'send',
+         {
+            "queue_name": "payment_queue",
+            "message": message,
+            "sleep_seconds": 30,
+        }
+
+    ).execute()
 
     logger.info(
         event="wallet_payment_queued",

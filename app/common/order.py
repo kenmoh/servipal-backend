@@ -8,6 +8,17 @@ from app.config.logging import logger
 from app.utils.audit import log_audit_event
 from pydantic import BaseModel
 from app.services.notification_service import notify_user
+from app.config.config import settings
+from postgrest.exceptions import APIError
+from app.services.payment_service import process_successful_delivery_payment, process_successful_food_payment, process_successful_topup_payment, process_successful_laundry_payment, process_successful_product_payment
+
+HANDLER_MAP = {
+    "FOOD-": process_successful_food_payment,
+    "PRODUCT-": process_successful_product_payment,
+    "LAUNDRY-": process_successful_laundry_payment,
+    "DELIVERY-": process_successful_delivery_payment,
+    "TOPUP-": process_successful_topup_payment,
+}
 
 
 class OrderStatus(str, Enum):
@@ -27,11 +38,74 @@ class TransactionType(str, Enum):
     ESCROW_HOLD = "ESCROW_HOLD"
     REFUNDED = "REFUNDED"
 
+class ProcessPaymentRequest(BaseModel):
+    tx_ref: str
+    paid_amount: float
+    flw_ref: str
+    payment_method: str  # 'CARD' or 'WALLET'
+
 
 class OrderStatusUpdate(BaseModel):
     status: str | None = "success"
     new_status: OrderStatus
     cancel_reason: Optional[str] = None
+
+
+async def process_payment(
+    data: ProcessPaymentRequest,
+    x_internal_key: str,
+    supabase: AsyncClient ,
+):
+    # 1. Verify internal key — only Edge Function can call this
+    if x_internal_key != settings.INTERNAL_API_KEY:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Unauthorized",
+        )
+
+    # 2. Find handler from tx_ref prefix
+    handler = next(
+        (h for prefix, h in HANDLER_MAP.items() if data.tx_ref.startswith(prefix)),
+        None
+    )
+
+    if not handler:
+        logger.warning("unknown_tx_ref_prefix", tx_ref=data.tx_ref)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unknown tx_ref prefix: {data.tx_ref}",
+        )
+
+    # 3. Run the handler
+    try:
+        await handler(
+            tx_ref=data.tx_ref,
+            paid_amount=data.paid_amount,
+            flw_ref=data.flw_ref,
+            payment_method=data.payment_method,
+            supabase=supabase,
+        )
+
+        logger.info(
+            "payment_processed",
+            tx_ref=data.tx_ref,
+            handler=handler.__name__,
+        )
+
+        return {"status": "success", "tx_ref": data.tx_ref}
+
+    except APIError as e:
+        logger.error(
+            "payment_processing_failed",
+            tx_ref=data.tx_ref,
+            error=str(e),
+            exc_info=True,
+        )
+        # Return 500 so Edge Function leaves message in queue for retry
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail='Something went wrong while processing the payment. Please try again.',
+        )
 
 
 async def update_order_status(
