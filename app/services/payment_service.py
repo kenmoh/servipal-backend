@@ -151,7 +151,6 @@ async def process_successful_delivery_payment(
         await supabase.table("wallet_payment")
         .select("id, status, amount")
         .eq("tx_ref", tx_ref)
-        .limit(1)
         .execute()
     )
 
