@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, Request, status, HTTPException
+from fastapi.responses import RedirectResponse
 from uuid import UUID
 from app.schemas.wallet_schema import (
     WalletBalanceResponse,
@@ -103,7 +104,6 @@ async def pay_with_wallet_webhook(
         await supabase.table("wallet_payment")
         .select("id, status")
         .eq("tx_ref", data.tx_ref)
-        .eq("order_id", data.order_id)
         .single()
         .execute()
     )
@@ -126,7 +126,7 @@ async def pay_with_wallet_webhook(
                     "tx_ref": data.tx_ref,
                     "amount": data.amount,
                     "status": "success",
-                    "order_id": data.order_id,
+                 
                 }
             )
             .execute()
@@ -136,7 +136,7 @@ async def pay_with_wallet_webhook(
             "wallet_payment_db_insert_error",
             error=str(e),
             tx_ref=data.tx_ref,
-            order_id=data.order_id,
+            amount=data.amount,
         )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -187,7 +187,8 @@ async def pay_with_wallet_webhook(
         handler,
         tx_ref=str(tx_ref),
         paid_amount=paid_amount,
-        wlt_ref=f"{tx_ref}",
+        flw_ref=f"WALLET-{tx_ref}",
+        payment_method="WALLET",
         retry=Retry(max=5, interval=[30, 60, 120, 300, 600]),
     )
 
@@ -198,10 +199,9 @@ async def pay_with_wallet_webhook(
         job_id=job_id,
         handler=handler.__name__,
     )
-    return PaymentWebhookResponse(
-        status="queued_with_retry",
-        trx_ref=tx_ref,
-        message="Wallet payment processing queued",
+    return RedirectResponse(
+        url=f"{settings.FRONTEND_URL}/payment/status?status=success&tx_ref={tx_ref}",
+        status_code=status.HTTP_302_FOUND,
     )
 
 

@@ -149,6 +149,7 @@ async def flutterwave_webhook(
     job_id = enqueue_job(
         handler,
         tx_ref=str(tx_ref),
+        payment_method='CARD',
         paid_amount=paid_amount,
         flw_ref=str(flw_ref),
         retry=Retry(max=5, interval=[30, 60, 120, 300, 600]),

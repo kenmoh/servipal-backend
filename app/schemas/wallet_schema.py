@@ -149,7 +149,6 @@ class OrderType(str, Enum):
 class PaymentWithWalletData(BaseModel):
     amount: Decimal
     tx_ref: str
-    order_id: str
 
 
 class WalletPaymentRequest(BaseModel):

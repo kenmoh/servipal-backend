@@ -1,4 +1,5 @@
 import json
+from typing import Literal
 from app.utils.redis_utils import get_pending, delete_pending
 from uuid import UUID
 from supabase import AsyncClient
@@ -20,6 +21,7 @@ from app.services.notification_service import notify_user
 async def process_successful_delivery_payment(
     tx_ref: str,
     paid_amount: float,
+    payment_method: Literal["CARD", "WALLET"],
     flw_ref: str,
     supabase: AsyncClient,
 ):
@@ -29,10 +31,12 @@ async def process_successful_delivery_payment(
         paid_amount=paid_amount,
     )
 
-    verified = await verify_transaction_tx_ref(tx_ref)
-    if not verified or verified.get("status") != "success":
-        logger.error("delivery_payment_verification_failed", tx_ref=tx_ref)
-        return {"status": "verification_failed"}
+
+    if payment_method == "CARD":
+        verified = await verify_transaction_tx_ref(tx_ref)
+        if not verified or verified.get("status") != "success":
+            logger.error("delivery_payment_verification_failed", tx_ref=tx_ref)
+            return {"status": "verification_failed"}
 
     # 1. Get pending data from Redis
     pending_key = f"pending_delivery_{tx_ref}"

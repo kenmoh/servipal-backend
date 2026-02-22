@@ -16,6 +16,9 @@ class Settings(BaseSettings):
     DEBUG: bool = False
     ENVIRONMENT: str = "development"
 
+    # Frontend URL (used for redirects after payment processing)
+    FRONTEND_URL: str = "https://servipal-backend.onrender.com/api/v1"
+
     # LOGFIRE
     LOGFIRE_TOKEN: Optional[str] = None
 
