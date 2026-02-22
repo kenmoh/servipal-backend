@@ -218,7 +218,7 @@ async def update_delivery_status(
     try:
         # Fetch delivery for validation
         delivery = await _get_delivery(tx_ref, supabase)
-        delivery_id = delivery["id"]
+        delivery_id = f'{delivery["id"]}'
 
         # Validate authorization
         _validate_authorization(
@@ -371,7 +371,7 @@ async def assign_rider(
             "assign_rider_to_delivery",
             {
                 "p_tx_ref": tx_ref,
-                "p_rider_id": rider_id,
+                "p_rider_id": f"{rider_id}",
             },
         ).execute()
 
