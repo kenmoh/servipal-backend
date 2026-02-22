@@ -13,6 +13,12 @@ from app.utils.payment import verify_transaction_tx_ref
 from app.services.notification_service import notify_user
 
 
+def parse_coordinates(value):
+    """Ensure coordinates are a list [lat, lng], not a string."""
+    if isinstance(value, str):
+        return json.loads(value)  # "[6.5, 3.3]" → [6.5, 3.3]
+    return value 
+
 # ───────────────────────────────────────────────
 # Delivery Payment
 # ───────────────────────────────────────────────
@@ -48,6 +54,7 @@ async def process_successful_delivery_payment(
 
     try:
         delivery_data = pending["delivery_data"]
+        logger.debug("***************delivery_data*****************", data=delivery_data)
         distance = Decimal(str(pending.get("distance", 0)))
         sender_id = str(pending["sender_id"])
 
@@ -65,8 +72,8 @@ async def process_successful_delivery_payment(
                 "p_sender_phone_number": delivery_data.get("sender_phone_number"),
                 "p_pickup_location": delivery_data["pickup_location"],
                 "p_destination": delivery_data["destination"],
-                "p_pickup_coordinates": delivery_data["pickup_coordinates"],
-                "p_dropoff_coordinates": delivery_data["dropoff_coordinates"],
+                "p_pickup_coordinates": parse_coordinates(delivery_data["pickup_coordinates"]),
+                "p_dropoff_coordinates": parse_coordinates(delivery_data["dropoff_coordinates"]),
                 "p_additional_info": delivery_data.get("description"),
                 "p_delivery_type": delivery_data.get("delivery_type", "STANDARD"),
                 "p_duration": delivery_data.get("duration"),
