@@ -19,7 +19,7 @@ import hmac
 class PaymentWebhookResponse(BaseModel):
     status: str
     message: str | None = None
-    trx_ref: str | None = None
+    tx_ref: str | None = None
 
 
 router = APIRouter(tags=["payment-webhook"], prefix="/api/v1/payment")
