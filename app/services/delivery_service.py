@@ -375,12 +375,6 @@ async def assign_rider(
             },
         ).execute()
 
-        if result.error:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to assign rider: {result.error.message}",
-            )
-
         result_data = result.data
 
         # Send notifications
