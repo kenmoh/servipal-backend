@@ -37,7 +37,6 @@ class DeliveryStatusUpdate(BaseModel):
 
 
 class PackageDeliveryCreate(BaseModel):
-    payment_method: Literal["WALLET", "CARD"] = "CARD"
     receiver_phone: str
     sender_phone_number: str
     package_name: str

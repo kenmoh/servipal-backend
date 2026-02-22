@@ -61,7 +61,6 @@ async def initiate_delivery_payment(
     try:
         # Get charges from DB
         charges = await get_charges(supabase)
-        payment_method = data.payment_method
 
         base_fee = Decimal(str(charges["base_delivery_fee"]))
         per_km_fee = Decimal(str(charges["delivery_fee_per_km"]))
@@ -81,7 +80,6 @@ async def initiate_delivery_payment(
             "delivery_data": data.model_dump(),
             "distance": str(distance),
             "tx_ref": tx_ref,
-            "payment_method": payment_method,
             "created_at": datetime.datetime.now().isoformat(),
         }
 
@@ -91,9 +89,7 @@ async def initiate_delivery_payment(
         return PaymentInitializationResponse(
             tx_ref=tx_ref,
             amount=delivery_fee,
-            public_key=settings.FLUTTERWAVE_PUBLIC_KEY
-            if payment_method == "CARD"
-            else None,
+            public_key=settings.FLUTTERWAVE_PUBLIC_KEY,
             distance=str(distance),
             currency="NGN",
             receiver_phone=data.receiver_phone,
