@@ -95,7 +95,7 @@ async def pay_with_wallet(
     # 1. Verify wallet balance
     await wallet_service.verify_wallet_balance(
         customer_id=current_profile["id"],
-        required_amount=f'{data.amount}',
+        required_amount=data.amount,
         supabase=supabase,
     )
 
