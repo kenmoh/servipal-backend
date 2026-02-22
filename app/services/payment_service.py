@@ -131,6 +131,7 @@ async def process_successful_delivery_payment(
     paid_amount: Decimal,
     flw_ref: str,
     supabase: AsyncClient,
+    payment_method: Literal["CARD", "WALLET"],
 ):
     """
     Process successful delivery payment.
@@ -139,10 +140,31 @@ async def process_successful_delivery_payment(
     logger.info("processing_delivery_payment", tx_ref=tx_ref, paid_amount=paid_amount)
 
     # 1. Verify payment
-    verified = await verify_transaction_tx_ref(tx_ref)
-    if not verified or verified.get("status") != "success":
-        logger.error("delivery_payment_verification_failed", tx_ref=tx_ref)
-        return {"status": "verification_failed"}
+    if payment_method == "CARD":
+        verified = await verify_transaction_tx_ref(tx_ref)
+        if not verified or verified.get("status") != "success":
+            logger.error("delivery_payment_verification_failed", tx_ref=tx_ref)
+            return {"status": "verification_failed"}
+
+    if payment_method == "WALLET":
+        existing = (
+        await supabase.table("wallet_payment")
+        .select("id, status, amount")
+        .eq("tx_ref", tx_ref)
+        .single()
+        .execute()
+    )
+
+        if existing.data:
+            logger.info(
+                event="wallet_payment_already_processed", level="info", tx_ref=tx_ref
+            )
+            return {
+                "status": existing.data["status"],
+                "tx_ref": existing.data["tx_ref"],
+                "amount": existing.data["amount"],
+                "message": "Wallet payment already initiated",
+            }
 
     # 2. Get pending data from Redis
     pending_key = f"pending_delivery_{tx_ref}"
