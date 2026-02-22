@@ -146,11 +146,17 @@ class OrderType(str, Enum):
     DELIVERY = "DELIVERY"
 
 
+class PaymentWithWalletData(BaseModel):
+    amount: Decimal
+    tx_ref: str
+    order_id: str
+
+
 class WalletPaymentRequest(BaseModel):
     order_type: OrderType
 
     # Shared
-    grand_total: Decimal
+    # grand_total: Decimal
     additional_info: Optional[str] = None
 
     # FOOD / LAUNDRY / PRODUCT shared
@@ -161,16 +167,16 @@ class WalletPaymentRequest(BaseModel):
     destination: Optional[str] = None
 
     # FOOD specific
-    total_price: Optional[Decimal] = None
+    # total_price: Optional[Decimal] = None
 
     # LAUNDRY specific
-    subtotal: Optional[Decimal] = None
+    # subtotal: Optional[Decimal] = None
 
     # PRODUCT specific
     product_id: Optional[UUID4] = None
     quantity: Optional[int] = None
     product_name: Optional[str] = None
-    unit_price: Optional[Decimal] = None
+    price: Optional[Decimal] = None
     shipping_cost: Optional[float] = None
     delivery_address: Optional[str] = None
     images: Optional[List[Any]] = None

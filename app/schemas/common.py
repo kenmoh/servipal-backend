@@ -53,7 +53,7 @@ class PaymentInitializationResponse(BaseModel):
     amount: Decimal = Field(
         description="Amount to be paid", default=Decimal("0.00"), decimal_places=2
     )
-    public_key: str
+    public_key: str | None = None  # Only needed for card payments
     currency: str
     customer: PaymentCustomerInfo
     customization: PaymentCustomization

@@ -678,11 +678,26 @@ async def verify_wallet_balance(
     return balance
 
 
-def validate_payload(data: WalletPaymentRequest, customer_id: str) -> dict:
+from app.services.delivery_service import get_charges
+
+
+async def validate_payload(
+    data: WalletPaymentRequest, customer_id: str, supabase: AsyncClient
+) -> dict:
     """
     Validate required fields per order type and
     build the RPC params dict.
     """
+    charges = await get_charges(supabase)
+
+    base_fee = Decimal(str(charges["base_delivery_fee"]))
+    per_km_fee = Decimal(str(charges["delivery_fee_per_km"]))
+    # commission_rate = Decimal(str(charges["delivery_commission_rate"]))
+
+    # Calculate delivery fee
+    distance = Decimal(str(data.distance))
+    delivery_fee = base_fee + (per_km_fee * distance)
+    delivery_fee = round(delivery_fee, 2)
 
     if data.order_type == OrderType.FOOD:
         if not all(
@@ -752,7 +767,7 @@ def validate_payload(data: WalletPaymentRequest, customer_id: str) -> dict:
         "p_grand_total": data.grand_total,
         "p_additional_info": data.additional_info,
         "p_vendor_id": str(data.vendor_id) if data.vendor_id else None,
-        "p_delivery_fee": data.delivery_fee,
+        "p_delivery_fee": delivery_fee,
         "p_delivery_option": data.delivery_option,
         "p_order_data": data.order_data,
         "p_destination": data.destination,
@@ -777,7 +792,7 @@ def validate_payload(data: WalletPaymentRequest, customer_id: str) -> dict:
         "p_pickup_location": data.pickup_location,
         "p_pickup_coordinates": data.pickup_coordinates,
         "p_dropoff_coordinates": data.dropoff_coordinates,
-        "p_delivery_type": data.delivery_type,
+        "p_delivery_type": "STANDARD",  # Default to STANDARD if not provided
         "p_duration": data.duration,
         "p_package_image_url": data.package_image_url,
     }

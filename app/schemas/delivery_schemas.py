@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Optional, List
+from typing import Optional, List, Literal
 from uuid import UUID
 from datetime import datetime
 from decimal import Decimal
@@ -37,6 +37,7 @@ class DeliveryStatusUpdate(BaseModel):
 
 
 class PackageDeliveryCreate(BaseModel):
+    payment_method: Literal["WALLET", "CARD"] = "CARD"
     receiver_phone: str
     sender_phone_number: str
     package_name: str
