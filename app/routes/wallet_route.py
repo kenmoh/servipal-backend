@@ -104,7 +104,6 @@ async def pay_with_wallet(
         await supabase.table("wallet_payment")
         .select("id, status")
         .eq("tx_ref", data.tx_ref)
-        .limit(1)
         .execute()
     )
 
