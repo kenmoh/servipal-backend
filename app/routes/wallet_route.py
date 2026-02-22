@@ -104,15 +104,15 @@ async def pay_with_wallet_webhook(
         await supabase.table("wallet_payment")
         .select("id, status")
         .eq("tx_ref", data.tx_ref)
-        .single()
+        .limit(1)
         .execute()
     )
 
     if existing.data:
         return {
-            "status": existing.data["status"],
-            "tx_ref": data.tx_ref,
-            "amount": data.amount,
+            "status": existing.data[0]["status"],
+            "tx_ref": existing.data[0]["tx_ref"],
+            "amount": existing.data[0]["amount"],
             "message": "Wallet payment already initiated",
         }
 
