@@ -734,5 +734,3 @@ async def initiate_food_payment(
             exc_info=True,
         )
         raise HTTPException(500, f"Food payment initiation failed: {str(e)}")
-
-

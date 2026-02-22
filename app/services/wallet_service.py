@@ -29,8 +29,13 @@ from datetime import datetime
 from app.utils.audit import log_audit_event
 from app.config.logging import logger
 from supabase import AsyncClient
-from app.schemas.wallet_schema import WithdrawResponse
-from app.schemas.common import PaymentInitializationResponse, PaymentCustomerInfo, PaymentCustomization
+from app.schemas.wallet_schema import WithdrawResponse, WalletPaymentRequest, OrderType
+from postgrest.exceptions import APIError
+from app.schemas.common import (
+    PaymentInitializationResponse,
+    PaymentCustomerInfo,
+    PaymentCustomization,
+)
 
 
 # ───────────────────────────────────────────────
@@ -172,115 +177,78 @@ async def initiate_wallet_top_up(
     ).model_dump()
 
 
-
 # ───────────────────────────────────────────────
 # Pay with Wallet (deduct from balance)
 # ───────────────────────────────────────────────
 async def pay_with_wallet(
-    user_id: UUID, data: PayWithWalletRequest, supabase: AsyncClient
+    data: WalletPaymentRequest,
+    current_profile: dict,
+    supabase: AsyncClient,
 ) -> PayWithWalletResponse:
-    """
-    Deduct amount from user's wallet balance.
-    - Checks sufficient balance
-    - Atomic via RPC
-    - Records trans action
-    """
+    customer_id = str(current_profile["id"])
+    customer_name = current_profile.get("full_name") or current_profile.get("email", "")
+
     logger.info(
-        "wallet_payment_attempt",
-        user_id=str(user_id),
-        amount=float(data.amount),
-        order_id=str(data.order_id) if data.order_id else None,
+        "wallet_payment_initiated",
+        customer_id=customer_id,
+        order_type=data.order_type,
+        grand_total=data.grand_total,
     )
+
+    # 1. Balance check before touching RPC
+    await verify_wallet_balance(customer_id, data.grand_total, supabase)
+
+    # 2. Validate payload and build RPC params
+    rpc_params = validate_payload(data, customer_id)
+
+    # 3. Inject customer_name from token
+    rpc_params["p_customer_name"] = customer_name
+
     try:
-        # Get current balance
-        wallet = (
-            await supabase.table("wallets")
-            .select("balance")
-            .eq("user_id", str(user_id))
-            .single()
-            .execute()
-        )
+        # 4. Call the RPC
+        result = await supabase.rpc("pay_with_wallet", rpc_params).execute()
 
-        if not wallet.data:
-            logger.warning("wallet_not_found_for_payment", user_id=str(user_id))
+        if not result.data:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="Wallet not found"
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Payment processing returned no data",
             )
 
-        old_balance = Decimal(str(wallet.data["balance"]))
-        current_balance = old_balance
+        response = result.data
 
-        if current_balance < data.amount:
+        # 5. Handle already_processed gracefully
+        if response.get("status") == "already_processed":
             logger.warning(
-                "insufficient_wallet_balance",
-                user_id=str(user_id),
-                balance=float(current_balance),
-                requested=float(data.amount),
+                "wallet_payment_already_processed",
+                customer_id=customer_id,
+                order_id=response.get("order_id"),
             )
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Insufficient wallet balance",
-            )
-
-        # Deduct from balance (atomic RPC)
-        await supabase.rpc(
-            "update_wallet_balance",
-            {"p_user_id": str(user_id), "p_delta": -data.amount, "p_field": "balance"},
-        ).execute()
-
-        # Get new balance after deduction
-        wallet_after = (
-            await supabase.table("wallets")
-            .select("balance")
-            .eq("user_id", str(user_id))
-            .single()
-            .execute()
-        )
-
-        new_balance = Decimal(str(wallet_after.data["balance"]))
-
-        # Record transaction
-        tx_ref = f"PAY-{uuid.uuid4().hex[:22].upper()}"
-        await (
-            supabase.table("transactions")
-            .insert(
-                {
-                    "tx_ref": tx_ref,
-                    "amount": float(data.amount),
-                    "from_user_id": str(user_id),
-                    "to_user_id": data.to_user_id,
-                    "order_id": data.order_id,
-                    "transaction_type": data.transaction_type or "ORDER_PAYMENT",
-                    "status": "COMPLETED",
-                    "payment_method": "WALLET",
-                    "details": data.details or {},
-                }
-            )
-            .execute()
-        )
+            return response
 
         logger.info(
             "wallet_payment_success",
-            user_id=str(user_id),
-            tx_ref=tx_ref,
-            amount=float(data.amount),
-            new_balance=float(new_balance),
+            customer_id=customer_id,
+            order_type=data.order_type,
+            order_id=response.get("order_id"),
+            tx_ref=response.get("tx_ref"),
         )
-        return PayWithWalletResponse(
-            success=True,
-            message="Payment successful from wallet",
-            new_balance=new_balance,
-            tx_ref=tx_ref,
-        )
+
+        return response
 
     except HTTPException:
         raise
-    except Exception as e:
+
+    except APIError as e:
         logger.error(
-            "wallet_payment_error", user_id=str(user_id), error=str(e), exc_info=True
+            "wallet_payment_failed",
+            customer_id=customer_id,
+            order_type=data.order_type,
+            error=str(e.message),
+            exc_info=True,
         )
         raise HTTPException(
-            status.HTTP_500_INTERNAL_SERVER_ERROR, f"Wallet payment failed: {str(e)}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Payment processing failed",
         )
 
 
@@ -359,17 +327,17 @@ async def request_withdrawal(
 
         return WithdrawalResponse(**withdrawal)
 
-    except Exception as e:
+    except APIError as e:
         # Rollback balance deduction on error (optional - add try/except rollback)
         logger.error(
             "Withdrawal request failed",
             user_id=str(user_id),
-            error=str(e),
+            error=str(e.message),
             exc_info=True,
         )
         raise HTTPException(
             status.HTTP_500_INTERNAL_SERVER_ERROR,
-            f"Withdrawal request failed: {str(e)}",
+            f"Withdrawal request failed",
         )
 
 
@@ -603,7 +571,7 @@ async def withdraw_all_balance(
             # 8. Notify user
             await notify_user(
                 user_id=user_id,
-                title="💰 Withdrawal Successful",
+                title="Withdrawal Successful",
                 message=f"₦{net_amount} has been sent to your {current_profile.get('bank_name')} account",
                 notification_type="WITHDRAWAL",
                 request=request,
@@ -671,3 +639,145 @@ async def withdraw_all_balance(
             status.HTTP_500_INTERNAL_SERVER_ERROR,
             f"Withdrawal failed: {str(e)}",
         )
+
+
+async def verify_wallet_balance(
+    customer_id: str,
+    required_amount: Decimal,
+    supabase: AsyncClient,
+) -> Decimal:
+    """Check wallet balance before hitting the RPC."""
+    result = (
+        await supabase.table("wallets")
+        .select("balance")
+        .eq("user_id", customer_id)
+        .single()
+        .execute()
+    )
+
+    if not result.data:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Wallet not found",
+        )
+
+    balance = Decimal(result.data["balance"] or 0)
+
+    if balance < required_amount:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "error": "insufficient_balance",
+                "message": f"Insufficient wallet balance",
+                "current_balance": balance,
+                "required": required_amount,
+                "shortfall": round(required_amount - balance, 2),
+            },
+        )
+
+    return balance
+
+
+def validate_payload(data: WalletPaymentRequest, customer_id: str) -> dict:
+    """
+    Validate required fields per order type and
+    build the RPC params dict.
+    """
+
+    if data.order_type == OrderType.FOOD:
+        if not all(
+            [
+                data.vendor_id,
+                data.total_price is not None,
+                data.delivery_option,
+                data.order_data,
+                data.customer_name if hasattr(data, "customer_name") else True,
+            ]
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="FOOD orders require: vendor_id, total_price, delivery_option, order_data",
+            )
+
+    elif data.order_type == OrderType.PRODUCT:
+        if not all(
+            [
+                data.vendor_id,
+                data.product_id,
+                data.quantity,
+                data.product_name,
+                data.unit_price is not None,
+                data.subtotal is not None,
+            ]
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="PRODUCT orders require: vendor_id, product_id, quantity, product_name, unit_price, subtotal",
+            )
+
+    elif data.order_type == OrderType.LAUNDRY:
+        if not all(
+            [
+                data.vendor_id,
+                data.subtotal is not None,
+                data.delivery_option,
+                data.order_data,
+            ]
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="LAUNDRY orders require: vendor_id, subtotal, delivery_option, order_data",
+            )
+
+    elif data.order_type == OrderType.DELIVERY:
+        if not all(
+            [
+                data.distance,
+                data.pickup_location,
+                data.destination,
+                data.receiver_phone,
+                data.pickup_coordinates,
+                data.dropoff_coordinates,
+            ]
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="DELIVERY orders require: distance, pickup_location, destination, receiver_phone, pickup_coordinates, dropoff_coordinates",
+            )
+
+    # Build RPC params — only pass what's set
+    return {
+        "p_order_type": data.order_type.value,
+        "p_customer_id": str(customer_id),
+        "p_grand_total": data.grand_total,
+        "p_additional_info": data.additional_info,
+        "p_vendor_id": str(data.vendor_id) if data.vendor_id else None,
+        "p_delivery_fee": data.delivery_fee,
+        "p_delivery_option": data.delivery_option,
+        "p_order_data": data.order_data,
+        "p_destination": data.destination,
+        "p_customer_name": data.customer_name
+        if hasattr(data, "customer_name")
+        else None,
+        "p_total_price": data.total_price,
+        "p_subtotal": data.subtotal,
+        "p_product_id": str(data.product_id) if data.product_id else None,
+        "p_quantity": data.quantity,
+        "p_product_name": data.product_name,
+        "p_unit_price": data.unit_price,
+        "p_shipping_cost": data.shipping_cost,
+        "p_delivery_address": data.delivery_address,
+        "p_images": data.images,
+        "p_selected_size": data.selected_size,
+        "p_selected_color": data.selected_color,
+        "p_distance": data.distance,
+        "p_package_name": data.package_name,
+        "p_receiver_phone": data.receiver_phone,
+        "p_sender_phone_number": data.sender_phone_number,
+        "p_pickup_location": data.pickup_location,
+        "p_pickup_coordinates": data.pickup_coordinates,
+        "p_dropoff_coordinates": data.dropoff_coordinates,
+        "p_delivery_type": data.delivery_type,
+        "p_duration": data.duration,
+        "p_package_image_url": data.package_image_url,
+    }

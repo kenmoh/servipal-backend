@@ -133,7 +133,7 @@ async def update_delivery_status(
         "update_delivery_status_called",
         tx_ref=tx_ref,
         new_status=data.new_status.value,
-        triggered_by=f'{triggered_by_user_id}',
+        triggered_by=f"{triggered_by_user_id}",
     )
 
     try:
@@ -195,7 +195,7 @@ async def update_delivery_status(
 
         logger.info(
             "update_delivery_status_success",
-            delivery_id=f'{delivery_id}',
+            delivery_id=f"{delivery_id}",
             new_status=data.new_status.value,
         )
 
@@ -239,14 +239,16 @@ async def _get_delivery(tx_ref: str, supabase: AsyncClient) -> dict:
             )
         return delivery_resp.data
     except APIError as e:
-        logger.error("fetch_delivery_error", error=str(e), errorr_message=f'{e.message}', exc_info=True)
+        logger.error(
+            "fetch_delivery_error",
+            error=str(e),
+            errorr_message=f"{e.message}",
+            exc_info=True,
+        )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Database error fetching delivery: {e.message}",
         )
-        
-
-
 
 
 # ============================================================
@@ -271,10 +273,9 @@ async def assign_rider(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="rider_id is required"
         )
-    
-    try:
 
-    # Get tx_ref
+    try:
+        # Get tx_ref
         delivery = (
             await supabase.table("delivery_orders")
             .select("tx_ref, order_number")
@@ -307,9 +308,9 @@ async def assign_rider(
         await _send_delivery_notifications(
             order_number=order_number,
             new_status=DeliveryStatus.ASSIGNED,
-            sender_id=f'{sender_id}',
-            rider_id=f'{rider_id}',
-            dispatch_id=f'{result_data.get("dispatch_id")}',
+            sender_id=f"{sender_id}",
+            rider_id=f"{rider_id}",
+            dispatch_id=f"{result_data.get('dispatch_id')}",
             supabase=supabase,
         )
 
@@ -317,12 +318,17 @@ async def assign_rider(
             "status": "success",
             "delivery_status": "ASSIGNED",
             "tx_ref": tx_ref,
-            "rider_id": f'{rider_id}',
-            "dispatch_id": f'{result_data.get("dispatch_id")}',
+            "rider_id": f"{rider_id}",
+            "dispatch_id": f"{result_data.get('dispatch_id')}",
         }
 
     except APIError as e:
-        logger.error("assign_rider_error", error=str(e), error_message=f'{e.message}', exc_info=True)
+        logger.error(
+            "assign_rider_error",
+            error=str(e),
+            error_message=f"{e.message}",
+            exc_info=True,
+        )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Something went wrong!",

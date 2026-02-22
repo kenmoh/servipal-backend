@@ -49,7 +49,6 @@ async def update_order_status(
     try:
         # Handle COMPLETED status
         if data.new_status == OrderStatus.COMPLETED:
-          
             result = await supabase.rpc(
                 "mark_order_as_completed",
                 {

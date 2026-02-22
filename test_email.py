@@ -22,24 +22,24 @@ async def send_test_email():
     try:
         # Create an admin client
         supabase = await create_supabase_admin_client()
-        
+
         # Test email details
         test_email = "moh2stack@hmail.com"
-        
+
         print(f"Attempting to send test email to: {test_email}")
         print(f"Supabase URL: {settings.SUPABASE_URL}")
         await supabase.auth.reset_password_for_email(test_email)
         print(f"✓ Password reset email sent to: {test_email}")
-        
+
         # Method 1: Use the Supabase admin API to create a user with email verification
         # This will trigger an email to be sent
         try:
             response = await supabase.auth.admin.create_user(
-               {
-                 "email": test_email,
-                "password": "TempPassword123!",
-                "email_confirm": False 
-               } # This will trigger a confirmation email
+                {
+                    "email": test_email,
+                    "password": "TempPassword123!",
+                    "email_confirm": False,
+                }  # This will trigger a confirmation email
             )
             print(f"✓ User created successfully: {response.user.id}")
             print(f"✓ Confirmation email sent to: {test_email}")
@@ -60,13 +60,10 @@ async def send_test_email():
             else:
                 print(f"✗ Error creating user: {e}")
                 return False
-                
+
     except Exception as e:
         print(f"✗ Error initializing Supabase client: {e}")
         return False
-
-
-
 
 
 async def main():
@@ -74,11 +71,11 @@ async def main():
     print("=" * 60)
     print("Supabase Email Testing")
     print("=" * 60)
-    
+
     # Test 1: Send confirmation email (new user)
     print("\n[Test 1] Sending confirmation email (user signup)...")
     success1 = await send_test_email()
-    
+
     print("\n" + "=" * 60)
     if success1:
         print("✓ Email test completed successfully!")
@@ -89,5 +86,3 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-
-

@@ -17,7 +17,105 @@ from app.services.notification_service import notify_user
 # ───────────────────────────────────────────────
 
 
-async def process_successful_delivery_payment_rpc(
+async def process_successful_delivery_payment(
+    tx_ref: str,
+    paid_amount: float,
+    flw_ref: str,
+    supabase: AsyncClient,
+):
+    logger.info(
+        event="processing_delivery_payment",
+        tx_ref=tx_ref,
+        paid_amount=paid_amount,
+    )
+
+    verified = await verify_transaction_tx_ref(tx_ref)
+    if not verified or verified.get("status") != "success":
+        logger.error("delivery_payment_verification_failed", tx_ref=tx_ref)
+        return {"status": "verification_failed"}
+
+    # 1. Get pending data from Redis
+    pending_key = f"pending_delivery_{tx_ref}"
+    pending = await get_pending(pending_key)
+
+    if not pending:
+        logger.warning(event="pending_delivery_not_found", tx_ref=tx_ref)
+        return
+
+    try:
+        delivery_data = pending["delivery_data"]
+        distance = Decimal(str(pending.get("distance", 0)))
+        sender_id = str(pending["sender_id"])
+
+        # 2. Call RPC (fee recalculated inside RPC from distance — source of truth)
+        result = await supabase.rpc(
+            "process_delivery_payment",
+            {
+                "p_tx_ref": tx_ref,
+                "p_flw_ref": flw_ref,
+                "p_sender_id": sender_id,
+                "p_paid_amount": str(paid_amount),
+                "p_distance": str(distance),
+                "p_package_name": delivery_data.get("package_name"),
+                "p_receiver_phone": delivery_data.get("receiver_phone"),
+                "p_sender_phone_number": delivery_data.get("sender_phone_number"),
+                "p_pickup_location": delivery_data["pickup_location"],
+                "p_destination": delivery_data["destination"],
+                "p_pickup_coordinates": delivery_data["pickup_coordinates"],
+                "p_dropoff_coordinates": delivery_data["dropoff_coordinates"],
+                "p_additional_info": delivery_data.get("description"),
+                "p_delivery_type": delivery_data.get("delivery_type", "STANDARD"),
+                "p_duration": delivery_data.get("duration"),
+                "p_package_image_url": delivery_data.get("package_image_url"),
+            },
+        ).execute()
+
+        response = result.data
+
+        if response.get("status") == "already_processed":
+            logger.info(
+                event="delivery_payment_already_processed",
+                tx_ref=tx_ref,
+                order_id=response.get("order_id"),
+            )
+            await delete_pending(pending_key)
+            return
+
+        logger.info(
+            event="delivery_payment_success",
+            tx_ref=tx_ref,
+            order_id=response.get("order_id"),
+            delivery_fee=response.get("delivery_fee"),
+            platform_commission=response.get("platform_commission"),
+        )
+
+        # 3. Notify sender
+        await notify_user(
+            user_id=sender_id,
+            title="Payment Successful",
+            body=f"Your delivery payment of ₦{response.get('delivery_fee')} has been received.",
+            data={
+                "type": "DELIVERY_PAYMENT_SUCCESS",
+                "order_id": str(response.get("order_id")),
+                "amount": str(response.get("delivery_fee")),
+            },
+            supabase=supabase,
+        )
+
+        await delete_pending(pending_key)
+
+    except Exception as e:
+        logger.error(
+            event="delivery_payment_processing_error",
+            tx_ref=tx_ref,
+            error=str(e),
+            exc_info=True,
+        )
+        await delete_pending(pending_key)
+        raise
+
+
+async def process_successful_delivery_payment_rpc_old(
     tx_ref: str,
     paid_amount: Decimal,
     flw_ref: str,
@@ -132,7 +230,7 @@ async def process_successful_delivery_payment_rpc(
         raise
 
 
-async def process_successful_delivery_payment(
+async def process_successful_delivery_payment_non_rpc(
     tx_ref: str,
     paid_amount: Decimal,
     flw_ref: str,
@@ -255,7 +353,6 @@ async def process_successful_delivery_payment(
                 "p_escrow_balance_change": "0",
             },
         ).execute()
-        
 
         logger.info(
             "sender_wallet_credited", sender_id=sender_id, amount=str(delivery_fee)
@@ -705,8 +802,125 @@ async def process_successful_topup_payment(
 # Product Payment
 # ───────────────────────────────────────────────
 
+# services/product_payment.py
+
+from decimal import Decimal
+from supabase import AsyncClient
+import structlog
+
+logger = structlog.get_logger()
+
 
 async def process_successful_product_payment(
+    tx_ref: str,
+    paid_amount: float,
+    flw_ref: str,
+    supabase: AsyncClient,
+):
+    logger.info(
+        event="processing_product_payment",
+        tx_ref=tx_ref,
+        paid_amount=paid_amount,
+    )
+
+    verified = await verify_transaction_tx_ref(tx_ref)
+    if not verified or verified.get("status") != "success":
+        logger.error(event="delivery_payment_verification_failed", tx_ref=tx_ref)
+        return
+
+    # 1. Get pending data from Redis
+    pending_key = f"pending_product_{tx_ref}"
+    pending = await get_pending(pending_key)
+
+    if not pending:
+        logger.warning(event="pending_order_not_found", tx_ref=tx_ref)
+        return
+
+    try:
+        grand_total = Decimal(str(pending["grand_total"]))
+        paid_rounded = Decimal(str(paid_amount)).quantize(Decimal("0.00"))
+        expected_rounded = grand_total.quantize(Decimal("0.00"))
+
+        # 2. Amount validation
+        if paid_rounded != expected_rounded:
+            logger.error(
+                event="product_payment_amount_mismatch",
+                tx_ref=tx_ref,
+                expected=str(expected_rounded),
+                paid=str(paid_rounded),
+            )
+            await delete_pending(pending_key)
+            return
+
+        # 3. Call RPC
+        result = await supabase.rpc(
+            "process_product_payment",
+            {
+                "p_tx_ref": tx_ref,
+                "p_flw_ref": flw_ref,
+                "p_customer_id": pending["customer_id"],
+                "p_vendor_id": pending["vendor_id"],
+                "p_product_id": pending["item_id"],
+                "p_quantity": int(pending["quantity"]),
+                "p_product_name": pending.get("product_name", "Product"),
+                "p_unit_price": float(pending.get("price", 0)),
+                "p_subtotal": float(pending["subtotal"]),
+                "p_shipping_cost": float(pending.get("shipping_cost", 0)),
+                "p_grand_total": float(grand_total),
+                "p_paid_amount": float(paid_rounded),
+                "p_delivery_option": pending["delivery_option"],
+                "p_delivery_address": pending["delivery_address"],
+                "p_additional_info": pending.get("additional_info"),
+                "p_images": pending.get("images"),
+                "p_selected_size": pending.get("selected_size"),
+                "p_selected_color": pending.get("selected_color"),
+            },
+        ).execute()
+
+        response = result.data
+
+        if response.get("status") == "already_processed":
+            logger.info(
+                event="product_payment_already_processed",
+                tx_ref=tx_ref,
+                order_id=response.get("order_id"),
+            )
+            await delete_pending(pending_key)
+            return
+
+        logger.info(
+            event="product_payment_success",
+            tx_ref=tx_ref,
+            order_id=response.get("order_id"),
+            grand_total=str(grand_total),
+        )
+
+        # 4. Notify vendor
+        await notify_user(
+            user_id=pending["vendor_id"],
+            title="New Order",
+            body="You have a new product order",
+            data={
+                "order_id": str(response.get("order_id")),
+                "type": "PRODUCT_PAYMENT",
+            },
+            supabase=supabase,
+        )
+
+        await delete_pending(pending_key)
+
+    except Exception as e:
+        logger.error(
+            event="product_payment_processing_error",
+            tx_ref=tx_ref,
+            error=str(e),
+            exc_info=True,
+        )
+        await delete_pending(pending_key)
+        raise
+
+
+async def process_successful_product_payment_non_rpc(
     tx_ref: str, paid_amount: float, flw_ref: str, supabase: AsyncClient
 ):
     logger.info(

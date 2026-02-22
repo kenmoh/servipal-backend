@@ -29,7 +29,9 @@ class UserCreate(BaseModel):
     @classmethod
     def validate_phone_format(cls, v: str) -> str:
         if not re.match(r"^\+234\d{10,15}$", v):
-            raise ValueError("Phone number must start with '+234' followed by 10-15 digits (e.g., +2348012345678)")
+            raise ValueError(
+                "Phone number must start with '+234' followed by 10-15 digits (e.g., +2348012345678)"
+            )
         return v
 
 
@@ -44,7 +46,9 @@ class RiderCreateByDispatch(BaseModel):
     @classmethod
     def validate_phone_format(cls, v: str) -> str:
         if not re.match(r"^\+234\d{10,15}$", v):
-            raise ValueError("Phone number must start with '+234' followed by 10-15 digits (e.g., +2348012345678)")
+            raise ValueError(
+                "Phone number must start with '+234' followed by 10-15 digits (e.g., +2348012345678)"
+            )
         return v
 
 

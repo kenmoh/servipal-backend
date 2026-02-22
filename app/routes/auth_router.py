@@ -60,7 +60,9 @@ async def login_for_access_token(
     return await user_service.login_user(login_data, supabase, request)
 
 
-@router.post("/forgot-password", status_code=status.HTTP_200_OK, include_in_schema=False)
+@router.post(
+    "/forgot-password", status_code=status.HTTP_200_OK, include_in_schema=False
+)
 async def forgot_password(
     data: auth.ForgotPasswordRequest,
     supabase: AsyncClient = Depends(get_supabase_client),

@@ -4,12 +4,11 @@ from app.schemas.wallet_schema import (
     WalletBalanceResponse,
     TopUpRequest,
     PayWithWalletRequest,
-    WalletTopUpInitiationResponse,
+    PayWithWalletResponse,
     WithdrawResponse,
-    WithdrawAllRequest,
 )
 from app.services import wallet_service
-from app.dependencies.auth import get_current_profile
+from app.dependencies.auth import get_current_profile, get_customer_contact_info
 from app.database.supabase import get_supabase_client
 from supabase import AsyncClient
 from app.config.logging import logger
@@ -37,7 +36,7 @@ async def top_up_my_wallet(
     data: TopUpRequest,
     current_profile: dict = Depends(get_current_profile),
     supabase: AsyncClient = Depends(get_supabase_client),
-) :
+):
     """
     Initiate wallet top-up.
 
@@ -60,13 +59,12 @@ async def top_up_my_wallet(
     )
 
 
-@router.post("/pay")
+@router.post("/pay-with-wallet")
 async def pay_with_my_wallet(
     data: PayWithWalletRequest,
-    request: Request,
-    current_profile: dict = Depends(get_current_profile),
+    current_profile: dict = Depends(get_customer_contact_info),
     supabase: AsyncClient = Depends(get_supabase_client),
-):
+) -> PayWithWalletResponse:
     """
     Make a payment using wallet balance.
 
@@ -74,7 +72,7 @@ async def pay_with_my_wallet(
         data (PayWithWalletRequest): Payment details.
 
     Returns:
-        dict: Transaction status.
+        PayWithWalletResponse: Transaction response details.
     """
     logger.info(
         "wallet_pay_endpoint_called",
@@ -82,7 +80,7 @@ async def pay_with_my_wallet(
         amount=float(data.amount),
     )
     return await wallet_service.pay_with_wallet(
-        current_profile["id"], data, supabase, request
+        data=data, current_profile=current_profile, supabase=supabase
     )
 
 
