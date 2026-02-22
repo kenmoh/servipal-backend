@@ -73,7 +73,7 @@ async def top_up_my_wallet(
 
 
 @router.post("/pay-with-wallet", status_code=status.HTTP_200_OK)
-async def pay_with_wallet_webhook(
+async def pay_with_wallet(
     data: PaymentWithWalletData,
     current_profile: dict = Depends(get_current_profile),
     supabase: AsyncClient = Depends(get_supabase_client),
@@ -95,7 +95,7 @@ async def pay_with_wallet_webhook(
     # 1. Verify wallet balance
     await wallet_service.verify_wallet_balance(
         customer_id=current_profile["id"],
-        required_amount=data.amount,
+        required_amount=f'{data.amount}',
         supabase=supabase,
     )
 
@@ -124,7 +124,7 @@ async def pay_with_wallet_webhook(
             .insert(
                 {
                     "tx_ref": data.tx_ref,
-                    "amount": data.amount,
+                    "amount": f'{data.amount}',
                     "status": "success",
                  
                 }
@@ -136,7 +136,7 @@ async def pay_with_wallet_webhook(
             "wallet_payment_db_insert_error",
             error=str(e),
             tx_ref=data.tx_ref,
-            amount=data.amount,
+            amount=f'{data.amount}',
         )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -147,7 +147,7 @@ async def pay_with_wallet_webhook(
         event="wallet_payment",
         customer_id=current_profile["id"],
         tx_ref=data.tx_ref,
-        amount=data.amount,
+        amount=f'{data.amount}',
     )
 
     tx_ref = wallet_payment.data[0]["tx_ref"]
