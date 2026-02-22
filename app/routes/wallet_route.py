@@ -126,6 +126,7 @@ async def pay_with_wallet(
                     "tx_ref": data.tx_ref,
                     "amount": f'{data.amount}',
                     "status": "success",
+                    "user_id": current_profile["id"],
                  
                 }
             )
