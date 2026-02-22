@@ -24,7 +24,7 @@ def parse_coordinates(value):
 # ───────────────────────────────────────────────
 
 
-async def process_successful_delivery_payment(
+async def process_successful_delivery_payment_rpc(
     tx_ref: str,
     paid_amount: float,
     payment_method: Literal["CARD", "WALLET"],
@@ -54,7 +54,6 @@ async def process_successful_delivery_payment(
 
     try:
         delivery_data = pending["delivery_data"]
-        logger.debug("***************delivery_data*****************", data=delivery_data)
         distance = Decimal(str(pending.get("distance", 0)))
         sender_id = str(pending["sender_id"])
 
@@ -126,122 +125,8 @@ async def process_successful_delivery_payment(
         raise
 
 
-async def process_successful_delivery_payment_rpc_old(
-    tx_ref: str,
-    paid_amount: Decimal,
-    flw_ref: str,
-    supabase: AsyncClient,
-):
-    """
-    Process successful delivery payment.
-    DB now handles ALL calculations - backend just passes data!
-    """
-    logger.info("processing_delivery_payment", tx_ref=tx_ref, paid_amount=paid_amount)
 
-    # 1. Verify payment with Flutterwave
-    verified = await verify_transaction_tx_ref(tx_ref)
-    if not verified or verified.get("status") != "success":
-        logger.error("delivery_payment_verification_failed", tx_ref=tx_ref)
-        return {"status": "verification_failed"}
-
-    # 2. Get pending data from Redis
-    pending_key = f"pending_delivery_{tx_ref}"
-    pending = await get_pending(pending_key)
-
-    if not pending:
-        logger.warning("delivery_payment_pending_not_found", tx_ref=tx_ref)
-        return {"status": "pending_not_found"}
-
-    sender_id = str(pending["sender_id"])
-    delivery_data = pending["delivery_data"]
-    distance = Decimal(str(pending.get("distance", 0)))
-
-    try:
-        # Convert delivery_data to JSON string
-        delivery_data_json = (
-            json.dumps(delivery_data)
-            if isinstance(delivery_data, dict)
-            else delivery_data
-        )
-
-        logger.info(
-            "calling_delivery_payment_rpc",
-            tx_ref=tx_ref,
-            sender_id=sender_id,
-            delivery_data_type=type(delivery_data).__name__,
-            delivery_data_json_type=type(delivery_data_json).__name__,
-            distance=float(distance),
-            data_json=delivery_data_json,
-            data_raw=delivery_data,
-        )
-
-        # 3. Call RPC - DB does ALL the work!
-        result = await supabase.rpc(
-            "process_delivery_payment",
-            {
-                "p_tx_ref": tx_ref,
-                "p_flw_ref": flw_ref,
-                "p_paid_amount": str(paid_amount),
-                "p_sender_id": sender_id,
-                "p_delivery_data": delivery_data_json,
-                "p_distance": str(distance),
-            },
-        ).execute()
-
-        result_data = result.data
-
-        # Already processed? Just cleanup and return
-        if result_data.get("status") == "already_processed":
-            logger.info(
-                "delivery_payment_already_processed",
-                tx_ref=tx_ref,
-                order_id=result_data.get("order_id"),
-            )
-            await delete_pending(pending_key)
-            return result_data
-
-        # Success! Clean up Redis
-        await delete_pending(pending_key)
-
-        order_id = result_data["order_id"]
-
-        logger.info(
-            event="delivery_payment_processed_success",
-            tx_ref=tx_ref,
-            order_id=str(order_id),
-            delivery_fee=result_data["delivery_fee"],
-            platform_commission=result_data["platform_commission"],
-        )
-
-        # Send notification
-        try:
-            await notify_user(
-                sender_id,
-                "Payment Successful",
-                f"Your delivery payment of ₦{result_data['delivery_fee']} has been received.",
-                data={
-                    "type": "DELIVERY_PAYMENT_SUCCESS",
-                    "order_id": str(order_id),
-                    "amount": str(result_data["delivery_fee"]),
-                },
-                supabase=supabase,
-            )
-        except Exception as notif_error:
-            logger.error("notification_failed", error=str(notif_error))
-
-        return result_data
-
-    except Exception as e:
-        logger.error(
-            event="delivery_payment_processing_error",
-            tx_ref=tx_ref,
-            error=str(e),
-            exc_info=True,
-        )
-        raise
-
-
-async def process_successful_delivery_payment_non_rpc(
+async def process_successful_delivery_payment(
     tx_ref: str,
     paid_amount: Decimal,
     flw_ref: str,
