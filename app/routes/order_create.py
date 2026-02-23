@@ -144,19 +144,18 @@ async def retry_payments(
     if x_internal_key != settings.INTERNAL_API_KEY:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized")
 
-    # Read messages with read_ct > 0 (previously attempted but failed)
     result = await supabase.schema("pgmq_public").rpc(
         "read",
         {
             "queue_name": "payment_queue",
-            "sleep_seconds": 60,  
-            "n": 10,             
+            "sleep_seconds": 60,
+            "n": 10,
         }
     ).execute()
 
     logger.info('*'*100)
-    logger.info(result)
-    logger.info(result.data)
+    logger.info("retry_payments_result", result=result)
+    logger.info("retry_payments_data", data=result.data)
     logger.info('*'*100)
 
     messages = result.data or []
@@ -164,50 +163,60 @@ async def retry_payments(
     if not messages:
         return {"status": "empty"}
 
+    logger.info("retry_payments_read", count=len(messages))
+
     for msg in messages:
+        msg_id = msg["msg_id"]
+        read_ct = msg["read_ct"]
         data = msg["message"]
         tx_ref = data["tx_ref"]
 
-        # Dead letter — exceeded max retries
-        if msg["read_ct"] > 5:
-            logger.error(
-                "payment_dead_letter",
-                tx_ref=tx_ref,
-                attempts=msg["read_ct"],
-            )
+        try:
+            paid_amount = float(data["paid_amount"])
+        except (ValueError, TypeError) as e:
+            logger.error("invalid_paid_amount", tx_ref=tx_ref, raw=data.get("paid_amount"))
             await supabase.schema("pgmq_public").rpc(
-                "archive",
-                {"queue_name": "payment_queue", "msg_id": msg["msg_id"]}
+                "archive", {"queue_name": "payment_queue", "message_id": msg_id}
             ).execute()
             continue
 
+        # Dead letter — exceeded max retries
+        if read_ct > 5:
+            logger.error("payment_dead_letter", tx_ref=tx_ref, msg_id=msg_id, attempts=read_ct)
+            await supabase.schema("pgmq_public").rpc(
+                "archive", {"queue_name": "payment_queue", "message_id": msg_id}
+            ).execute()
+            continue
+
+        # Unknown prefix
         handler = next(
             (h for prefix, h in HANDLER_MAP.items() if tx_ref.startswith(prefix)),
             None,
         )
 
         if not handler:
+            logger.warning("retry_unknown_prefix", tx_ref=tx_ref)
             await supabase.schema("pgmq_public").rpc(
-                "archive",
-                {"queue_name": "payment_queue", "msg_id": msg["msg_id"]}
+                "archive", {"queue_name": "payment_queue", "message_id": msg_id}
             ).execute()
             continue
 
+        # Run handler
         try:
             await handler(
                 tx_ref=tx_ref,
-                paid_amount=float(data["paid_amount"]),
+                paid_amount=paid_amount,
                 flw_ref=data["flw_ref"],
                 payment_method=data["payment_method"],
                 supabase=supabase,
             )
             await supabase.schema("pgmq_public").rpc(
-                "archive",
-                {"queue_name": "payment_queue", "msg_id": msg["msg_id"]}
+                "archive", {"queue_name": "payment_queue", "msg_id": msg_id}
             ).execute()
-            logger.info("payment_retry_success", tx_ref=tx_ref)
+            logger.info("payment_retry_success", tx_ref=tx_ref, msg_id=msg_id)
 
         except Exception as e:
-            logger.error("payment_retry_failed", tx_ref=tx_ref, error=str(e))
+            logger.error("payment_retry_failed", tx_ref=tx_ref, msg_id=msg_id, error=str(e))
+            # Don't archive — stays in queue for next retry
 
     return {"status": "done", "processed": len(messages)}
