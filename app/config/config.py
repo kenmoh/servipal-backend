@@ -24,7 +24,6 @@ class Settings(BaseSettings):
 
     # Internal API keys (for secure communication between services)
     INTERNAL_API_KEY: Optional[str] = os.getenv("INTERNAL_API_KEY")
-    
 
     # FLUTTERWAVE
     FLW_PUBLIC_KEY: Optional[str] = None

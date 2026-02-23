@@ -155,18 +155,22 @@ async def flutterwave_webhook(
     #     flw_ref=str(flw_ref),
     #     retry=Retry(max=5, interval=[30, 60, 120, 300, 600]),
     # )
-    result = await supabase.schema("pgmq_public").rpc(
-        "send",
-        {
-            "queue_name": "payment_queue",
-            "message": {
-                "tx_ref": tx_ref,
-                "paid_amount": str(paid_amount),
-                "flw_ref": str(flw_ref),
-                "payment_method": "CARD",
+    result = (
+        await supabase.schema("pgmq_public")
+        .rpc(
+            "send",
+            {
+                "queue_name": "payment_queue",
+                "message": {
+                    "tx_ref": tx_ref,
+                    "paid_amount": str(paid_amount),
+                    "flw_ref": str(flw_ref),
+                    "payment_method": "CARD",
+                },
             },
-        }
-    ).execute()
+        )
+        .execute()
+    )
 
     msg_id = result.data
 

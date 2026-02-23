@@ -10,7 +10,7 @@ from supabase import AsyncClient
 from uuid import UUID
 from datetime import datetime
 from app.dependencies.auth import require_user_type
-from app.config.config import settings  
+from app.config.config import settings
 from app.routes.order_create import HANDLER_MAP
 
 router = APIRouter(prefix="/api/v1/admin", tags=["Admin"])
@@ -480,7 +480,9 @@ async def get_archived_payments(
     supabase: AsyncClient = Depends(get_supabase_admin_client),
 ):
     if x_internal_key != settings.INTERNAL_API_KEY:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized"
+        )
 
     result = await supabase.rpc("get_archived_payments", {}).execute()
 
@@ -495,12 +497,12 @@ async def reprocess_archived_payment(
 ):
     """Reprocess a specific archived payment by tx_ref."""
     if x_internal_key != settings.INTERNAL_API_KEY:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized"
+        )
 
     # 1. Get from archive
-    result = await supabase.rpc(
-        "get_archived_payments", {}
-    ).execute()
+    result = await supabase.rpc("get_archived_payments", {}).execute()
 
     payment = next(
         (p for p in result.data if p["tx_ref"] == tx_ref),
@@ -515,10 +517,7 @@ async def reprocess_archived_payment(
 
     # 2. Idempotency check
     existing = (
-        await supabase.table("transactions")
-        .select("id")
-        .eq("tx_ref", tx_ref)
-        .execute()
+        await supabase.table("transactions").select("id").eq("tx_ref", tx_ref).execute()
     )
 
     if existing.data:

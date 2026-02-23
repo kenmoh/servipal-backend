@@ -26,6 +26,7 @@ from app.services.payment_service import (
     process_successful_product_payment,
 )
 from app.worker import enqueue_job
+from app.utils.redis_utils import get_pending, delete_pending
 
 router = APIRouter(prefix="/api/v1/wallet", tags=["Wallet"])
 
@@ -93,6 +94,14 @@ async def pay_with_wallet(
         - :param request:
         - :param supabase:
     """
+    pending_key = f"pending_delivery_{tx_ref}"
+    pending = await get_pending(pending_key)
+
+    if not pending:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Order data not found or expired. Please try again.",
+        )
     # 1. Verify wallet balance
     await wallet_service.verify_wallet_balance(
         customer_id=current_profile["id"],
@@ -198,20 +207,24 @@ async def pay_with_wallet(
     #     retry=Retry(max=5, interval=[30, 60, 120, 300, 600]),
     # )
 
- 
     # Supabase Que
-    result = await supabase.schema("pgmq_public").rpc(
-        "send",
-        {
-            "queue_name": "payment_queue",
-            "message": {
-                "tx_ref": tx_ref,
-                "paid_amount": str(paid_amount),
-                "flw_ref": str(data.tx_ref),
-                "payment_method": "WALLET",
+    result = (
+        await supabase.schema("pgmq_public")
+        .rpc(
+            "send",
+            {
+                "queue_name": "payment_queue",
+                "message": {
+                    "tx_ref": tx_ref,
+                    "paid_amount": str(paid_amount),
+                    "flw_ref": str(data.tx_ref),
+                    "payment_method": "WALLET",
+                    "pending_data": pending,
+                },
             },
-        }
-    ).execute()
+        )
+        .execute()
+    )
 
     msg_id = result.data
 
