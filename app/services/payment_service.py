@@ -152,7 +152,7 @@ async def process_successful_delivery_payment(
     if payment_method == "WALLET":
         existing = (
             await supabase.table("wallet_payment")
-            .select("id, status, amount")
+            .select("id, status, amount, tx_ref")
             .eq("tx_ref", tx_ref)
             .execute()
         )
