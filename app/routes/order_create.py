@@ -16,7 +16,7 @@ from app.services.payment_service import (
 )
 from app.config.logging import logger
 
-router = APIRouter(prefix="/internal", tags=["Internal"])
+router = APIRouter(prefix="/api/v1internal", tags=["Internal"])
 
 class PaymentMessage(BaseModel):
     tx_ref: str
