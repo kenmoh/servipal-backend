@@ -149,25 +149,6 @@ async def process_successful_delivery_payment(
             logger.error("delivery_payment_verification_failed", tx_ref=tx_ref)
             return {"status": "verification_failed"}
 
-    if payment_method == "WALLET":
-        existing = (
-            await supabase.table("wallet_payment")
-            .select("id, status, amount, tx_ref")
-            .eq("tx_ref", tx_ref)
-            .execute()
-        )
-
-        if existing.data:
-            logger.info(
-                event="wallet_payment_already_processed", level="info", tx_ref=tx_ref
-            )
-            return {
-                "status": existing.data[0]["status"],
-                "tx_ref": existing.data[0]["tx_ref"],
-                "amount": existing.data[0]["amount"],
-                "message": "Wallet payment already initiated",
-            }
-
     # 2. Get pending data from Redis
     pending_key = f"pending_delivery_{tx_ref}"
     pending = await get_pending(pending_key)
