@@ -76,7 +76,7 @@ async def top_up_my_wallet(
 async def pay_with_wallet(
     data: PaymentWithWalletData,
     current_profile: dict = Depends(get_current_profile),
-    supabase: AsyncClient = Depends(get_supabase_client),
+    supabase: AsyncClient = Depends(get_supabase_admin_client),
 ) -> PaymentWebhookResponse:
     """
     ** Handle Flutterwave payment webhooks. **
