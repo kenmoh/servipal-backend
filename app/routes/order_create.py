@@ -4,7 +4,7 @@ from fastapi import APIRouter, Header, HTTPException, status, Depends
 from typing import Optional, Any
 from pydantic import BaseModel, Field
 from supabase import AsyncClient
-from app.database.supabase import get_supabase_client
+from app.database.supabase import get_supabase_admin_client
 
 from app.config.config import settings
 from app.services.payment_service import (
@@ -57,7 +57,7 @@ HANDLER_MAP = {
 async def process_payment(
     payload: InsertPayload,
     x_internal_key: str = Header(...),
-    supabase: AsyncClient = Depends(get_supabase_client),
+    supabase: AsyncClient = Depends(get_supabase_admin_client),
 ):
 
     logger.info('*'*100)
@@ -139,7 +139,7 @@ async def process_payment(
 @router.post("/retry-payments", status_code=status.HTTP_200_OK)
 async def retry_payments(
     x_internal_key: str = Header(...),
-    supabase: AsyncClient = Depends(get_supabase_client),
+    supabase: AsyncClient = Depends(get_supabase_admin_client),
 ):
     if x_internal_key != settings.INTERNAL_API_KEY:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized")
