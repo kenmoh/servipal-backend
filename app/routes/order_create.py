@@ -146,7 +146,7 @@ async def retry_payments(
 
     # Read messages with read_ct > 0 (previously attempted but failed)
     result = await supabase.schema("pgmq_public").rpc(
-        "pop",
+        "read",
         {
             "queue_name": "payment_queue",
             "vt": 60,
