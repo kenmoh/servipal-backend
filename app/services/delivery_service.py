@@ -3,7 +3,7 @@ from typing import Optional
 import uuid
 import datetime
 from uuid import UUID
-from decimal import Decimal
+from decimal import Decimalq    
 from fastapi import Request, HTTPException, status
 from supabase import AsyncClient
 from postgrest.exceptions import APIError
@@ -330,17 +330,18 @@ async def _get_delivery(tx_ref: str, supabase: AsyncClient) -> dict:
         )
 
 
+
+
 # ============================================================
 # 1. ASSIGN RIDER
 # ============================================================
-
-
 async def assign_rider(
     delivery_id: str,
     rider_id: str,
     sender_id: str,
     supabase: AsyncClient,
 ) -> dict:
+    
     """
     Sender assigns a rider to delivery.
     - Validates rider availability
@@ -348,13 +349,16 @@ async def assign_rider(
     - Sets rider as busy
     - Sends notification to rider
     """
+
+
     if not rider_id:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="rider_id is required"
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="rider_id is required",
         )
 
     try:
-        # Get tx_ref
+        # 1. Get tx_ref and order_number
         delivery = (
             await supabase.table("delivery_orders")
             .select("tx_ref, order_number")
@@ -366,24 +370,43 @@ async def assign_rider(
         tx_ref = delivery.data["tx_ref"]
         order_number = delivery.data["order_number"]
 
-        # Call RPC
-        result = await supabase.rpc(
-            "assign_rider_to_delivery",
-            {
-                "p_tx_ref": tx_ref,
-                "p_rider_id": f"{rider_id}",
-            },
-        ).execute()
+        # 2. Call RPC
+        result_data = None
+        try:
+            result = await supabase.rpc(
+                "assign_rider_to_delivery",
+                {
+                    "p_tx_ref": tx_ref,
+                    "p_rider_id": rider_id,
+                },
+            ).execute()
+            result_data = result.data
 
-        result_data = result.data
+        except APIError as e:
+            result_data = extract_rpc_data(e)
+            if not result_data:
+                raise  # real error — re-raise
 
-        # Send notifications
+        if not result_data:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="No data returned from RPC",
+            )
+
+        logger.info(
+            "rider_assigned",
+            tx_ref=tx_ref,
+            dispatch_id=result_data.get("dispatch_id"),
+            rider_id=rider_id,
+        )
+
+        # 3. Send notifications
         await _send_delivery_notifications(
             order_number=order_number,
             new_status=DeliveryStatus.ASSIGNED,
-            sender_id=f"{sender_id}",
-            rider_id=f"{rider_id}",
-            dispatch_id=f"{result_data.get('dispatch_id')}",
+            sender_id=sender_id,
+            rider_id=rider_id,
+            dispatch_id=str(result_data.get("dispatch_id")),
             supabase=supabase,
         )
 
@@ -391,21 +414,92 @@ async def assign_rider(
             "status": "success",
             "delivery_status": "ASSIGNED",
             "tx_ref": tx_ref,
-            "rider_id": f"{rider_id}",
-            "dispatch_id": f"{result_data.get('dispatch_id')}",
+            "rider_id": rider_id,
+            "dispatch_id": str(result_data.get("dispatch_id")),
         }
 
+    except HTTPException:
+        raise
+
     except APIError as e:
-        logger.error(
-            "assign_rider_error",
-            error=str(e),
-            error_message=f"{e.message}",
-            exc_info=True,
-        )
+        logger.error("assign_rider_api_error", error=str(e), exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Something went wrong!",
+            detail="Something went wrong!",
         )
+
+
+# async def assign_rider(
+#     delivery_id: str,
+#     rider_id: str,
+#     sender_id: str,
+#     supabase: AsyncClient,
+# ) -> dict:
+    # """
+    # Sender assigns a rider to delivery.
+    # - Validates rider availability
+    # - Updates status to ASSIGNED
+    # - Sets rider as busy
+    # - Sends notification to rider
+    # """
+#     if not rider_id:
+#         raise HTTPException(
+#             status_code=status.HTTP_400_BAD_REQUEST, detail="rider_id is required"
+#         )
+
+#     try:
+#         # Get tx_ref
+#         delivery = (
+#             await supabase.table("delivery_orders")
+#             .select("tx_ref, order_number")
+#             .eq("id", delivery_id)
+#             .single()
+#             .execute()
+#         )
+
+#         tx_ref = delivery.data["tx_ref"]
+#         order_number = delivery.data["order_number"]
+
+#         # Call RPC
+#         result = await supabase.rpc(
+#             "assign_rider_to_delivery",
+#             {
+#                 "p_tx_ref": tx_ref,
+#                 "p_rider_id": f"{rider_id}",
+#             },
+#         ).execute()
+
+#         result_data = result.data
+
+#         # Send notifications
+#         await _send_delivery_notifications(
+#             order_number=order_number,
+#             new_status=DeliveryStatus.ASSIGNED,
+#             sender_id=f"{sender_id}",
+#             rider_id=f"{rider_id}",
+#             dispatch_id=f"{result_data.get('dispatch_id')}",
+#             supabase=supabase,
+#         )
+
+#         return {
+#             "status": "success",
+#             "delivery_status": "ASSIGNED",
+#             "tx_ref": tx_ref,
+#             "rider_id": f"{rider_id}",
+#             "dispatch_id": f"{result_data.get('dispatch_id')}",
+#         }
+
+#     except APIError as e:
+#         logger.error(
+#             "assign_rider_error",
+#             error=str(e),
+#             error_message=f"{e.message}",
+#             exc_info=True,
+#         )
+#         raise HTTPException(
+#             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+#             detail=f"Something went wrong!",
+#         )
 
 
 # ============================================================
@@ -1058,3 +1152,27 @@ async def _send_delivery_notifications(
                 data=notif["data"],
                 supabase=supabase,
             )
+
+
+import json
+
+def extract_rpc_data(e: APIError) -> dict | None:
+    """Extract actual RPC response from APIError details when postgrest
+    fails to parse a valid JSONB response."""
+    try:
+        details = e.details
+        if not details:
+            return None
+
+        if isinstance(details, (bytes, bytearray)):
+            return json.loads(details.decode("utf-8"))
+
+        if isinstance(details, str):
+            clean = details.strip()
+            # Strip b'...' wrapper if present
+            if clean.startswith("b'") or clean.startswith('b"'):
+                clean = clean[2:-1]
+            return json.loads(clean)
+
+    except Exception:
+        return None
