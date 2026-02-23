@@ -10,7 +10,13 @@ from pydantic import BaseModel
 from app.services.notification_service import notify_user
 from app.config.config import settings
 from postgrest.exceptions import APIError
-from app.services.payment_service import process_successful_delivery_payment, process_successful_food_payment, process_successful_topup_payment, process_successful_laundry_payment, process_successful_product_payment
+from app.services.payment_service import (
+    process_successful_delivery_payment,
+    process_successful_food_payment,
+    process_successful_topup_payment,
+    process_successful_laundry_payment,
+    process_successful_product_payment,
+)
 
 HANDLER_MAP = {
     "FOOD-": process_successful_food_payment,
@@ -38,6 +44,7 @@ class TransactionType(str, Enum):
     ESCROW_HOLD = "ESCROW_HOLD"
     REFUNDED = "REFUNDED"
 
+
 class ProcessPaymentRequest(BaseModel):
     tx_ref: str
     paid_amount: float
@@ -54,7 +61,7 @@ class OrderStatusUpdate(BaseModel):
 async def process_payment(
     data: ProcessPaymentRequest,
     x_internal_key: str,
-    supabase: AsyncClient ,
+    supabase: AsyncClient,
 ):
     # 1. Verify internal key — only Edge Function can call this
     if x_internal_key != settings.INTERNAL_API_KEY:
@@ -65,8 +72,7 @@ async def process_payment(
 
     # 2. Find handler from tx_ref prefix
     handler = next(
-        (h for prefix, h in HANDLER_MAP.items() if data.tx_ref.startswith(prefix)),
-        None
+        (h for prefix, h in HANDLER_MAP.items() if data.tx_ref.startswith(prefix)), None
     )
 
     if not handler:
@@ -104,7 +110,7 @@ async def process_payment(
         # Return 500 so Edge Function leaves message in queue for retry
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail='Something went wrong while processing the payment. Please try again.',
+            detail="Something went wrong while processing the payment. Please try again.",
         )
 
 

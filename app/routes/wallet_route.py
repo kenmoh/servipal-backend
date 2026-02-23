@@ -103,9 +103,9 @@ async def pay_with_wallet(
     if not data.tx_ref:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="tx_ref is required in the request body"
+            detail="tx_ref is required in the request body",
         )
-    
+
     existing = (
         await supabase.table("wallet_payment")
         .select("id, status")
@@ -129,10 +129,9 @@ async def pay_with_wallet(
             .insert(
                 {
                     "tx_ref": data.tx_ref,
-                    "amount": f'{data.amount}',
+                    "amount": f"{data.amount}",
                     "status": "success",
                     "user_id": current_profile["id"],
-                 
                 }
             )
             .execute()
@@ -142,7 +141,7 @@ async def pay_with_wallet(
             "wallet_payment_db_insert_error",
             error=str(e),
             tx_ref=data.tx_ref,
-            amount=f'{data.amount}',
+            amount=f"{data.amount}",
         )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -153,7 +152,7 @@ async def pay_with_wallet(
         event="wallet_payment",
         customer_id=current_profile["id"],
         tx_ref=data.tx_ref,
-        amount=f'{data.amount}',
+        amount=f"{data.amount}",
     )
 
     tx_ref = wallet_payment.data[0]["tx_ref"]
@@ -168,59 +167,64 @@ async def pay_with_wallet(
         return PaymentWebhookResponse(status="error", message="Missing tx_ref")
 
     # 5. Determine which handler is based on the tx_ref prefix
-    handler = None
-    if tx_ref.startswith("DELIVERY-"):
-        handler = process_successful_delivery_payment
-    elif tx_ref.startswith("FOOD-"):
-        handler = process_successful_food_payment
-    elif tx_ref.startswith("TOPUP-"):
-        handler = process_successful_topup_payment
-    elif tx_ref.startswith("LAUNDRY-"):
-        handler = process_successful_laundry_payment
-    elif tx_ref.startswith("PRODUCT-"):
-        handler = process_successful_product_payment
+    # handler = None
+    # if tx_ref.startswith("DELIVERY-"):
+    #     handler = process_successful_delivery_payment
+    # elif tx_ref.startswith("FOOD-"):
+    #     handler = process_successful_food_payment
+    # elif tx_ref.startswith("TOPUP-"):
+    #     handler = process_successful_topup_payment
+    # elif tx_ref.startswith("LAUNDRY-"):
+    #     handler = process_successful_laundry_payment
+    # elif tx_ref.startswith("PRODUCT-"):
+    #     handler = process_successful_product_payment
 
-    if not handler:
-        logger.warning(
-            event="wallet_payment_unknown_transaction_type",
-            level="warning",
-            tx_ref=tx_ref,
-        )
-        return PaymentWebhookResponse(status="unknown_transaction_type")
+    # if not handler:
+    #     logger.warning(
+    #         event="wallet_payment_unknown_transaction_type",
+    #         level="warning",
+    #         tx_ref=tx_ref,
+    #     )
+    #     return PaymentWebhookResponse(status="unknown_transaction_type")
 
     # 6. Queue the job with retry (5 attempts, exponential backoff)
-    job_id = enqueue_job(
-        handler,
-        tx_ref=str(tx_ref),
-        paid_amount=paid_amount,
-        flw_ref=f"{tx_ref}",
-        payment_method="WALLET",
-        retry=Retry(max=5, interval=[30, 60, 120, 300, 600]),
-    )
+    # job_id = enqueue_job(
+    #     handler,
+    #     tx_ref=str(tx_ref),
+    #     paid_amount=paid_amount,
+    #     flw_ref=f"{tx_ref}",
+    #     payment_method="WALLET",
+    #     retry=Retry(max=5, interval=[30, 60, 120, 300, 600]),
+    # )
 
     message = {
-        'tx_ref': str(tx_ref),
-        'paid_amount': paid_amount,
-        'flw_ref': f"{tx_ref}",
-        'payment_method': "WALLET",
+        "tx_ref": str(tx_ref),
+        "paid_amount": paid_amount,
+        "flw_ref": f"{tx_ref}",
+        "payment_method": "WALLET",
     }
     # Supabase Que
-    await supabase.schema("pgmq_public").rpc(
-        'send',
-         {
-            "queue_name": "payment_queue",
-            "message": message,
-            "sleep_seconds": 30,
-        }
+    result = (
+        await supabase.schema("pgmq_public")
+        .rpc(
+            "send",
+            {
+                "queue_name": "payment_queue",
+                "message": message,
+            },
+        )
+        .execute()
+    )
 
-    ).execute()
+    msg_id = result.data
 
     logger.info(
         event="wallet_payment_queued",
         level="info",
         wlt_ref=tx_ref,
-        job_id=job_id,
-        handler=handler.__name__,
+        # job_id=job_id,
+        msg_id=msg_id,
+        # handler=handler.__name__,
     )
     return RedirectResponse(
         url=f"{settings.FRONTEND_URL}/payment/status?status=success&tx_ref={tx_ref}",

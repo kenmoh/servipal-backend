@@ -17,14 +17,14 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = "development"
 
     # Frontend URL (used for redirects after payment processing)
-    FRONTEND_URL: str = "https://servipal-backend.onrender.com/api/v1"
+    API_URL: str = "https://servipal-backend.onrender.com/api/v1"
 
     # LOGFIRE
     LOGFIRE_TOKEN: Optional[str] = None
 
     # Internal API keys (for secure communication between services)
-    INTERNAL_API_KEY: Optional[str] = None
-    INTERNAL_API_KEY_HEADER: str = "X-Internal-API-Key"
+    INTERNAL_API_KEY: Optional[str] = os.getenv("INTERNAL_API_KEY")
+    INTERNAL_API_KEY_HEADER: str = os.getenv("INTERNAL_API_KEY_HEADER")
 
     # FLUTTERWAVE
     FLW_PUBLIC_KEY: Optional[str] = None

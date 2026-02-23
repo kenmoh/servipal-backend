@@ -129,8 +129,6 @@ class WithdrawalListResponse(BaseModel):
     withdrawals: List[WithdrawalResponse]
     total_count: int
 
-    
-
 
 class TransactionType(str, Enum):
     TOP_UP = "TOP_UP"

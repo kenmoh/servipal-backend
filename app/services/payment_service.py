@@ -17,7 +17,8 @@ def parse_coordinates(value):
     """Ensure coordinates are a list [lat, lng], not a string."""
     if isinstance(value, str):
         return json.loads(value)  # "[6.5, 3.3]" → [6.5, 3.3]
-    return value 
+    return value
+
 
 # ───────────────────────────────────────────────
 # Delivery Payment
@@ -36,7 +37,6 @@ async def process_successful_delivery_payment_rpc(
         tx_ref=tx_ref,
         paid_amount=paid_amount,
     )
-
 
     if payment_method == "CARD":
         verified = await verify_transaction_tx_ref(tx_ref)
@@ -71,8 +71,12 @@ async def process_successful_delivery_payment_rpc(
                 "p_sender_phone_number": delivery_data.get("sender_phone_number"),
                 "p_pickup_location": delivery_data["pickup_location"],
                 "p_destination": delivery_data["destination"],
-                "p_pickup_coordinates": parse_coordinates(delivery_data["pickup_coordinates"]),
-                "p_dropoff_coordinates": parse_coordinates(delivery_data["dropoff_coordinates"]),
+                "p_pickup_coordinates": parse_coordinates(
+                    delivery_data["pickup_coordinates"]
+                ),
+                "p_dropoff_coordinates": parse_coordinates(
+                    delivery_data["dropoff_coordinates"]
+                ),
                 "p_additional_info": delivery_data.get("description"),
                 "p_delivery_type": delivery_data.get("delivery_type", "STANDARD"),
                 "p_duration": delivery_data.get("duration"),
@@ -125,7 +129,6 @@ async def process_successful_delivery_payment_rpc(
         raise
 
 
-
 async def process_successful_delivery_payment(
     tx_ref: str,
     paid_amount: Decimal,
@@ -148,11 +151,11 @@ async def process_successful_delivery_payment(
 
     if payment_method == "WALLET":
         existing = (
-        await supabase.table("wallet_payment")
-        .select("id, status, amount")
-        .eq("tx_ref", tx_ref)
-        .execute()
-    )
+            await supabase.table("wallet_payment")
+            .select("id, status, amount")
+            .eq("tx_ref", tx_ref)
+            .execute()
+        )
 
         if existing.data:
             logger.info(

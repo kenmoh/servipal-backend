@@ -16,6 +16,7 @@ from app.routes import (
     product_route,
     dispute_route,
     escrow_route,
+    order_create
 )
 from app.config.logging import logger
 from app.utils.payment import get_all_banks
@@ -194,3 +195,4 @@ app.include_router(product_route.router)
 app.include_router(dispute_route.router)
 app.include_router(escrow_route.router)
 app.include_router(admin_router.router, include_in_schema=False)
+app.include_router(order_create.router, include_in_schema=False)

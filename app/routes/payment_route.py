@@ -126,42 +126,57 @@ async def flutterwave_webhook(
         )
 
     # 5. Determine which handler is based on the tx_ref prefix
-    handler = None
-    if tx_ref.startswith("DELIVERY-"):
-        handler = process_successful_delivery_payment
-    elif tx_ref.startswith("FOOD-"):
-        handler = process_successful_food_payment
-    elif tx_ref.startswith("TOPUP-"):
-        handler = process_successful_topup_payment
-    elif tx_ref.startswith("LAUNDRY-"):
-        handler = process_successful_laundry_payment
-    elif tx_ref.startswith("PRODUCT-"):
-        handler = process_successful_product_payment
+    # handler = None
+    # if tx_ref.startswith("DELIVERY-"):
+    #     handler = process_successful_delivery_payment
+    # elif tx_ref.startswith("FOOD-"):
+    #     handler = process_successful_food_payment
+    # elif tx_ref.startswith("TOPUP-"):
+    #     handler = process_successful_topup_payment
+    # elif tx_ref.startswith("LAUNDRY-"):
+    #     handler = process_successful_laundry_payment
+    # elif tx_ref.startswith("PRODUCT-"):
+    #     handler = process_successful_product_payment
 
-    if not handler:
-        logger.warning(
-            event="flutterwave_webhook_unknown_transaction_type",
-            level="warning",
-            tx_ref=tx_ref,
-        )
-        return PaymentWebhookResponse(status="unknown_transaction_type")
+    # if not handler:
+    #     logger.warning(
+    #         event="flutterwave_webhook_unknown_transaction_type",
+    #         level="warning",
+    #         tx_ref=tx_ref,
+    #     )
+    #     return PaymentWebhookResponse(status="unknown_transaction_type")
 
     # 6. Queue the job with retry (5 attempts, exponential backoff)
-    job_id = enqueue_job(
-        handler,
-        tx_ref=str(tx_ref),
-        payment_method='CARD',
-        paid_amount=paid_amount,
-        flw_ref=str(flw_ref),
-        retry=Retry(max=5, interval=[30, 60, 120, 300, 600]),
-    )
+    # job_id = enqueue_job(
+    #     handler,
+    #     tx_ref=str(tx_ref),
+    #     payment_method="CARD",
+    #     paid_amount=paid_amount,
+    #     flw_ref=str(flw_ref),
+    #     retry=Retry(max=5, interval=[30, 60, 120, 300, 600]),
+    # )
+    result = await supabase.schema("pgmq_public").rpc(
+        "send",
+        {
+            "queue_name": "payment_queue",
+            "message": {
+                "tx_ref": tx_ref,
+                "paid_amount": str(paid_amount),
+                "flw_ref": str(flw_ref),
+                "payment_method": "CARD",
+            },
+        }
+    ).execute()
+
+    msg_id = result.data
 
     logger.info(
         event=webhook_event,
         level="info",
         tx_ref=tx_ref,
-        job_id=job_id,
-        handler=handler.__name__,
+        msg_id=msg_id,
+        # job_id=job_id,
+        # handler=handler.__name__,
     )
     return PaymentWebhookResponse(
         status="queued_with_retry", trx_ref=tx_ref, message="Payment processing queued"
