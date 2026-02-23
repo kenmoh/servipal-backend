@@ -145,12 +145,12 @@ async def retry_payments(
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized")
 
     # Read messages with read_ct > 0 (previously attempted but failed)
-    result = await supabase.rpc(
+    result = await supabase.schema("pgmq_public").rpc(
         "read",
         {
             "queue_name": "payment_queue",
-            "vt": 60,
-            "qty": 5,
+            "sleep_seconds": 60,  
+            "n": 10,             
         }
     ).execute()
 
