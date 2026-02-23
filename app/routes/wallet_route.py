@@ -198,24 +198,20 @@ async def pay_with_wallet(
     #     retry=Retry(max=5, interval=[30, 60, 120, 300, 600]),
     # )
 
-    message = {
-        "tx_ref": str(tx_ref),
-        "paid_amount": paid_amount,
-        "flw_ref": f"{tx_ref}",
-        "payment_method": "WALLET",
-    }
+ 
     # Supabase Que
-    result = (
-        await supabase.schema("pgmq_public")
-        .rpc(
-            "send",
-            {
-                "queue_name": "payment_queue",
-                "message": message,
+    result = await supabase.schema("pgmq_public").rpc(
+        "send",
+        {
+            "queue_name": "payment_queue",
+            "message": {
+                "tx_ref": tx_ref,
+                "paid_amount": str(paid_amount),
+                "flw_ref": str(data.tx_ref),
+                "payment_method": "WALLET",
             },
-        )
-        .execute()
-    )
+        }
+    ).execute()
 
     msg_id = result.data
 
@@ -223,9 +219,7 @@ async def pay_with_wallet(
         event="wallet_payment_queued",
         level="info",
         wlt_ref=tx_ref,
-        # job_id=job_id,
         msg_id=msg_id,
-        # handler=handler.__name__,
     )
     return RedirectResponse(
         url=f"{settings.API_URL}/payment/status?status=success&tx_ref={tx_ref}",
