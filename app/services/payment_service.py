@@ -11,6 +11,8 @@ from fastapi import Request
 from decimal import Decimal
 from app.utils.payment import verify_transaction_tx_ref
 from app.services.notification_service import notify_user
+from app.services.delivery_service import extract_rpc_data
+from postgrest.exceptions import APIError
 
 
 def parse_coordinates(value):
@@ -486,19 +488,28 @@ async def process_successful_topup_payment(
 ):
     logger.info("processing_topup_payment", tx_ref=tx_ref, paid_amount=paid_amount)
 
-    # 1. Verify payment — CARD only
+    # 1. Verify — CARD only
     if payment_method == "CARD":
         verified = await verify_transaction_tx_ref(tx_ref)
         if not verified or verified.get("status") != "success":
             logger.error("topup_payment_verification_failed", tx_ref=tx_ref)
             return
 
-    # 2. Get pending data — from message (WALLET) or Redis (CARD)
-    pending_key = f"pending_topup_{tx_ref}"
+    # 2. ✅ Idempotency check BEFORE anything else
+    existing = (
+        await supabase.table("transactions")
+        .select("id")
+        .eq("tx_ref", tx_ref)
+        .execute()
+    )
+    if existing.data:
+        logger.info("topup_payment_already_processed", tx_ref=tx_ref)
+        return {"status": "already_processed"}
 
+    # 3. Get pending data
+    pending_key = f"pending_topup_{tx_ref}"
     if payment_method == "WALLET" and pending_data:
         pending = pending_data
-        logger.info("using_embedded_pending_data", tx_ref=tx_ref)
     else:
         pending = await get_pending(pending_key)
 
@@ -509,7 +520,6 @@ async def process_successful_topup_payment(
     expected_amount = Decimal(str(pending["amount"]))
     user_id = pending["user_id"]
 
-    # 3. Validate amount
     expected_rounded = expected_amount.quantize(Decimal("0.00"))
     paid_rounded = Decimal(str(paid_amount)).quantize(Decimal("0.00"))
 
@@ -525,17 +535,26 @@ async def process_successful_topup_payment(
 
     try:
         # 4. Call RPC
-        result = await supabase.rpc(
-            "process_topup_payment",
-            {
-                "p_tx_ref": tx_ref,
-                "p_flw_ref": flw_ref,
-                "p_paid_amount": str(paid_rounded),
-                "p_user_id": user_id,
-            },
-        ).execute()
+        result_data = None
+        try:
+            result = await supabase.rpc(
+                "process_topup_payment",
+                {
+                    "p_tx_ref": tx_ref,
+                    "p_flw_ref": flw_ref,
+                    "p_paid_amount": str(paid_rounded),
+                    "p_user_id": user_id,
+                },
+            ).execute()
+            result_data = result.data
 
-        result_data = result.data
+        except APIError as e:
+            result_data = extract_rpc_data(e)
+            if not result_data:
+                raise
+
+        if not result_data:
+            raise Exception("No data returned from RPC")
 
         if result_data.get("status") == "already_processed":
             logger.info("topup_payment_already_processed", tx_ref=tx_ref)

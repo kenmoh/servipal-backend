@@ -163,11 +163,6 @@ async def retry_payments(
         .execute()
     )
 
-    logger.info("*" * 100)
-    logger.info("retry_payments_result", result=result)
-    logger.info("retry_payments_data", data=result.data)
-    logger.info("*" * 100)
-
     messages = result.data or []
 
     if not messages:
@@ -179,6 +174,7 @@ async def retry_payments(
         msg_id = msg["msg_id"]
         read_ct = msg["read_ct"]
         data = msg["message"]
+        paid_amount = data["paid_amount"]
         tx_ref = data["tx_ref"]
 
         try:
@@ -225,7 +221,7 @@ async def retry_payments(
         try:
             await handler(
                 tx_ref=tx_ref,
-                paid_amount=Decimal(paid_amount),
+                paid_amount=paid_amount,
                 flw_ref=data["flw_ref"],
                 payment_method=data["payment_method"],
                 pending_data=data.get("pending_data"),
