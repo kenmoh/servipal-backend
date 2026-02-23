@@ -1,7 +1,8 @@
 # routers/internal.py
 
 from fastapi import APIRouter, Header, HTTPException, status, Depends
-from pydantic import BaseModel
+from typing import Optional, Any
+from pydantic import BaseModel, Field
 from supabase import AsyncClient
 from app.database.supabase import get_supabase_client
 
@@ -17,12 +18,30 @@ from app.config.logging import logger
 
 router = APIRouter(prefix="/internal", tags=["Internal"])
 
-
-class ProcessPaymentRequest(BaseModel):
+class PaymentMessage(BaseModel):
     tx_ref: str
     paid_amount: float
     flw_ref: str
-    payment_method: str  # 'CARD' or 'WALLET'
+    payment_method: str
+
+
+class QueueRecord(BaseModel):
+    msg_id: int
+    read_ct: int
+    enqueued_at: str
+    vt: str
+    message: PaymentMessage
+
+
+class InsertPayload(BaseModel):
+    type: str
+    table: str
+    schema: str = Field(None, alias="schema") 
+    record: QueueRecord
+    old_record: Optional[Any] = None
+
+    model_config = {"populate_by_name": True}
+
 
 
 HANDLER_MAP = {
@@ -36,75 +55,154 @@ HANDLER_MAP = {
 
 @router.post("/process-payment", status_code=status.HTTP_200_OK)
 async def process_payment(
-    data: ProcessPaymentRequest,
+    payload: InsertPayload,
     x_internal_key: str = Header(...),
     supabase: AsyncClient = Depends(get_supabase_client),
 ):
-    # 1. Verify internal key — only Edge Function can call this
+
+    logger.info('*'*100)
+    logger.info(payload)
+    logger.info('*'*100)
+    # 1. Verify internal key
     if x_internal_key != settings.INTERNAL_API_KEY:
-        logger.warning(
-            "internal_endpoint_unauthorized",
-            tx_ref=data.tx_ref,
-        )
+        logger.warning("internal_endpoint_unauthorized")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Unauthorized",
         )
 
+    # 2. Only process INSERT events
+    if payload.type != "INSERT":
+        return {"status": "ignored", "reason": f"Event type {payload.type} not handled"}
+
+    # 3. Extract message directly from record
+    data = payload.record.message
+    tx_ref = data.tx_ref
+    paid_amount = data.paid_amount
+    flw_ref = data.flw_ref
+    payment_method = data.payment_method
+
     logger.info(
         "process_payment_received",
-        tx_ref=data.tx_ref,
-        payment_method=data.payment_method,
-        paid_amount=data.paid_amount,
+        tx_ref=tx_ref,
+        payment_method=payment_method,
+        paid_amount=paid_amount,
+        msg_id=payload.record.msg_id,
     )
 
-    # 2. Find handler from tx_ref prefix
+    # 4. Find handler
     handler = next(
-        (h for prefix, h in HANDLER_MAP.items() if data.tx_ref.startswith(prefix)),
+        (h for prefix, h in HANDLER_MAP.items() if tx_ref.startswith(prefix)),
         None,
     )
 
     if not handler:
-        logger.warning(
-            "process_payment_unknown_prefix",
-            tx_ref=data.tx_ref,
-        )
-        # Return 400 — Edge Function will dead letter this message
-        # since retrying won't help (prefix will always be unknown)
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Unknown tx_ref prefix: {data.tx_ref}",
-        )
+        logger.warning("process_payment_unknown_prefix", tx_ref=tx_ref)
+        # Return 200 — bad prefix won't fix itself, no point retrying
+        return {"status": "ignored", "reason": f"Unknown tx_ref prefix: {tx_ref}"}
 
-    # 3. Run the handler
+    # 5. Run handler
     try:
         await handler(
-            tx_ref=data.tx_ref,
-            paid_amount=data.paid_amount,
-            flw_ref=data.flw_ref,
-            payment_method=data.payment_method,
+            tx_ref=tx_ref,
+            paid_amount=paid_amount,
+            flw_ref=flw_ref,
+            payment_method=payment_method,
             supabase=supabase,
         )
 
         logger.info(
             "process_payment_success",
-            tx_ref=data.tx_ref,
+            tx_ref=tx_ref,
             handler=handler.__name__,
-            payment_method=data.payment_method,
+            payment_method=payment_method,
+            msg_id=payload.record.msg_id,
         )
 
-        return {"status": "success", "tx_ref": data.tx_ref}
+        return {"status": "success", "tx_ref": tx_ref}
 
     except Exception as e:
         logger.error(
             "process_payment_failed",
-            tx_ref=data.tx_ref,
+            tx_ref=tx_ref,
             handler=handler.__name__,
             error=str(e),
             exc_info=True,
         )
-        # Return 500 — Edge Function leaves message in queue for retry
+        # Return 500 — webhook will retry
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Something went wrong while processing the payment",
+            detail=str(e),
         )
+    
+
+@router.post("/retry-payments", status_code=status.HTTP_200_OK)
+async def retry_payments(
+    x_internal_key: str = Header(...),
+    supabase: AsyncClient = Depends(get_supabase_client),
+):
+    if x_internal_key != settings.INTERNAL_API_KEY:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized")
+
+    # Read messages with read_ct > 0 (previously attempted but failed)
+    result = await supabase.schema("pgmq_public").rpc(
+        "pop",
+        {
+            "queue_name": "payment_queue",
+            "vt": 60,
+            "qty": 10,
+        }
+    ).execute()
+
+    messages = result.data or []
+
+    if not messages:
+        return {"status": "empty"}
+
+    for msg in messages:
+        data = msg["message"]
+        tx_ref = data["tx_ref"]
+
+        # Dead letter — exceeded max retries
+        if msg["read_ct"] > 5:
+            logger.error(
+                "payment_dead_letter",
+                tx_ref=tx_ref,
+                attempts=msg["read_ct"],
+            )
+            await supabase.schema("pgmq_public").rpc(
+                "archive",
+                {"queue_name": "payment_queue", "msg_id": msg["msg_id"]}
+            ).execute()
+            continue
+
+        handler = next(
+            (h for prefix, h in HANDLER_MAP.items() if tx_ref.startswith(prefix)),
+            None,
+        )
+
+        if not handler:
+            await supabase.schema("pgmq_public").rpc(
+                "archive",
+                {"queue_name": "payment_queue", "msg_id": msg["msg_id"]}
+            ).execute()
+            continue
+
+        try:
+            await handler(
+                tx_ref=tx_ref,
+                paid_amount=float(data["paid_amount"]),
+                flw_ref=data["flw_ref"],
+                payment_method=data["payment_method"],
+                supabase=supabase,
+            )
+            await supabase.schema("pgmq_public").rpc(
+                "archive",
+                {"queue_name": "payment_queue", "msg_id": msg["msg_id"]}
+            ).execute()
+            logger.info("payment_retry_success", tx_ref=tx_ref)
+
+        except Exception as e:
+            logger.error("payment_retry_failed", tx_ref=tx_ref, error=str(e))
+
+    return {"status": "done", "processed": len(messages)}
