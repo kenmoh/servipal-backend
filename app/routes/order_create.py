@@ -83,6 +83,7 @@ async def process_payment(
     paid_amount = data.paid_amount
     flw_ref = data.flw_ref
     payment_method = data.payment_method
+    pending_data = data.pending_data
 
     logger.info(
         "process_payment_received",
@@ -110,7 +111,7 @@ async def process_payment(
             paid_amount=paid_amount,
             flw_ref=flw_ref,
             payment_method=payment_method,
-            pending_data=data.get("pending_data"),
+            pending_data=pending_data,
             supabase=supabase,
         )
 

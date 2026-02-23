@@ -480,21 +480,27 @@ async def process_successful_topup_payment(
     paid_amount: float,
     flw_ref: str,
     supabase: AsyncClient,
-    request: Optional[Request] = None,
     payment_method: Literal["CARD", "WALLET"] = "CARD",
+    pending_data: dict = None,
+    request: Optional[Request] = None,
 ):
-    """Process successful wallet top-up payment using atomic RPC."""
     logger.info("processing_topup_payment", tx_ref=tx_ref, paid_amount=paid_amount)
 
-    # Verify payment
-    verified = await verify_transaction_tx_ref(tx_ref)
-    if not verified or verified.get("status") != "success":
-        logger.error("topup_payment_verification_failed", tx_ref=tx_ref)
-        return
+    # 1. Verify payment — CARD only
+    if payment_method == "CARD":
+        verified = await verify_transaction_tx_ref(tx_ref)
+        if not verified or verified.get("status") != "success":
+            logger.error("topup_payment_verification_failed", tx_ref=tx_ref)
+            return
 
-    # Get pending data
+    # 2. Get pending data — from message (WALLET) or Redis (CARD)
     pending_key = f"pending_topup_{tx_ref}"
-    pending = await get_pending(pending_key)
+
+    if payment_method == "WALLET" and pending_data:
+        pending = pending_data
+        logger.info("using_embedded_pending_data", tx_ref=tx_ref)
+    else:
+        pending = await get_pending(pending_key)
 
     if not pending:
         logger.warning("topup_payment_pending_not_found", tx_ref=tx_ref)
@@ -503,7 +509,7 @@ async def process_successful_topup_payment(
     expected_amount = Decimal(str(pending["amount"]))
     user_id = pending["user_id"]
 
-    # Validate amount
+    # 3. Validate amount
     expected_rounded = expected_amount.quantize(Decimal("0.00"))
     paid_rounded = Decimal(str(paid_amount)).quantize(Decimal("0.00"))
 
@@ -511,14 +517,14 @@ async def process_successful_topup_payment(
         logger.warning(
             "topup_payment_amount_mismatch",
             tx_ref=tx_ref,
-            expected=expected_rounded,
-            paid=paid_rounded,
+            expected=str(expected_rounded),
+            paid=str(paid_rounded),
         )
         await delete_pending(pending_key)
         return
 
     try:
-        # Call atomic RPC - everything happens in one transaction!
+        # 4. Call RPC
         result = await supabase.rpc(
             "process_topup_payment",
             {
@@ -536,10 +542,8 @@ async def process_successful_topup_payment(
             await delete_pending(pending_key)
             return result_data
 
-        # Success! Cleanup Redis
         await delete_pending(pending_key)
 
-        # Notify user
         await notify_user(
             user_id=user_id,
             title="Wallet Top-up Successful",
@@ -553,7 +557,6 @@ async def process_successful_topup_payment(
             supabase=supabase,
         )
 
-        # Audit log
         await log_audit_event(
             supabase,
             entity_type="WALLET",
@@ -586,6 +589,117 @@ async def process_successful_topup_payment(
             exc_info=True,
         )
         raise
+# async def process_successful_topup_payment(
+#     tx_ref: str,
+#     paid_amount: float,
+#     flw_ref: str,
+#     supabase: AsyncClient,
+#     request: Optional[Request] = None,
+#     payment_method: Literal["CARD", "WALLET"] = "CARD",
+# ):
+#     """Process successful wallet top-up payment using atomic RPC."""
+#     logger.info("processing_topup_payment", tx_ref=tx_ref, paid_amount=paid_amount)
+
+#     # Verify payment
+#     verified = await verify_transaction_tx_ref(tx_ref)
+#     if not verified or verified.get("status") != "success":
+#         logger.error("topup_payment_verification_failed", tx_ref=tx_ref)
+#         return
+
+#     # Get pending data
+#     pending_key = f"pending_topup_{tx_ref}"
+#     pending = await get_pending(pending_key)
+
+#     if not pending:
+#         logger.warning("topup_payment_pending_not_found", tx_ref=tx_ref)
+#         return
+
+#     expected_amount = Decimal(str(pending["amount"]))
+#     user_id = pending["user_id"]
+
+#     # Validate amount
+#     expected_rounded = expected_amount.quantize(Decimal("0.00"))
+#     paid_rounded = Decimal(str(paid_amount)).quantize(Decimal("0.00"))
+
+#     if paid_rounded != expected_rounded:
+#         logger.warning(
+#             "topup_payment_amount_mismatch",
+#             tx_ref=tx_ref,
+#             expected=expected_rounded,
+#             paid=paid_rounded,
+#         )
+#         await delete_pending(pending_key)
+#         return
+
+#     try:
+#         # Call atomic RPC - everything happens in one transaction!
+#         result = await supabase.rpc(
+#             "process_topup_payment",
+#             {
+#                 "p_tx_ref": tx_ref,
+#                 "p_flw_ref": flw_ref,
+#                 "p_paid_amount": str(paid_rounded),
+#                 "p_user_id": user_id,
+#             },
+#         ).execute()
+
+#         result_data = result.data
+
+#         if result_data.get("status") == "already_processed":
+#             logger.info("topup_payment_already_processed", tx_ref=tx_ref)
+#             await delete_pending(pending_key)
+#             return result_data
+
+#         # Success! Cleanup Redis
+#         await delete_pending(pending_key)
+
+#         # Notify user
+#         await notify_user(
+#             user_id=user_id,
+#             title="Wallet Top-up Successful",
+#             body=f"₦{paid_rounded} has been added to your wallet",
+#             data={
+#                 "user_id": str(user_id),
+#                 "type": "WALLET_TOPUP",
+#                 "amount": str(paid_rounded),
+#                 "new_balance": str(result_data["new_balance"]),
+#             },
+#             supabase=supabase,
+#         )
+
+#         # Audit log
+#         await log_audit_event(
+#             supabase,
+#             entity_type="WALLET",
+#             entity_id=user_id,
+#             action="TOP_UP",
+#             old_value={"balance": str(result_data["old_balance"])},
+#             new_value={"balance": str(result_data["new_balance"])},
+#             change_amount=Decimal(str(paid_rounded)),
+#             actor_id=user_id,
+#             actor_type="USER",
+#             notes=f"Wallet top-up of ₦{paid_rounded} via Flutterwave",
+#             request=request,
+#         )
+
+#         logger.info(
+#             "topup_payment_processed_success",
+#             tx_ref=tx_ref,
+#             user_id=user_id,
+#             amount=float(paid_rounded),
+#             new_balance=float(result_data["new_balance"]),
+#         )
+
+#         return result_data
+
+#     except Exception as e:
+#         logger.error(
+#             "topup_payment_processing_error",
+#             tx_ref=tx_ref,
+#             error=str(e),
+#             exc_info=True,
+#         )
+#         raise
 
 
 # ───────────────────────────────────────────────
