@@ -1,6 +1,7 @@
 # routers/internal.py
 
 from fastapi import APIRouter, Header, HTTPException, status, Depends
+from decimal import Decimal
 from typing import Optional, Any
 from pydantic import BaseModel, Field
 from supabase import AsyncClient
@@ -172,7 +173,7 @@ async def retry_payments(
         tx_ref = data["tx_ref"]
 
         try:
-            paid_amount = float(data["paid_amount"])
+            paid_amount = str(Decimal(data["paid_amount"]))
         except (ValueError, TypeError) as e:
             logger.error("invalid_paid_amount", tx_ref=tx_ref, raw=data.get("paid_amount"))
             await supabase.schema("pgmq_public").rpc(
@@ -181,7 +182,7 @@ async def retry_payments(
             continue
 
         # Dead letter — exceeded max retries
-        if read_ct > 5:
+        if read_ct > 10:
             logger.error("payment_dead_letter", tx_ref=tx_ref, msg_id=msg_id, attempts=read_ct)
             await supabase.schema("pgmq_public").rpc(
                 "archive", {"queue_name": "payment_queue", "message_id": msg_id}
@@ -205,18 +206,18 @@ async def retry_payments(
         try:
             await handler(
                 tx_ref=tx_ref,
-                paid_amount=paid_amount,
+                paid_amount=Decimal(paid_amount),
                 flw_ref=data["flw_ref"],
                 payment_method=data["payment_method"],
                 supabase=supabase,
             )
             await supabase.schema("pgmq_public").rpc(
-                "archive", {"queue_name": "payment_queue", "msg_id": msg_id}
+                "archive", {"queue_name": "payment_queue", "message_id": msg_id}
             ).execute()
             logger.info("payment_retry_success", tx_ref=tx_ref, msg_id=msg_id)
 
         except Exception as e:
-            logger.error("payment_retry_failed", tx_ref=tx_ref, msg_id=msg_id, error=str(e))
+            logger.error("payment_retry_failed", tx_ref=tx_ref, message_id=msg_id, error=str(e))
             # Don't archive — stays in queue for next retry
 
     return {"status": "done", "processed": len(messages)}

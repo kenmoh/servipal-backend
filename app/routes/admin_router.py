@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends, Query, Request, HTTPException, status
+from fastapi import APIRouter, Depends, Query, Request, HTTPException, status, Header
+from typing import Optional, List
 from app.services import admin_service
 from app.schemas.admin_schemas import *
 from app.dependencies.auth import get_current_profile
@@ -9,6 +10,8 @@ from supabase import AsyncClient
 from uuid import UUID
 from datetime import datetime
 from app.dependencies.auth import require_user_type
+from app.config.config import settings  
+from app.routes.order_create import HANDLER_MAP
 
 router = APIRouter(prefix="/api/v1/admin", tags=["Admin"])
 
@@ -469,3 +472,91 @@ async def list_audit_logs(
     pagination = PaginationParams(page=page, page_size=page_size)
 
     return await admin_service.list_audit_logs(filters, pagination, admin_client)
+
+
+@router.get("/queue/archived", status_code=status.HTTP_200_OK)
+async def get_archived_payments(
+    x_internal_key: str = Header(...),
+    supabase: AsyncClient = Depends(get_supabase_admin_client),
+):
+    if x_internal_key != settings.INTERNAL_API_KEY:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized")
+
+    result = await supabase.rpc("get_archived_payments", {}).execute()
+
+    return {"archived": result.data, "count": len(result.data)}
+
+
+@router.post("/queue/reprocess", status_code=status.HTTP_200_OK)
+async def reprocess_archived_payment(
+    tx_ref: str,
+    x_internal_key: str = Header(...),
+    supabase: AsyncClient = Depends(get_supabase_admin_client),
+):
+    """Reprocess a specific archived payment by tx_ref."""
+    if x_internal_key != settings.INTERNAL_API_KEY:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized")
+
+    # 1. Get from archive
+    result = await supabase.rpc(
+        "get_archived_payments", {}
+    ).execute()
+
+    payment = next(
+        (p for p in result.data if p["tx_ref"] == tx_ref),
+        None,
+    )
+
+    if not payment:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"No archived payment found for tx_ref: {tx_ref}",
+        )
+
+    # 2. Idempotency check
+    existing = (
+        await supabase.table("transactions")
+        .select("id")
+        .eq("tx_ref", tx_ref)
+        .execute()
+    )
+
+    if existing.data:
+        return {
+            "status": "already_processed",
+            "tx_ref": tx_ref,
+            "message": "Order already exists for this payment",
+        }
+
+    # 3. Find handler
+    handler = next(
+        (h for prefix, h in HANDLER_MAP.items() if tx_ref.startswith(prefix)),
+        None,
+    )
+
+    if not handler:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unknown tx_ref prefix: {tx_ref}",
+        )
+
+    # 4. Reprocess
+    try:
+        await handler(
+            tx_ref=tx_ref,
+            paid_amount=Decimal(str(payment["paid_amount"])),
+            flw_ref=payment["flw_ref"],
+            payment_method=payment["payment_method"],
+            supabase=supabase,
+        )
+
+        logger.info("archived_payment_reprocessed", tx_ref=tx_ref)
+
+        return {"status": "success", "tx_ref": tx_ref}
+
+    except Exception as e:
+        logger.error("archived_payment_reprocess_failed", tx_ref=tx_ref, error=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e),
+        )

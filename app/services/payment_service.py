@@ -162,9 +162,9 @@ async def process_successful_delivery_payment(
                 event="wallet_payment_already_processed", level="info", tx_ref=tx_ref
             )
             return {
-                "status": existing.data["status"],
-                "tx_ref": existing.data["tx_ref"],
-                "amount": existing.data["amount"],
+                "status": existing.data[0]["status"],
+                "tx_ref": existing.data[0]["tx_ref"],
+                "amount": existing.data[0]["amount"],
                 "message": "Wallet payment already initiated",
             }
 
