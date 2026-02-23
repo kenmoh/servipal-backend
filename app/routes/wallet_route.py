@@ -227,7 +227,7 @@ async def pay_with_wallet(
         # handler=handler.__name__,
     )
     return RedirectResponse(
-        url=f"{settings.FRONTEND_URL}/payment/status?status=success&tx_ref={tx_ref}",
+        url=f"{settings.API_URL}/payment/status?status=success&tx_ref={tx_ref}",
         status_code=status.HTTP_302_FOUND,
     )
 
