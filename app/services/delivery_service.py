@@ -3,7 +3,7 @@ from typing import Optional
 import uuid
 import datetime
 from uuid import UUID
-from decimal import Decimalq
+from decimal import Decimal
 from fastapi import Request, HTTPException, status
 from supabase import AsyncClient
 from postgrest.exceptions import APIError
@@ -21,9 +21,8 @@ from app.utils.redis_utils import save_pending
 from app.config.config import settings
 from app.config.logging import logger
 from app.utils.audit import log_audit_event
-from decimal import Decimal
 from app.services.notification_service import notify_user
-from decimal import Decimal
+
 
 
 async def get_charges(supabase: AsyncClient) -> dict:
