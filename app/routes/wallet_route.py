@@ -234,9 +234,11 @@ async def pay_with_wallet(
         wlt_ref=tx_ref,
         msg_id=msg_id,
     )
-    return RedirectResponse(
-        url=f"{settings.API_URL}/payment/status?status=success&tx_ref={tx_ref}",
-        status_code=status.HTTP_302_FOUND,
+    return PaymentWebhookResponse(
+        status="success",
+        tx_ref=tx_ref,
+        amount=paid_amount,
+        message="Wallet payment processed and queued",
     )
 
 

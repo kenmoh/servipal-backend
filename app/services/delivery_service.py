@@ -3,7 +3,7 @@ from typing import Optional
 import uuid
 import datetime
 from uuid import UUID
-from decimal import Decimalq    
+from decimal import Decimalq
 from fastapi import Request, HTTPException, status
 from supabase import AsyncClient
 from postgrest.exceptions import APIError
@@ -330,8 +330,6 @@ async def _get_delivery(tx_ref: str, supabase: AsyncClient) -> dict:
         )
 
 
-
-
 # ============================================================
 # 1. ASSIGN RIDER
 # ============================================================
@@ -341,7 +339,6 @@ async def assign_rider(
     sender_id: str,
     supabase: AsyncClient,
 ) -> dict:
-    
     """
     Sender assigns a rider to delivery.
     - Validates rider availability
@@ -349,7 +346,6 @@ async def assign_rider(
     - Sets rider as busy
     - Sends notification to rider
     """
-
 
     if not rider_id:
         raise HTTPException(
@@ -435,13 +431,13 @@ async def assign_rider(
 #     sender_id: str,
 #     supabase: AsyncClient,
 # ) -> dict:
-    # """
-    # Sender assigns a rider to delivery.
-    # - Validates rider availability
-    # - Updates status to ASSIGNED
-    # - Sets rider as busy
-    # - Sends notification to rider
-    # """
+# """
+# Sender assigns a rider to delivery.
+# - Validates rider availability
+# - Updates status to ASSIGNED
+# - Sets rider as busy
+# - Sends notification to rider
+# """
 #     if not rider_id:
 #         raise HTTPException(
 #             status_code=status.HTTP_400_BAD_REQUEST, detail="rider_id is required"
@@ -1155,6 +1151,7 @@ async def _send_delivery_notifications(
 
 
 import json
+
 
 def extract_rpc_data(e: APIError) -> dict | None:
     """Extract actual RPC response from APIError details when postgrest
