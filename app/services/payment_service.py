@@ -481,6 +481,7 @@ async def process_successful_topup_payment(
     flw_ref: str,
     supabase: AsyncClient,
     request: Optional[Request] = None,
+    payment_method: Literal["CARD", "WALLET"] = "CARD",
 ):
     """Process successful wallet top-up payment using atomic RPC."""
     logger.info("processing_topup_payment", tx_ref=tx_ref, paid_amount=paid_amount)
