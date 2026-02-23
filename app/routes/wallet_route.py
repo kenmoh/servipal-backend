@@ -100,6 +100,12 @@ async def pay_with_wallet(
     )
 
     # 3. Idempotency — check if wallet_payment row already exists
+    if not data.tx_ref:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="tx_ref is required in the request body"
+        )
+    
     existing = (
         await supabase.table("wallet_payment")
         .select("id, status")
@@ -187,7 +193,7 @@ async def pay_with_wallet(
         handler,
         tx_ref=str(tx_ref),
         paid_amount=paid_amount,
-        flw_ref=f"WALLET-{tx_ref}",
+        flw_ref=f"{tx_ref}",
         payment_method="WALLET",
         retry=Retry(max=5, interval=[30, 60, 120, 300, 600]),
     )
@@ -195,7 +201,7 @@ async def pay_with_wallet(
     message = {
         'tx_ref': str(tx_ref),
         'paid_amount': paid_amount,
-        'flw_ref': f"WALLET-{tx_ref}",
+        'flw_ref': f"{tx_ref}",
         'payment_method': "WALLET",
     }
     # Supabase Que
