@@ -94,7 +94,8 @@ async def pay_with_wallet(
         - :param request:
         - :param supabase:
     """
-    pending_key = f"pending_delivery_{tx_ref}"
+    service = data.tx_ref.split("-")[0].lower() if data.tx_ref else "UNKNOWN"
+    pending_key = f"pending_{service}_{data.tx_ref}"
     pending = await get_pending(pending_key)
 
     if not pending:
