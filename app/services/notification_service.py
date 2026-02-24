@@ -95,11 +95,9 @@ async def notify_user(
         supabase = await create_supabase_admin_client()
 
     token = await get_push_token(user_id, supabase)
-    logger.debug("*" * 100)
-    logger.info(f"Attempting to send notification to user {user_id} with token {token}")
-    if not token:
-        logger.debug("push_notification_no_token", user_id=str(user_id))
-        return False
-    logger.debug("*" * 100)
 
-    return await send_push_notification(token, title, body, data)
+    if token is not None:
+        return await send_push_notification(token, title, body, data)
+    else:
+        logger.warning("push_notification_no_token", user_id=str(user_id))
+       

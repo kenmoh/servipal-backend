@@ -27,14 +27,23 @@ from rq import Worker
 import multiprocessing
 import sentry_sdk
 
-sentry_sdk.init(dsn=settings.SENTRY_DSN, send_default_pii=True, enable_logs=True)
+if settings.SENTRY_DSN:
+    sentry_sdk.init(dsn=settings.SENTRY_DSN, send_default_pii=True, enable_logs=True)
+else:
+    logger.info("Sentry DSN not found, sentry disabled")
 
 
 def run_worker():
     """Run the RQ worker"""
-    logger.info("Starting RQ worker")
-    worker = Worker(["default"], connection=sync_redis_client)
-    worker.work()
+    if not sync_redis_client:
+        logger.error("RQ worker cannot start: Redis client not initialized")
+        return
+    try:
+        logger.info("Starting RQ worker")
+        worker = Worker(["default"], connection=sync_redis_client)
+        worker.work()
+    except Exception as e:
+        logger.error("RQ worker failed to start", error=str(e))
 
 
 @asynccontextmanager
@@ -44,9 +53,15 @@ async def lifespan(_: FastAPI):
     logger.info("Servipal Application Started", version="1.0.0")
 
     # Start worker in a separate process
-    logger.info("Starting RQ worker")
-    worker_process = multiprocessing.Process(target=run_worker)
-    worker_process.start()
+    if os.getenv("ENABLE_WORKER", "true").lower() == "true":
+        logger.info("Starting RQ worker process")
+        try:
+            worker_process = multiprocessing.Process(target=run_worker)
+            worker_process.start()
+        except Exception as e:
+            logger.error("Failed to fork worker process", error=str(e))
+    else:
+        logger.info("RQ worker is disabled")
 
     yield
 
@@ -78,8 +93,11 @@ app = FastAPI(
     },
 )
 
-logfire.configure()
-logfire.instrument_fastapi(app)
+if settings.LOGFIRE_TOKEN:
+    logfire.configure()
+    logfire.instrument_fastapi(app)
+else:
+    logger.info("Logfire token not found, logfire disabled")
 
 FAVICON_URL = "https://mohdelivery.s3.us-east-1.amazonaws.com/favion/favicon.ico"
 

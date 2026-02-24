@@ -65,33 +65,43 @@ async def process_successful_delivery_payment_rpc(
         sender_id = str(pending["sender_id"])
 
         # 2. Call RPC (fee recalculated inside RPC from distance — source of truth)
-        result = await supabase.rpc(
-            "process_delivery_payment",
-            {
-                "p_tx_ref": tx_ref,
-                "p_flw_ref": flw_ref,
-                "p_sender_id": sender_id,
-                "p_paid_amount": str(paid_amount),
-                "p_distance": str(distance),
-                "p_package_name": delivery_data.get("package_name"),
-                "p_receiver_phone": delivery_data.get("receiver_phone"),
-                "p_sender_phone_number": delivery_data.get("sender_phone_number"),
-                "p_pickup_location": delivery_data["pickup_location"],
-                "p_destination": delivery_data["destination"],
-                "p_pickup_coordinates": parse_coordinates(
-                    delivery_data["pickup_coordinates"]
-                ),
-                "p_dropoff_coordinates": parse_coordinates(
-                    delivery_data["dropoff_coordinates"]
-                ),
-                "p_additional_info": delivery_data.get("description"),
-                "p_delivery_type": delivery_data.get("delivery_type", "STANDARD"),
-                "p_duration": delivery_data.get("duration"),
-                "p_package_image_url": delivery_data.get("package_image_url"),
-            },
-        ).execute()
+        response = None
+        try:
+            result = await supabase.rpc(
+                "process_delivery_payment",
+                {
+                    "p_tx_ref": tx_ref,
+                    "p_flw_ref": flw_ref,
+                    "p_sender_id": sender_id,
+                    "p_paid_amount": str(paid_amount),
+                    "p_distance": str(distance),
+                    "p_package_name": delivery_data.get("package_name"),
+                    "p_receiver_phone": delivery_data.get("receiver_phone"),
+                    "p_sender_phone_number": delivery_data.get("sender_phone_number"),
+                    "p_pickup_location": delivery_data["pickup_location"],
+                    "p_destination": delivery_data["destination"],
+                    "p_pickup_coordinates": parse_coordinates(
+                        delivery_data["pickup_coordinates"]
+                    ),
+                    "p_dropoff_coordinates": parse_coordinates(
+                        delivery_data["dropoff_coordinates"]
+                    ),
+                    "p_additional_info": delivery_data.get("description"),
+                    "p_delivery_type": delivery_data.get("delivery_type", "STANDARD"),
+                    "p_duration": delivery_data.get("duration"),
+                    "p_package_image_url": delivery_data.get("package_image_url"),
+                },
+            ).execute()
 
-        response = result.data
+            response = result.data
+
+        except APIError as e:
+            response = extract_rpc_data(e)
+            if not response:
+                raise
+
+        if not response:
+            raise Exception("No data returned from RPC")
 
         if response.get("status") == "already_processed":
             logger.info(
@@ -268,14 +278,19 @@ async def process_successful_delivery_payment(
         logger.info("delivery_order_created", order_id=order_id)
 
         # 8. Credit sender wallet (DEPOSIT)
-        await supabase.rpc(
-            "update_user_wallet",
-            {
-                "p_user_id": sender_id,
-                "p_balance_change": str(delivery_fee),
-                "p_escrow_balance_change": "0",
-            },
-        ).execute()
+        try:
+            await supabase.rpc(
+                "update_user_wallet",
+                {
+                    "p_user_id": sender_id,
+                    "p_balance_change": str(delivery_fee),
+                    "p_escrow_balance_change": "0",
+                },
+            ).execute()
+        except APIError as e:
+            wallet_result = extract_rpc_data(e)
+            if not wallet_result:
+                raise
 
         logger.info(
             "sender_wallet_credited", sender_id=sender_id, amount=str(delivery_fee)
@@ -323,7 +338,7 @@ async def process_successful_delivery_payment(
         # 11. Send notification
         try:
             await notify_user(
-                sender_id,
+                f'{sender_id}',
                 "Payment Successful",
                 f"Your delivery payment of ₦{delivery_fee} has been received.",
                 data={
@@ -408,26 +423,36 @@ async def process_successful_food_payment(
 
     try:
         # Call atomic RPC
-        result = await supabase.rpc(
-            "process_food_payment",
-            {
-                "p_tx_ref": tx_ref,
-                "p_flw_ref": flw_ref,
-                "p_paid_amount": float(paid_amount),
-                "p_customer_id": pending["customer_id"],
-                "p_vendor_id": pending["vendor_id"],
-                "p_order_data": pending["items"],
-                "p_total_price": float(Decimal(pending["total_price"])),
-                "p_delivery_fee": float(Decimal(pending.get("delivery_fee", 0))),
-                "p_grand_total": float(Decimal(pending["grand_total"])),
-                "p_delivery_option": pending["delivery_option"],
-                "p_additional_info": pending.get("additional_info"),
-                "p_customer_name": pending.get("name", "Customer"),
-                "p_destination": pending.get("delivery_address", None),
-            },
-        ).execute()
+        result_data = None
+        try:
+            result = await supabase.rpc(
+                "process_food_payment",
+                {
+                    "p_tx_ref": tx_ref,
+                    "p_flw_ref": flw_ref,
+                    "p_paid_amount": float(paid_amount),
+                    "p_customer_id": pending["customer_id"],
+                    "p_vendor_id": pending["vendor_id"],
+                    "p_order_data": pending["items"],
+                    "p_total_price": float(Decimal(pending["total_price"])),
+                    "p_delivery_fee": float(Decimal(pending.get("delivery_fee", 0))),
+                    "p_grand_total": float(Decimal(pending["grand_total"])),
+                    "p_delivery_option": pending["delivery_option"],
+                    "p_additional_info": pending.get("additional_info"),
+                    "p_customer_name": pending.get("name", "Customer"),
+                    "p_destination": pending.get("delivery_address", None),
+                },
+            ).execute()
 
-        result_data = result.data
+            result_data = result.data
+
+        except APIError as e:
+            result_data = extract_rpc_data(e)
+            if not result_data:
+                raise
+
+        if not result_data:
+            raise Exception("No data returned from RPC")
 
         if result_data.get("status") == "already_processed":
             logger.info("food_payment_already_processed", tx_ref=tx_ref)
@@ -441,7 +466,7 @@ async def process_successful_food_payment(
 
         # Notify vendor
         await notify_user(
-            user_id=result_data["vendor_id"],
+            user_id=f'{result_data["vendor_id"]}',
             title="New Order",
             body=f"You have a new order from {pending.get('name', 'Customer')}",
             data={"order_id": str(order_id), "type": "FOOD_PAYMENT"},
@@ -457,7 +482,7 @@ async def process_successful_food_payment(
             actor_id=result_data["customer_id"],
             actor_type="USER",
             change_amount=Decimal(str(result_data["grand_total"])),
-            notes=f"Food order payment received via Flutterwave: {tx_ref}",
+            notes=f"Food order payment received via {payment_method}: {tx_ref}",
             request=request,
         )
 
@@ -608,118 +633,6 @@ async def process_successful_topup_payment(
             exc_info=True,
         )
         raise
-# async def process_successful_topup_payment(
-#     tx_ref: str,
-#     paid_amount: float,
-#     flw_ref: str,
-#     supabase: AsyncClient,
-#     request: Optional[Request] = None,
-#     payment_method: Literal["CARD", "WALLET"] = "CARD",
-# ):
-#     """Process successful wallet top-up payment using atomic RPC."""
-#     logger.info("processing_topup_payment", tx_ref=tx_ref, paid_amount=paid_amount)
-
-#     # Verify payment
-#     verified = await verify_transaction_tx_ref(tx_ref)
-#     if not verified or verified.get("status") != "success":
-#         logger.error("topup_payment_verification_failed", tx_ref=tx_ref)
-#         return
-
-#     # Get pending data
-#     pending_key = f"pending_topup_{tx_ref}"
-#     pending = await get_pending(pending_key)
-
-#     if not pending:
-#         logger.warning("topup_payment_pending_not_found", tx_ref=tx_ref)
-#         return
-
-#     expected_amount = Decimal(str(pending["amount"]))
-#     user_id = pending["user_id"]
-
-#     # Validate amount
-#     expected_rounded = expected_amount.quantize(Decimal("0.00"))
-#     paid_rounded = Decimal(str(paid_amount)).quantize(Decimal("0.00"))
-
-#     if paid_rounded != expected_rounded:
-#         logger.warning(
-#             "topup_payment_amount_mismatch",
-#             tx_ref=tx_ref,
-#             expected=expected_rounded,
-#             paid=paid_rounded,
-#         )
-#         await delete_pending(pending_key)
-#         return
-
-#     try:
-#         # Call atomic RPC - everything happens in one transaction!
-#         result = await supabase.rpc(
-#             "process_topup_payment",
-#             {
-#                 "p_tx_ref": tx_ref,
-#                 "p_flw_ref": flw_ref,
-#                 "p_paid_amount": str(paid_rounded),
-#                 "p_user_id": user_id,
-#             },
-#         ).execute()
-
-#         result_data = result.data
-
-#         if result_data.get("status") == "already_processed":
-#             logger.info("topup_payment_already_processed", tx_ref=tx_ref)
-#             await delete_pending(pending_key)
-#             return result_data
-
-#         # Success! Cleanup Redis
-#         await delete_pending(pending_key)
-
-#         # Notify user
-#         await notify_user(
-#             user_id=user_id,
-#             title="Wallet Top-up Successful",
-#             body=f"₦{paid_rounded} has been added to your wallet",
-#             data={
-#                 "user_id": str(user_id),
-#                 "type": "WALLET_TOPUP",
-#                 "amount": str(paid_rounded),
-#                 "new_balance": str(result_data["new_balance"]),
-#             },
-#             supabase=supabase,
-#         )
-
-#         # Audit log
-#         await log_audit_event(
-#             supabase,
-#             entity_type="WALLET",
-#             entity_id=user_id,
-#             action="TOP_UP",
-#             old_value={"balance": str(result_data["old_balance"])},
-#             new_value={"balance": str(result_data["new_balance"])},
-#             change_amount=Decimal(str(paid_rounded)),
-#             actor_id=user_id,
-#             actor_type="USER",
-#             notes=f"Wallet top-up of ₦{paid_rounded} via Flutterwave",
-#             request=request,
-#         )
-
-#         logger.info(
-#             "topup_payment_processed_success",
-#             tx_ref=tx_ref,
-#             user_id=user_id,
-#             amount=float(paid_rounded),
-#             new_balance=float(result_data["new_balance"]),
-#         )
-
-#         return result_data
-
-#     except Exception as e:
-#         logger.error(
-#             "topup_payment_processing_error",
-#             tx_ref=tx_ref,
-#             error=str(e),
-#             exc_info=True,
-#         )
-#         raise
-
 
 # ───────────────────────────────────────────────
 # Product Payment
@@ -775,31 +688,41 @@ async def process_successful_product_payment(
             return
 
         # 3. Call RPC
-        result = await supabase.rpc(
-            "process_product_payment",
-            {
-                "p_tx_ref": tx_ref,
-                "p_flw_ref": flw_ref,
-                "p_customer_id": pending["customer_id"],
-                "p_vendor_id": pending["vendor_id"],
-                "p_product_id": pending["item_id"],
-                "p_quantity": int(pending["quantity"]),
-                "p_product_name": pending.get("product_name", "Product"),
-                "p_unit_price": float(pending.get("price", 0)),
-                "p_subtotal": float(pending["subtotal"]),
-                "p_shipping_cost": float(pending.get("shipping_cost", 0)),
-                "p_grand_total": float(grand_total),
-                "p_paid_amount": float(paid_rounded),
-                "p_delivery_option": pending["delivery_option"],
-                "p_delivery_address": pending["delivery_address"],
-                "p_additional_info": pending.get("additional_info"),
-                "p_images": pending.get("images"),
-                "p_selected_size": pending.get("selected_size"),
-                "p_selected_color": pending.get("selected_color"),
-            },
-        ).execute()
+        response = None
+        try:
+            result = await supabase.rpc(
+                "process_product_payment",
+                {
+                    "p_tx_ref": tx_ref,
+                    "p_flw_ref": flw_ref,
+                    "p_customer_id": pending["customer_id"],
+                    "p_vendor_id": pending["vendor_id"],
+                    "p_product_id": pending["item_id"],
+                    "p_quantity": int(pending["quantity"]),
+                    "p_product_name": pending.get("product_name", "Product"),
+                    "p_unit_price": float(pending.get("price", 0)),
+                    "p_subtotal": float(pending["subtotal"]),
+                    "p_shipping_cost": float(pending.get("shipping_cost", 0)),
+                    "p_grand_total": float(grand_total),
+                    "p_paid_amount": float(paid_rounded),
+                    "p_delivery_option": pending["delivery_option"],
+                    "p_delivery_address": pending["delivery_address"],
+                    "p_additional_info": pending.get("additional_info"),
+                    "p_images": pending.get("images"),
+                    "p_selected_size": pending.get("selected_size"),
+                    "p_selected_color": pending.get("selected_color"),
+                },
+            ).execute()
 
-        response = result.data
+            response = result.data
+
+        except APIError as e:
+            response = extract_rpc_data(e)
+            if not response:
+                raise
+
+        if not response:
+            raise Exception("No data returned from RPC")
 
         if response.get("status") == "already_processed":
             logger.info(
@@ -1044,26 +967,36 @@ async def process_successful_laundry_payment(
 
     try:
         # Call atomic RPC
-        result = await supabase.rpc(
-            "process_laundry_payment",
-            {
-                "p_tx_ref": tx_ref,
-                "p_flw_ref": flw_ref,
-                "p_paid_amount": str(paid_amount),
-                "p_customer_id": pending["customer_id"],
-                "p_vendor_id": pending["vendor_id"],
-                "p_order_data": pending["items"],
-                "p_subtotal": str(Decimal(pending["subtotal"])),
-                "p_delivery_fee": str(Decimal(pending.get("delivery_fee", 0))),
-                "p_grand_total": str(Decimal(pending["grand_total"])),
-                "p_delivery_option": pending.get("delivery_option", "PICKUP"),
-                "p_additional_info": pending.get("additional_info"),
-                "p_customer_name": pending.get("name", "Customer"),
-                "p_destination": pending.get("delivery_address", None),
-            },
-        ).execute()
+        result_data = None
+        try:
+            result = await supabase.rpc(
+                "process_laundry_payment",
+                {
+                    "p_tx_ref": tx_ref,
+                    "p_flw_ref": flw_ref,
+                    "p_paid_amount": str(paid_amount),
+                    "p_customer_id": pending["customer_id"],
+                    "p_vendor_id": pending["vendor_id"],
+                    "p_order_data": pending["items"],
+                    "p_subtotal": str(Decimal(pending["subtotal"])),
+                    "p_delivery_fee": str(Decimal(pending.get("delivery_fee", 0))),
+                    "p_grand_total": str(Decimal(pending["grand_total"])),
+                    "p_delivery_option": pending.get("delivery_option", "PICKUP"),
+                    "p_additional_info": pending.get("additional_info"),
+                    "p_customer_name": pending.get("name", "Customer"),
+                    "p_destination": pending.get("delivery_address", None),
+                },
+            ).execute()
 
-        result_data = result.data
+            result_data = result.data
+
+        except APIError as e:
+            result_data = extract_rpc_data(e)
+            if not result_data:
+                raise
+
+        if not result_data:
+            raise Exception("No data returned from RPC")
 
         if result_data.get("status") == "already_processed":
             logger.info("laundry_payment_already_processed", tx_ref=tx_ref)
