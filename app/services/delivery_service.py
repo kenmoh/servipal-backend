@@ -372,7 +372,7 @@ async def assign_rider(
                 "assign_rider_to_delivery",
                 {
                     "p_tx_ref": tx_ref,
-                    "p_rider_id": rider_id,
+                    "p_rider_id": f'{rider_id}',
                 },
             ).execute()
             result_data = result.data
@@ -399,8 +399,8 @@ async def assign_rider(
         await _send_delivery_notifications(
             order_number=order_number,
             new_status=DeliveryStatus.ASSIGNED,
-            sender_id=sender_id,
-            rider_id=rider_id,
+            sender_id=f'{sender_id}',
+            rider_id=f'{rider_id}',
             dispatch_id=str(result_data.get("dispatch_id")),
             supabase=supabase,
         )
@@ -409,7 +409,7 @@ async def assign_rider(
             "status": "success",
             "delivery_status": "ASSIGNED",
             "tx_ref": tx_ref,
-            "rider_id": rider_id,
+            "rider_id": f'{rider_id}',
             "dispatch_id": str(result_data.get("dispatch_id")),
         }
 
