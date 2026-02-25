@@ -641,7 +641,7 @@ async def process_successful_topup_payment(
 
 async def process_successful_product_payment(
     tx_ref: str,
-    paid_amount: float,
+    paid_amount: str,
     flw_ref: str,
     supabase: AsyncClient,
     payment_method: Literal["CARD", "WALLET"],
