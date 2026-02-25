@@ -26,6 +26,7 @@ import logfire
 from rq import Worker
 import multiprocessing
 import sentry_sdk
+import os
 
 if settings.SENTRY_DSN:
     sentry_sdk.init(dsn=settings.SENTRY_DSN, send_default_pii=True, enable_logs=True)
