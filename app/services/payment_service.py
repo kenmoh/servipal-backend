@@ -669,6 +669,10 @@ async def process_successful_product_payment(
         logger.info('*'*100)
     else:
         pending = await get_pending(pending_key)  # CARD reads from Redis
+        logger.info("using_embedded_pending_data", tx_ref=tx_ref)
+        logger.info('*'*100)
+        logger.info("pending_data", pending=pending)
+        logger.info('*'*100)
 
     if not pending:
         logger.warning(event="pending_order_not_found", tx_ref=tx_ref)
