@@ -682,6 +682,7 @@ async def process_successful_product_payment(
         grand_total = Decimal(str(pending["grand_total"]))
         paid_rounded = Decimal(str(paid_amount)).quantize(Decimal("0.00"))
         expected_rounded = grand_total.quantize(Decimal("0.00"))
+        shipping = Decimal(pending.get("shipping_cost", 0))
 
         # 2. Amount validation
         if paid_rounded != expected_rounded:
@@ -707,9 +708,9 @@ async def process_successful_product_payment(
                     "p_product_id": pending["item_id"],
                     "p_quantity": int(pending["quantity"]),
                     "p_product_name": pending.get("product_name", "Product"),
-                    "p_unit_price": str(pending.get("price", 0)),
+                    "p_unit_price": str(pending.get("price", 0)) if pending.get("price") is not None else None,
                     "p_subtotal": str(pending["subtotal"]),
-                    "p_shipping_cost": str(pending.get("shipping_cost", 0)),
+                    "p_shipping_cost": str(shipping) if shipping is not None else None,
                     "p_grand_total": str(grand_total),
                     "p_paid_amount": str(paid_rounded),
                     "p_delivery_option": pending["delivery_option"],
