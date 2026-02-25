@@ -187,7 +187,7 @@ async def initiate_product_payment(
         grand_total = subtotal + (shipping_cost if shipping_cost is not None else 0)
 
         # Generate tx_ref
-        tx_ref = f"PRODUCT-{uuid.uuid4().hex[:12].upper()}"
+        tx_ref = f"PRODUCT-{uuid.uuid4().hex[:32].upper()}"
 
         # Save pending state
         pending_data = {
@@ -206,8 +206,7 @@ async def initiate_product_payment(
             "delivery_option": data.delivery_option,
             "delivery_address": data.delivery_address,
             "additional_info": data.additional_info,
-            "tx_ref": tx_ref,
-            "created_at": datetime.now().isoformat(),
+            "tx_ref": tx_ref
         }
         await save_pending(f"pending_product_{tx_ref}", pending_data)
 
