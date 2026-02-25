@@ -61,10 +61,6 @@ async def process_payment(
     x_internal_key: str = Header(...),
     supabase: AsyncClient = Depends(get_supabase_admin_client),
 ):
-
-    logger.info("*" * 100)
-    logger.info(payload)
-    logger.info("*" * 100)
     # 1. Verify internal key
     if x_internal_key != settings.INTERNAL_API_KEY:
         logger.warning("internal_endpoint_unauthorized")

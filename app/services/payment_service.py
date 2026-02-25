@@ -711,6 +711,7 @@ async def process_successful_product_payment(
                     "p_images": pending.get("images"),
                     "p_selected_size": pending.get("selected_size"),
                     "p_selected_color": pending.get("selected_color"),
+                    "p_payment_method": payment_method,
                 },
             ).execute()
 
@@ -894,7 +895,7 @@ async def process_successful_product_payment_non_rpc(
                     "wallet_id": customer_id,
                     "order_id": order_id,
                     "transaction_type": "ESCROW_HOLD",
-                    "payment_method": "FLUTTERWAVE",
+                    "payment_method": f'{payment_method}',
                     "order_type": "PRODUCT",
                     "details": {"flw_ref": flw_ref, "label": "DEBIT"},
                 }
@@ -1027,7 +1028,7 @@ async def process_successful_laundry_payment(
             actor_id=result_data["customer_id"],
             actor_type="USER",
             change_amount=Decimal(str(result_data["grand_total"])),
-            notes=f"Laundry payment received via Flutterwave: {tx_ref}",
+            notes=f"Laundry payment received via {payment_method}: {tx_ref}",
             request=request,
         )
 
@@ -1045,3 +1046,23 @@ async def process_successful_laundry_payment(
             exc_info=True,
         )
         raise
+
+
+"""
+ {
+ "additional_info": "", 
+ "["#ebd093"], 
+ "delivery_address": "Gh bhhhvb vgg",
+ "delivery_option": "VENDOR_DELIVERY", 
+ "images": ["https://fehrsomiswgjtcjuqyot.
+supabase.co/storage/v1/object/public/product-images/ec147cc9-7467-4fb6-ae72-2cee
+bd0440af/1771586512570_0.jpeg", "https://fehrsomiswgjtcjuqyot.supabase.co/storag
+e/v1/object/public/product-images/ec147cc9-7467-4fb6-ae72-2ceebd0440af/177158651
+3689_1.jpeg", "https://fehrsomiswgjtcjuqyot.supabase.co/storage/v1/object/public
+/product-images/ec147cc9-7467-4fb6-ae72-2ceebd0440af/1771586514481_2.jpeg"], 
+"item_id": "d1b0ea45-ba35-4786-8056-7ba997c4764b", 
+"quantity": 1, 
+"sizes": ["40"], 
+"vendor_id": "ec147cc9-7467-4fb6-ae72-2ceebd0440af"}
+
+"""
