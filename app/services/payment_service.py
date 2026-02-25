@@ -520,7 +520,7 @@ async def process_successful_topup_payment(
             logger.error("topup_payment_verification_failed", tx_ref=tx_ref)
             return
 
-    # 2. ✅ Idempotency check BEFORE anything else
+    # 2. Idempotency check BEFORE anything else
     existing = (
         await supabase.table("transactions")
         .select("id")
@@ -769,7 +769,6 @@ async def process_successful_product_payment(
             error=str(e),
             exc_info=True,
         )
-        await delete_pending(pending_key)
         raise
 
 
@@ -930,7 +929,7 @@ async def process_successful_product_payment_non_rpc(
         )
         # Depending on your failure strategy, you might not want to delete pending here
         # so it can be retried, but keeping it as per your original logic.
-        await delete_pending(pending_key)
+      
         raise
 
 
