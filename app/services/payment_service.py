@@ -664,6 +664,9 @@ async def process_successful_product_payment(
     if payment_method == "WALLET" and pending_data:
         pending = pending_data
         logger.info("using_embedded_pending_data", tx_ref=tx_ref)
+        logger.info('*'*100)
+        logger.info("pending_data", pending=pending)
+        logger.info('*'*100)
     else:
         pending = await get_pending(pending_key)  # CARD reads from Redis
 
