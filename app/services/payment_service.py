@@ -679,10 +679,10 @@ async def process_successful_product_payment(
         return
 
     try:
-        grand_total = Decimal(str(pending["grand_total"]))
-        paid_rounded = Decimal(str(paid_amount)).quantize(Decimal("0.00"))
+        shipping = to_decimal(pending.get("shipping_cost"))
+        grand_total = to_decimal(pending.get("grand_total"))
+        paid_rounded = to_decimal(str(paid_amount)).quantize(Decimal("0.00"))
         expected_rounded = grand_total.quantize(Decimal("0.00"))
-        shipping = Decimal(pending.get("shipping_cost", 0))
 
         # 2. Amount validation
         if paid_rounded != expected_rounded:
@@ -1054,6 +1054,11 @@ async def process_successful_laundry_payment(
         )
         raise
 
+
+def to_decimal(val, default="0"):
+    if val is None or str(val).strip().lower() == "none":
+        return Decimal(default)
+    return Decimal(str(val))
 
 """
  {

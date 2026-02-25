@@ -192,16 +192,16 @@ async def initiate_product_payment(
         # Save pending state
         pending_data = {
             "product_name": item["name"],
-            "price": str(item["price"]),
+            "price":  safe_numeric_str(item["price"]),
             "customer_id": str(customer_info.get("id")),
             "vendor_id": str(data.vendor_id),
             "item_id": str(data.item_id),
             "quantity": data.quantity,
             "selected_size": data.sizes,
             "selected_color": data.colors,
-            "subtotal": str(subtotal),
-            "shipping_cost": str(shipping_cost),
-            "grand_total": str(grand_total),
+            "subtotal": safe_numeric_str(subtotal),
+            "shipping_cost": safe_numeric_str(shipping_cost),
+            "grand_total": safe_numeric_str(grand_total),
             "images": data.images,
             "delivery_option": data.delivery_option,
             "delivery_address": data.delivery_address,
@@ -467,3 +467,12 @@ async def vendor_mark_product_ready(
         raise he
     except Exception as e:
         raise HTTPException(500, f"Failed to mark ready: {str(e)}")
+
+
+def safe_numeric_str(val):
+    if val is None:
+        return "0"
+    try:
+        return str(Decimal(str(val)))
+    except Exception:
+        return "0"
