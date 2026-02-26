@@ -326,7 +326,7 @@ async def update_order_status(
             "update_product_order_status",
             {
                 "p_order_id": str(order_id),
-                "p_user_id": str(current_user.id),
+                "p_user_id": str(current_user['id']),
                 "p_new_status": payload.new_status,
                 "p_cancel_reason": payload.cancel_reason,
             },
@@ -378,7 +378,7 @@ async def update_order_status(
             "order_status_updated",
             order_id=str(order_id),
             new_status=payload.new_status,
-            updated_by=str(current_user.id),
+            updated_by=str(current_user['id']),
         )
 
         return response
