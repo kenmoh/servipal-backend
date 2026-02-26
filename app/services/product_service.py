@@ -390,7 +390,7 @@ async def update_order_status(
             error=str(e),
             exc_info=True,
         )
-        raise HTTPException(status_code=400, detail=e.message)
+        raise HTTPException(status_code=400, detail='Invalid status transition or input')
 
 async def vendor_mark_product_ready(
     order_id: UUID, vendor_id: UUID, supabase: AsyncClient
