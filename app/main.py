@@ -34,17 +34,17 @@ else:
     logger.info("Sentry DSN not found, sentry disabled")
 
 
-def run_worker():
-    """Run the RQ worker"""
-    if not sync_redis_client:
-        logger.error("RQ worker cannot start: Redis client not initialized")
-        return
-    try:
-        logger.info("Starting RQ worker")
-        worker = Worker(["default"], connection=sync_redis_client)
-        worker.work()
-    except Exception as e:
-        logger.error("RQ worker failed to start", error=str(e))
+# def run_worker():
+#     """Run the RQ worker"""
+#     if not sync_redis_client:
+#         logger.error("RQ worker cannot start: Redis client not initialized")
+#         return
+#     try:
+#         logger.info("Starting RQ worker")
+#         worker = Worker(["default"], connection=sync_redis_client)
+#         worker.work()
+#     except Exception as e:
+#         logger.error("RQ worker failed to start", error=str(e))
 
 
 @asynccontextmanager
@@ -54,15 +54,15 @@ async def lifespan(_: FastAPI):
     logger.info("Servipal Application Started", version="1.0.0")
 
     # Start worker in a separate process
-    if os.getenv("ENABLE_WORKER", "true").lower() == "true":
-        logger.info("Starting RQ worker process")
-        try:
-            worker_process = multiprocessing.Process(target=run_worker)
-            worker_process.start()
-        except Exception as e:
-            logger.error("Failed to fork worker process", error=str(e))
-    else:
-        logger.info("RQ worker is disabled")
+    # if os.getenv("ENABLE_WORKER", "true").lower() == "true":
+    #     logger.info("Starting RQ worker process")
+    #     try:
+    #         worker_process = multiprocessing.Process(target=run_worker)
+    #         worker_process.start()
+    #     except Exception as e:
+    #         logger.error("Failed to fork worker process", error=str(e))
+    # else:
+    #     logger.info("RQ worker is disabled")
 
     yield
 
@@ -70,13 +70,13 @@ async def lifespan(_: FastAPI):
     logger.info("Servipal Application Shutdown")
 
     # Stop worker
-    if worker_process.is_alive():
-        logger.info("Stopping RQ worker")
-        worker_process.terminate()
-        worker_process.join(timeout=5)
-        if worker_process.is_alive():
-            worker_process.kill()
-        logger.info("RQ worker stopped")
+    # if worker_process.is_alive():
+    #     logger.info("Stopping RQ worker")
+    #     worker_process.terminate()
+    #     worker_process.join(timeout=5)
+    #     if worker_process.is_alive():
+    #         worker_process.kill()
+    #     logger.info("RQ worker stopped")
 
 
 app = FastAPI(

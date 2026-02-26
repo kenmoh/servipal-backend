@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Form, File, UploadFile
+from fastapi import APIRouter, Depends, Form, File, UploadFile,status
 from typing import List, Optional
 from decimal import Decimal
 from uuid import UUID
@@ -15,6 +15,7 @@ from app.schemas.product_schemas import (
     ProductVendorMarkReadyResponse,
     ProductCustomerConfirmResponse,
     ProductType,
+    UpdateOrderStatusRequest
 )
 from app.services import product_service
 from app.dependencies.auth import get_current_profile, require_user_type
@@ -277,3 +278,14 @@ async def customer_confirm_product_order(
     return await product_service.customer_confirm_product_order(
         order_id, current_profile["id"], supabase
     )
+
+
+@router.patch("/orders/{order_id}/status", status_code=status.HTTP_202_ACCEPTED)
+async def update_order_status(
+    order_id: UUID,
+    payload: UpdateOrderStatusRequest,
+    current_user: dict = Depends(get_current_profile),
+    supabase: AsyncClient = Depends(get_supabase_client),
+):
+    
+    return await product_service.update_order_status(order_id, payload, current_user, supabase)

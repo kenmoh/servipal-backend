@@ -107,3 +107,11 @@ class ProductCustomerConfirmResponse(BaseModel):
     order_id: UUID
     amount_released: Decimal
     message: str
+
+class UpdateOrderStatusRequest(BaseModel):
+    order_id: UUID
+    new_status: Literal[
+        "SHIPPED", "DELIVERED", "COMPLETED",
+        "CANCELLED", "REJECTED", "RETURNED", "DISPUTED"
+    ]
+    cancel_reason: str | None = None

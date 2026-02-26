@@ -6,8 +6,7 @@ from app.schemas.product_schemas import (
     ProductItemUpdate,
     ProductItemResponse,
     ProductOrderCreate,
-    ProductVendorOrderAction,
-    ProductVendorOrderActionResponse,
+    UpdateOrderStatusRequest,
     ProductVendorMarkReadyResponse,
 )
 from fastapi import HTTPException, status
@@ -21,6 +20,10 @@ from app.schemas.common import (
     PaymentCustomerInfo,
     PaymentCustomization,
 )
+from app.services.notification_service import notify_user
+from app.config.logging import logger
+from postgrest.exceptions import APIError
+
 
 # from app.utils.commission import get_commission_rate
 
@@ -309,116 +312,85 @@ async def customer_confirm_product_order(
         raise HTTPException(500, f"Confirmation failed: {str(e)}")
 
 
-async def vendor_product_order_action(
+
+
+
+async def update_order_status(
     order_id: UUID,
-    data: ProductVendorOrderAction,
-    vendor_id: UUID,
-    supabase: AsyncClient,
-) -> ProductVendorOrderActionResponse:
-    """
-    Seller accepts or rejects a product order.
-    - Accept: move to ACCEPTED
-    - Reject: cancel + refund escrow to buyer balance (via RPC)
-    """
+    payload: UpdateOrderStatusRequest,
+    current_user: dict,
+    supabase: AsyncClient 
+):
     try:
-        # 1. Fetch order
-        order_resp = (
-            await supabase.table("product_orders")
-            .select(
-                "id, vendor_id, buyer_id, order_status, payment_status, grand_total"
+        result = await supabase.rpc(
+            "update_product_order_status",
+            {
+                "p_order_id": str(order_id),
+                "p_user_id": str(current_user.id),
+                "p_new_status": payload.new_status,
+                "p_cancel_reason": payload.cancel_reason,
+            },
+        ).execute()
+
+        response = result.data
+
+        if not response:
+            raise HTTPException(status_code=500, detail="No response from order update")
+
+        # Notify the other party
+        other_user_id = None
+        message_map = {
+            "SHIPPED": ("Order Shipped", "Your order is on its way!"),
+            "DELIVERED": ("Order Delivered", "Your order has been delivered."),
+            "COMPLETED": ("Order Completed", "Order completed. Payment has been released."),
+            "CANCELLED": ("Order Cancelled", "An order has been cancelled."),
+            "REJECTED": ("Order Rejected", "The buyer has rejected the order."),
+            "RETURNED": ("Item Returned", "The item has been marked as returned."),
+            "DISPUTED": ("Order Disputed", "A dispute has been raised on your order."),
+        }
+
+        title, body = message_map.get(payload.new_status, ("Order Update", "Your order status has changed."))
+
+        # Notify the other party
+        order = await supabase.table("product_orders").select(
+            "customer_id, vendor_id"
+        ).eq("id", str(order_id)).single().execute()
+
+        if order.data:
+            other_user_id = (
+                order.data["vendor_id"]
+                if str(current_user['id']) == order.data["customer_id"]
+                else order.data["customer_id"]
             )
-            .eq("id", str(order_id))
-            .single()
-            .execute()
-        )
-
-        if not order_resp.data:
-            raise HTTPException(404, "Product order not found")
-
-        order = order_resp.data
-
-        # 2. Security & validation
-        if order["vendor_id"] != str(vendor_id):
-            raise HTTPException(403, "This is not your order")
-
-        if order["order_status"] != "PENDING":
-            raise HTTPException(
-                400, f"Order already processed (status: {order['order_status']})"
-            )
-
-        if order["payment_status"] != "PAID":
-            raise HTTPException(400, "Payment not completed")
-
-        # 3. Process action
-        if data.action == "accept":
-            new_status = "ACCEPTED"
-            message = "Order accepted. Preparing item for delivery/pickup."
-            # refund = False
-
-        else:  # reject
-            new_status = "CANCELLED"
-            message = "Order rejected."
-            # refund = True
-
-            # Refund escrow → buyer balance
-            tx_resp = (
-                await supabase.table("transactions")
-                .select("id, amount, from_user_id, status")
-                .eq("order_id", str(order_id))
-                .single()
-                .execute()
-            )
-
-            if not tx_resp.data:
-                raise HTTPException(404, "Transaction not found")
-
-            tx = tx_resp.data
-            amount = tx["amount"]
-
-            # Atomic refund
-            await supabase.rpc(
-                "update_wallet_balance",
-                {
-                    "p_user_id": tx["from_user_id"],
-                    "p_delta": -amount,
-                    "p_field": "escrow_balance",
+            await notify_user(
+                user_id=other_user_id,
+                title=title,
+                body=body,
+                data={
+                    "order_id": str(order_id),
+                    "type": "ORDER_STATUS_UPDATE",
+                    "new_status": payload.new_status,
                 },
-            ).execute()
-
-            await supabase.rpc(
-                "update_wallet_balance",
-                {
-                    "p_user_id": tx["from_user_id"],
-                    "p_delta": amount,
-                    "p_field": "balance",
-                },
-            ).execute()
-
-            # Marks transaction refunded
-            await (
-                supabase.table("transactions")
-                .update({"status": "REFUNDED"})
-                .eq("id", tx["id"])
-                .execute()
+                supabase=supabase,
             )
 
-        # 4. Update order status
-        await (
-            supabase.table("product_orders")
-            .update({"order_status": new_status})
-            .eq("id", str(order_id))
-            .execute()
+        logger.info(
+            "order_status_updated",
+            order_id=str(order_id),
+            new_status=payload.new_status,
+            updated_by=str(current_user.id),
         )
 
-        return ProductVendorOrderActionResponse(
-            order_id=order_id, order_status=new_status, message=message
+        return response
+
+    except APIError as e:
+        logger.error(
+            "order_status_update_failed",
+            order_id=str(order_id),
+            error=str(e),
+            exc_info=True,
         )
-
-    except HTTPException as he:
-        raise he
-    except Exception as e:
-        raise HTTPException(500, f"Order action failed: {str(e)}")
-
+        raise HTTPException(status_code=400, detail=e.message)
 
 async def vendor_mark_product_ready(
     order_id: UUID, vendor_id: UUID, supabase: AsyncClient
