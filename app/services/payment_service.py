@@ -663,16 +663,9 @@ async def process_successful_product_payment(
     pending_key = f"pending_product_{tx_ref}"
     if payment_method == "WALLET" and pending_data:
         pending = pending_data
-        logger.info("using_embedded_pending_data", tx_ref=tx_ref)
-        logger.info('*'*100)
-        logger.info("pending_data", pending=pending)
-        logger.info('*'*100)
+   
     else:
         pending = await get_pending(pending_key)  # CARD reads from Redis
-        logger.info("using_embedded_pending_data", tx_ref=tx_ref)
-        logger.info('*'*100)
-        logger.info("pending_data", pending=pending)
-        logger.info('*'*100)
 
     if not pending:
         logger.warning(event="pending_order_not_found", tx_ref=tx_ref)
@@ -716,9 +709,9 @@ async def process_successful_product_payment(
                     "p_delivery_option": pending["delivery_option"],
                     "p_delivery_address": pending["delivery_address"],
                     "p_additional_info": pending.get("additional_info"),
-                    "p_images": pending.get("images"),
-                    "p_selected_size": pending.get("selected_size"),
-                    "p_selected_color": pending.get("selected_color"),
+                    "p_images": empty_to_none(pending.get("images")),
+                    "p_selected_size": empty_to_none(pending.get("selected_size")),
+                    "p_selected_color": empty_to_none(pending.get("selected_color")),
                     "p_payment_method": payment_method,
                 },
             ).execute()
@@ -1059,6 +1052,12 @@ def to_decimal(val, default="0"):
     if val is None or str(val).strip().lower() == "none":
         return Decimal(default)
     return Decimal(str(val))
+
+def empty_to_none(val):
+    """Convert empty lists to None so Postgres gets NULL instead of []"""
+    if isinstance(val, list) and len(val) == 0:
+        return None
+    return val
 
 """
  {
