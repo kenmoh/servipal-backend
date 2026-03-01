@@ -27,80 +27,45 @@ def parse_coordinates(value):
 # ───────────────────────────────────────────────
 
 
-async def process_successful_delivery_payment(
+async def process_successful_delivery_payment_rpc(
     tx_ref: str,
-    paid_amount: Decimal,
+    paid_amount: float,
+    payment_method: Literal["CARD", "WALLET"],
     flw_ref: str,
     supabase: AsyncClient,
-    payment_method: Literal["CARD", "WALLET"],
     pending_data: dict = None,
 ):
-    logger.info("processing_delivery_payment", tx_ref=tx_ref, paid_amount=paid_amount)
+    logger.info(
+        event="processing_delivery_payment",
+        tx_ref=tx_ref,
+        paid_amount=paid_amount,
+    )
 
-    # ── WALLET ──────────────────────────────────────────
-    # Order already created by pay_with_wallet RPC — just notify
-    if payment_method == "WALLET":
-        existing = (
-            await supabase.table("delivery_orders")
-            .select("id, sender_id, delivery_fee")
-            .eq("tx_ref", tx_ref)
-            .execute()
-        )
+    if payment_method == "CARD":
+        verified = await verify_transaction_tx_ref(tx_ref)
+        if not verified or verified.get("status") != "success":
+            logger.error("delivery_payment_verification_failed", tx_ref=tx_ref)
+            return {"status": "verification_failed"}
 
-        if not existing.data:
-            logger.warning("wallet_delivery_order_not_found", tx_ref=tx_ref)
-            return {"status": "order_not_found"}
-
-        order = existing.data[0]
-        order_id = order["id"]
-        sender_id = str(order["sender_id"])
-        delivery_fee = Decimal(str(order["delivery_fee"]))
-
-        try:
-            await notify_user(
-                sender_id,
-                "Payment Successful",
-                f"Your delivery payment of ₦{delivery_fee} has been received.",
-                data={
-                    "type": "DELIVERY_PAYMENT_SUCCESS",
-                    "order_id": order_id,
-                    "amount": str(delivery_fee),
-                },
-                supabase=supabase,
-            )
-        except Exception as e:
-            logger.error("notification_failed", error=str(e))
-
-        return {
-            "status": "success",
-            "order_id": order_id,
-            "tx_ref": tx_ref,
-            "delivery_fee": str(delivery_fee),
-            "message": "Delivery payment processed successfully via wallet",
-        }
-
-    # ── CARD ─────────────────────────────────────────────
-    # Verify payment
-    verified = await verify_transaction_tx_ref(tx_ref)
-    if not verified or verified.get("status") != "success":
-        logger.error("delivery_payment_verification_failed", tx_ref=tx_ref)
-        return {"status": "verification_failed"}
-
-    # Get pending data from Redis
+    # 1. Get pending data from Redis
     pending_key = f"pending_delivery_{tx_ref}"
-    pending = await get_pending(pending_key)
+    if payment_method == "WALLET" and pending_data:
+        pending = pending_data
+        logger.info("using_embedded_pending_data", tx_ref=tx_ref)
+    else:
+        pending = await get_pending(pending_key)  # CARD reads from Redis
 
     if not pending:
-        logger.warning("delivery_payment_pending_not_found", tx_ref=tx_ref)
-        return {"status": "pending_not_found"}
-
-    sender_id = str(pending["sender_id"])
-    delivery_data = pending["delivery_data"]
-    distance = Decimal(str(pending.get("distance", 0)))
+        logger.warning(event="pending_delivery_not_found", tx_ref=tx_ref)
+        return
 
     try:
-        # Call RPC — handles order creation, wallet credit, transaction atomically
-        result_data = None
+        delivery_data = pending["delivery_data"]
+        distance = Decimal(str(pending.get("distance", 0)))
+        sender_id = str(pending["sender_id"])
+
+        # 2. Call RPC (fee recalculated inside RPC from distance — source of truth)
+        response = None
         try:
             result = await supabase.rpc(
                 "process_delivery_payment",
@@ -115,69 +80,73 @@ async def process_successful_delivery_payment(
                     "p_sender_phone_number": delivery_data.get("sender_phone_number"),
                     "p_pickup_location": delivery_data["pickup_location"],
                     "p_destination": delivery_data["destination"],
-                    "p_pickup_coordinates": delivery_data["pickup_coordinates"],
-                    "p_dropoff_coordinates": delivery_data["dropoff_coordinates"],
+                    "p_pickup_coordinates": parse_coordinates(
+                        delivery_data["pickup_coordinates"]
+                    ),
+                    "p_dropoff_coordinates": parse_coordinates(
+                        delivery_data["dropoff_coordinates"]
+                    ),
                     "p_additional_info": delivery_data.get("description"),
                     "p_delivery_type": delivery_data.get("delivery_type", "STANDARD"),
                     "p_duration": delivery_data.get("duration"),
                     "p_package_image_url": delivery_data.get("package_image_url"),
                 },
             ).execute()
-            result_data = result.data
+
+            response = result.data
 
         except APIError as e:
-            result_data = extract_rpc_data(e)
-            if not result_data:
+            response = extract_rpc_data(e)
+            if not response:
                 raise
 
-        if not result_data:
+        if not response:
             raise Exception("No data returned from RPC")
 
-        if result_data.get("status") == "already_processed":
-            logger.info("delivery_payment_already_processed", tx_ref=tx_ref)
+        if response.get("status") == "already_processed":
+            logger.info(
+                event="delivery_payment_already_processed",
+                tx_ref=tx_ref,
+                order_id=response.get("order_id"),
+            )
             await delete_pending(pending_key)
-            return result_data
+            return
 
-        order_id = result_data["order_id"]
-        delivery_fee = Decimal(str(result_data["delivery_fee"]))
+        logger.info(
+            event="delivery_payment_success",
+            tx_ref=tx_ref,
+            order_id=response.get("order_id"),
+            delivery_fee=response.get("delivery_fee"),
+            platform_commission=response.get("platform_commission"),
+        )
+
+        # 3. Notify sender
+        await notify_user(
+            user_id=sender_id,
+            title="Payment Successful",
+            body=f"Your delivery payment of ₦{response.get('delivery_fee')} has been received.",
+            data={
+                "type": "DELIVERY_PAYMENT_SUCCESS",
+                "order_id": str(response.get("order_id")),
+                "amount": str(response.get("delivery_fee")),
+            },
+            supabase=supabase,
+        )
 
         await delete_pending(pending_key)
 
-        try:
-            await notify_user(
-                sender_id,
-                "Payment Successful",
-                f"Your delivery payment of ₦{delivery_fee} has been received.",
-                data={
-                    "type": "DELIVERY_PAYMENT_SUCCESS",
-                    "order_id": order_id,
-                    "amount": str(delivery_fee),
-                },
-                supabase=supabase,
-            )
-        except Exception as e:
-            logger.error("notification_failed", error=str(e))
-
-        logger.info(
-            "delivery_payment_processed_success",
-            tx_ref=tx_ref,
-            order_id=order_id,
-            delivery_fee=str(delivery_fee),
-        )
-
-        return result_data
-
     except Exception as e:
         logger.error(
-            "delivery_payment_processing_error",
+            event="delivery_payment_processing_error",
             tx_ref=tx_ref,
             error=str(e),
             exc_info=True,
         )
+        await delete_pending(pending_key)
         raise
 
 
-async def process_successful_delivery_payment_non_rpc(
+async def process_successful_delivery_payment(
     tx_ref: str,
     paid_amount: Decimal,
     flw_ref: str,
@@ -185,64 +154,36 @@ async def process_successful_delivery_payment_non_rpc(
     payment_method: Literal["CARD", "WALLET"],
     pending_data: dict = None,
 ):
+    """
+    Process successful delivery payment.
+    Uses direct DB operations (like legacy code) for reliability.
+    """
     logger.info("processing_delivery_payment", tx_ref=tx_ref, paid_amount=paid_amount)
 
-    # WALLET — order already created by pay_with_wallet RPC
-    # Just fetch the order and notify
-    if payment_method == "WALLET":
-        existing = (
-            await supabase.table("delivery_orders")
-            .select("id, sender_id, delivery_fee")
-            .eq("tx_ref", tx_ref)
-            .execute()
-        )
+    # 1. Verify payment
+    # if payment_method == "CARD":
+    #     verified = await verify_transaction_tx_ref(tx_ref)
+    #     if not verified or verified.get("status") != "success":
+    #         logger.error("delivery_payment_verification_failed", tx_ref=tx_ref)
+    #         return {"status": "verification_failed"}
 
-        if not existing.data:
-            logger.warning("wallet_delivery_order_not_found", tx_ref=tx_ref)
-            return {"status": "order_not_found"}
+    # # 2. Get pending data from Redis
+    # pending_key = f"pending_delivery_{tx_ref}"
+    # pending = await get_pending(pending_key)
 
-        order = existing.data[0]
-        order_id = order["id"]
-        sender_id = str(order["sender_id"])
-        delivery_fee = Decimal(str(order["delivery_fee"]))
+    if payment_method == "CARD":
+        verified = await verify_transaction_tx_ref(tx_ref)
+        if not verified or verified.get("status") != "success":
+            logger.error("delivery_payment_verification_failed", tx_ref=tx_ref)
+            return {"status": "verification_failed"}
 
-        try:
-            await notify_user(
-                sender_id,
-                "Payment Successful",
-                f"Your delivery payment of ₦{delivery_fee} has been received.",
-                data={
-                    "type": "DELIVERY_PAYMENT_SUCCESS",
-                    "order_id": order_id,
-                    "amount": str(delivery_fee),
-                },
-                supabase=supabase,
-            )
-        except Exception as notif_error:
-            logger.error("notification_failed", error=str(notif_error))
-
-        logger.info(
-            "wallet_delivery_payment_processed",
-            tx_ref=tx_ref,
-            order_id=order_id,
-        )
-
-        return {
-            "status": "success",
-            "order_id": order_id,
-            "tx_ref": tx_ref,
-            "delivery_fee": str(delivery_fee),
-            "message": "Delivery payment processed successfully via wallet",
-        }
-
-    # CARD — full flow as before
-    verified = await verify_transaction_tx_ref(tx_ref)
-    if not verified or verified.get("status") != "success":
-        logger.error("delivery_payment_verification_failed", tx_ref=tx_ref)
-        return {"status": "verification_failed"}
-
+    # 1. Get pending data from Redis
     pending_key = f"pending_delivery_{tx_ref}"
-    pending = await get_pending(pending_key)
+    if payment_method == "WALLET" and pending_data:
+        pending = pending_data
+        logger.info("using_embedded_pending_data", tx_ref=tx_ref)
+    else:
+        pending = await get_pending(pending_key)  # CARD reads from Redis
 
     if not pending:
         logger.warning("delivery_payment_pending_not_found", tx_ref=tx_ref)
@@ -252,7 +193,7 @@ async def process_successful_delivery_payment_non_rpc(
     delivery_data = pending["delivery_data"]
     distance = Decimal(str(pending.get("distance", 0)))
 
-    # Idempotency check
+    # 3. Check if already processed (idempotency)
     existing = (
         await supabase.table("transactions")
         .select("order_id")
@@ -268,6 +209,7 @@ async def process_successful_delivery_payment_non_rpc(
         }
 
     try:
+        # 4. Get charges from DB
         charges = (
             await supabase.table("charges_and_commissions")
             .select("base_delivery_fee, delivery_fee_per_km, delivery_commission_rate")
@@ -282,91 +224,122 @@ async def process_successful_delivery_payment_non_rpc(
         per_km_fee = Decimal(str(charges.data["delivery_fee_per_km"]))
         commission_rate = Decimal(str(charges.data["delivery_commission_rate"]))
 
+        # 5. Calculate fees
         delivery_fee = round(base_fee + (per_km_fee * distance), 2)
         amount_due_dispatch = round(delivery_fee * commission_rate, 2)
         platform_commission = delivery_fee - amount_due_dispatch
 
+        # 6. Validate paid amount
         if round(paid_amount, 2) != delivery_fee:
-            raise Exception(f"Amount mismatch: expected {delivery_fee}, got {paid_amount}")
+            raise Exception(
+                f"Amount mismatch: expected {delivery_fee}, got {paid_amount}"
+            )
 
-        # Create delivery order
+        logger.info(
+            "creating_delivery_order",
+            sender_id=sender_id,
+            delivery_fee=str(delivery_fee),
+            amount_due_dispatch=str(amount_due_dispatch),
+        )
+
+        # 7. Create delivery order (just like legacy code!)
         order_resp = (
             await supabase.table("delivery_orders")
-            .insert({
-                "sender_id": sender_id,
-                "package_name": delivery_data.get("package_name"),
-                "receiver_phone": delivery_data.get("receiver_phone"),
-                "sender_phone_number": delivery_data.get("sender_phone_number"),
-                "pickup_location": delivery_data["pickup_location"],
-                "destination": delivery_data["destination"],
-                "pickup_coordinates": delivery_data["pickup_coordinates"],
-                "dropoff_coordinates": delivery_data["dropoff_coordinates"],
-                "additional_info": delivery_data.get("description"),
-                "delivery_type": delivery_data.get("delivery_type", "STANDARD"),
-                "total_price": str(delivery_fee),
-                "amount_due_dispatch": str(amount_due_dispatch),
-                "delivery_fee": str(delivery_fee),
-                "duration": delivery_data.get("duration"),
-                "delivery_status": "PENDING",
-                "payment_status": "PAID",
-                "package_image_url": delivery_data.get("package_image_url"),
-                "distance": str(distance),
-                "tx_ref": tx_ref,
-                "flw_ref": flw_ref,
-                "order_type": "DELIVERY",
-            })
+            .insert(
+                {
+                    "sender_id": sender_id,
+                    "package_name": delivery_data.get("package_name"),
+                    "receiver_phone": delivery_data.get("receiver_phone"),
+                    "sender_phone_number": delivery_data.get("sender_phone_number"),
+                    "pickup_location": delivery_data["pickup_location"],
+                    "destination": delivery_data["destination"],
+                    "pickup_coordinates": delivery_data["pickup_coordinates"],
+                    "dropoff_coordinates": delivery_data["dropoff_coordinates"],
+                    "additional_info": delivery_data.get("description"),
+                    "delivery_type": delivery_data.get("delivery_type", "STANDARD"),
+                    "total_price": str(delivery_fee),
+                    "amount_due_dispatch": str(amount_due_dispatch),
+                    "delivery_fee": str(delivery_fee),
+                    "duration": delivery_data.get("duration"),
+                    "delivery_status": "PENDING",
+                    "payment_status": "PAID",
+                    "package_image_url": delivery_data.get("package_image_url"),
+                    "distance": str(distance),
+                    "tx_ref": tx_ref,
+                    "flw_ref": flw_ref,
+                    "order_type": "DELIVERY",
+                    # "sender_phone_number": ("receiver_phone"),
+                }
+            )
             .execute()
         )
 
         order_id = order_resp.data[0]["id"]
         logger.info("delivery_order_created", order_id=order_id)
 
-        # Credit sender wallet — CARD only
-        await supabase.rpc(
-            "update_user_wallet",
-            {
-                "p_user_id": sender_id,
-                "p_balance_change": str(delivery_fee),
-                "p_escrow_balance_change": "0",
-            },
-        ).execute()
+        # 8. Credit sender wallet (DEPOSIT)
+        try:
+            if payment_method == "CARD":
+                await supabase.rpc(
+                    "update_user_wallet",
+                    {
+                        "p_user_id": sender_id,
+                        "p_balance_change": str(delivery_fee),
+                        "p_escrow_balance_change": "0",
+                    },
+                ).execute()
+        except APIError as e:
+            wallet_result = extract_rpc_data(e)
+            if not wallet_result:
+                raise
 
-        logger.info("sender_wallet_credited", sender_id=sender_id, amount=str(delivery_fee))
+        logger.info(
+            "sender_wallet_credited", sender_id=sender_id, amount=str(delivery_fee)
+        )
 
-        # Create DEPOSIT transaction
-        await supabase.table("transactions").insert({
-            "tx_ref": tx_ref,
-            "amount": float(delivery_fee),
-            "from_user_id": sender_id,
-            "to_user_id": sender_id,
-            "order_id": order_id,
-            "wallet_id": sender_id,
-            "transaction_type": "DEPOSIT",
-            "payment_status": "SUCCESS",
-            "payment_method": "FLUTTERWAVE",
-            "order_type": "DELIVERY",
-            "details": {
-                "flw_ref": flw_ref,
-                "label": "CREDIT",
-                "note": "Delivery payment received from Flutterwave",
-                "delivery_fee_breakdown": {
-                    "base_fee": str(base_fee),
-                    "per_km_fee": str(per_km_fee),
-                    "distance_km": str(distance),
-                    "total_fee": str(delivery_fee),
-                    "dispatch_gets": str(amount_due_dispatch),
-                    "platform_commission": str(platform_commission),
-                },
-            },
-        }).execute()
+        # 9. Create DEPOSIT transaction
+        await (
+            supabase.table("transactions")
+            .insert(
+                {
+                    "tx_ref": tx_ref,
+                    "amount": float(delivery_fee),
+                    "from_user_id": sender_id,
+                    "to_user_id": sender_id,
+                    "order_id": order_id,
+                    "wallet_id": sender_id,
+                    "transaction_type": "DEPOSIT",
+                    "payment_status": "SUCCESS",
+                    "payment_method": "FLUTTERWAVE",
+                    "order_type": "DELIVERY",
+                    "details": {
+                        "flw_ref": flw_ref,
+                        "label": "CREDIT",
+                        "note": "Delivery payment received from Flutterwave",
+                        "delivery_fee_breakdown": {
+                            "base_fee": str(base_fee),
+                            "per_km_fee": str(per_km_fee),
+                            "distance_km": str(distance),
+                            "total_fee": str(delivery_fee),
+                            "dispatch_gets": str(amount_due_dispatch),
+                            "platform_commission": str(platform_commission),
+                        },
+                    },
+                }
+            )
+            .execute()
+        )
 
         logger.info("deposit_transaction_created", tx_ref=tx_ref)
 
+        # 10. Clean up Redis
         await delete_pending(pending_key)
+        logger.info("pending_delivery_deleted", tx_ref=tx_ref)
 
+        # 11. Send notification
         try:
             await notify_user(
-                sender_id,
+                f'{sender_id}',
                 "Payment Successful",
                 f"Your delivery payment of ₦{delivery_fee} has been received.",
                 data={
@@ -380,7 +353,7 @@ async def process_successful_delivery_payment_non_rpc(
             logger.error("notification_failed", error=str(notif_error))
 
         logger.info(
-            "delivery_payment_processed_success",
+            event="delivery_payment_processed_success",
             tx_ref=tx_ref,
             order_id=order_id,
             delivery_fee=str(delivery_fee),
@@ -399,244 +372,12 @@ async def process_successful_delivery_payment_non_rpc(
 
     except Exception as e:
         logger.error(
-            "delivery_payment_processing_error",
+            event="delivery_payment_processing_error",
             tx_ref=tx_ref,
             error=str(e),
             exc_info=True,
         )
         raise
-# async def process_successful_delivery_payment(
-#     tx_ref: str,
-#     paid_amount: Decimal,
-#     flw_ref: str,
-#     supabase: AsyncClient,
-#     payment_method: Literal["CARD", "WALLET"],
-#     pending_data: dict = None,
-# ):
-#     """
-#     Process successful delivery payment.
-#     Uses direct DB operations (like legacy code) for reliability.
-#     """
-#     logger.info("processing_delivery_payment", tx_ref=tx_ref, paid_amount=paid_amount)
-
-#     # 1. Verify payment
-#     # if payment_method == "CARD":
-#     #     verified = await verify_transaction_tx_ref(tx_ref)
-#     #     if not verified or verified.get("status") != "success":
-#     #         logger.error("delivery_payment_verification_failed", tx_ref=tx_ref)
-#     #         return {"status": "verification_failed"}
-
-#     # # 2. Get pending data from Redis
-#     # pending_key = f"pending_delivery_{tx_ref}"
-#     # pending = await get_pending(pending_key)
-
-#     if payment_method == "CARD":
-#         verified = await verify_transaction_tx_ref(tx_ref)
-#         if not verified or verified.get("status") != "success":
-#             logger.error("delivery_payment_verification_failed", tx_ref=tx_ref)
-#             return {"status": "verification_failed"}
-
-#     # 1. Get pending data from Redis
-#     pending_key = f"pending_delivery_{tx_ref}"
-#     if payment_method == "WALLET" and pending_data:
-#         pending = pending_data
-#         logger.info("using_embedded_pending_data", tx_ref=tx_ref)
-#     else:
-#         pending = await get_pending(pending_key)  # CARD reads from Redis
-
-#     if not pending:
-#         logger.warning("delivery_payment_pending_not_found", tx_ref=tx_ref)
-#         return {"status": "pending_not_found"}
-
-#     sender_id = str(pending["sender_id"])
-#     delivery_data = pending["delivery_data"]
-#     distance = Decimal(str(pending.get("distance", 0)))
-
-#     # 3. Check if already processed (idempotency)
-#     existing = (
-#         await supabase.table("transactions")
-#         .select("order_id")
-#         .eq("tx_ref", tx_ref)
-#         .execute()
-#     )
-#     if existing.data:
-#         logger.info("delivery_payment_already_processed", tx_ref=tx_ref)
-#         await delete_pending(pending_key)
-#         return {
-#             "status": "already_processed",
-#             "order_id": existing.data[0]["order_id"],
-#         }
-
-#     try:
-#         # 4. Get charges from DB
-#         charges = (
-#             await supabase.table("charges_and_commissions")
-#             .select("base_delivery_fee, delivery_fee_per_km, delivery_commission_rate")
-#             .single()
-#             .execute()
-#         )
-
-#         if not charges.data:
-#             raise Exception("Charges configuration not found")
-
-#         base_fee = Decimal(str(charges.data["base_delivery_fee"]))
-#         per_km_fee = Decimal(str(charges.data["delivery_fee_per_km"]))
-#         commission_rate = Decimal(str(charges.data["delivery_commission_rate"]))
-
-#         # 5. Calculate fees
-#         delivery_fee = round(base_fee + (per_km_fee * distance), 2)
-#         amount_due_dispatch = round(delivery_fee * commission_rate, 2)
-#         platform_commission = delivery_fee - amount_due_dispatch
-
-#         # 6. Validate paid amount
-#         if round(paid_amount, 2) != delivery_fee:
-#             raise Exception(
-#                 f"Amount mismatch: expected {delivery_fee}, got {paid_amount}"
-#             )
-
-#         logger.info(
-#             "creating_delivery_order",
-#             sender_id=sender_id,
-#             delivery_fee=str(delivery_fee),
-#             amount_due_dispatch=str(amount_due_dispatch),
-#         )
-
-#         # 7. Create delivery order (just like legacy code!)
-#         order_resp = (
-#             await supabase.table("delivery_orders")
-#             .insert(
-#                 {
-#                     "sender_id": sender_id,
-#                     "package_name": delivery_data.get("package_name"),
-#                     "receiver_phone": delivery_data.get("receiver_phone"),
-#                     "sender_phone_number": delivery_data.get("sender_phone_number"),
-#                     "pickup_location": delivery_data["pickup_location"],
-#                     "destination": delivery_data["destination"],
-#                     "pickup_coordinates": delivery_data["pickup_coordinates"],
-#                     "dropoff_coordinates": delivery_data["dropoff_coordinates"],
-#                     "additional_info": delivery_data.get("description"),
-#                     "delivery_type": delivery_data.get("delivery_type", "STANDARD"),
-#                     "total_price": str(delivery_fee),
-#                     "amount_due_dispatch": str(amount_due_dispatch),
-#                     "delivery_fee": str(delivery_fee),
-#                     "duration": delivery_data.get("duration"),
-#                     "delivery_status": "PENDING",
-#                     "payment_status": "PAID",
-#                     "package_image_url": delivery_data.get("package_image_url"),
-#                     "distance": str(distance),
-#                     "tx_ref": tx_ref,
-#                     "flw_ref": flw_ref,
-#                     "order_type": "DELIVERY",
-#                     # "sender_phone_number": ("receiver_phone"),
-#                 }
-#             )
-#             .execute()
-#         )
-
-#         order_id = order_resp.data[0]["id"]
-#         logger.info("delivery_order_created", order_id=order_id)
-
-#         # 8. Credit sender wallet (DEPOSIT)
-#         try:
-#             if payment_method == "CARD":
-#                 await supabase.rpc(
-#                     "update_user_wallet",
-#                     {
-#                         "p_user_id": sender_id,
-#                         "p_balance_change": str(delivery_fee),
-#                         "p_escrow_balance_change": "0",
-#                     },
-#                 ).execute()
-#         except APIError as e:
-#             wallet_result = extract_rpc_data(e)
-#             if not wallet_result:
-#                 raise
-
-#         logger.info(
-#             "sender_wallet_credited", sender_id=sender_id, amount=str(delivery_fee)
-#         )
-
-#         # 9. Create DEPOSIT transaction
-#         await (
-#             supabase.table("transactions")
-#             .insert(
-#                 {
-#                     "tx_ref": tx_ref,
-#                     "amount": float(delivery_fee),
-#                     "from_user_id": sender_id,
-#                     "to_user_id": sender_id,
-#                     "order_id": order_id,
-#                     "wallet_id": sender_id,
-#                     "transaction_type": "DEPOSIT",
-#                     "payment_status": "SUCCESS",
-#                     "payment_method": "FLUTTERWAVE",
-#                     "order_type": "DELIVERY",
-#                     "details": {
-#                         "flw_ref": flw_ref,
-#                         "label": "CREDIT",
-#                         "note": "Delivery payment received from Flutterwave",
-#                         "delivery_fee_breakdown": {
-#                             "base_fee": str(base_fee),
-#                             "per_km_fee": str(per_km_fee),
-#                             "distance_km": str(distance),
-#                             "total_fee": str(delivery_fee),
-#                             "dispatch_gets": str(amount_due_dispatch),
-#                             "platform_commission": str(platform_commission),
-#                         },
-#                     },
-#                 }
-#             )
-#             .execute()
-#         )
-
-#         logger.info("deposit_transaction_created", tx_ref=tx_ref)
-
-#         # 10. Clean up Redis
-#         await delete_pending(pending_key)
-#         logger.info("pending_delivery_deleted", tx_ref=tx_ref)
-
-#         # 11. Send notification
-#         try:
-#             await notify_user(
-#                 f'{sender_id}',
-#                 "Payment Successful",
-#                 f"Your delivery payment of ₦{delivery_fee} has been received.",
-#                 data={
-#                     "type": "DELIVERY_PAYMENT_SUCCESS",
-#                     "order_id": order_id,
-#                     "amount": str(delivery_fee),
-#                 },
-#                 supabase=supabase,
-#             )
-#         except Exception as notif_error:
-#             logger.error("notification_failed", error=str(notif_error))
-
-#         logger.info(
-#             event="delivery_payment_processed_success",
-#             tx_ref=tx_ref,
-#             order_id=order_id,
-#             delivery_fee=str(delivery_fee),
-#             platform_commission=str(platform_commission),
-#         )
-
-#         return {
-#             "status": "success",
-#             "order_id": order_id,
-#             "tx_ref": tx_ref,
-#             "delivery_fee": str(delivery_fee),
-#             "amount_due_dispatch": str(amount_due_dispatch),
-#             "platform_commission": str(platform_commission),
-#             "message": "Delivery payment processed successfully",
-#         }
-
-#     except Exception as e:
-#         logger.error(
-#             event="delivery_payment_processing_error",
-#             tx_ref=tx_ref,
-#             error=str(e),
-#             exc_info=True,
-#         )
-#         raise
 
 
 # ───────────────────────────────────────────────
@@ -653,53 +394,6 @@ async def process_successful_food_payment(
 ):
     """Process successful food order payment using atomic RPC."""
     logger.info("processing_food_payment", tx_ref=tx_ref, paid_amount=paid_amount)
-
-
-    if payment_method == "WALLET":
-        existing = (
-            await supabase.table("food_orders")
-            .select("id, customer_id, grand_total")
-            .eq("tx_ref", tx_ref)
-            .execute()
-        )
-
-        if not existing.data:
-            logger.warning("food_delivery_order_not_found", tx_ref=tx_ref)
-            return {"status": "order_not_found"}
-
-        order = existing.data[0]
-        order_id = order["id"]
-        customer_id = str(order["customer_id"])
-        grand_total = Decimal(str(order["grand_total"]))
-
-        try:
-            await notify_user(
-                customer_id,
-                "Payment Successful",
-                f"Your food payment of ₦{grand_total} has been received.",
-                data={
-                    "type": "FOOD_PAYMENT_SUCCESS",
-                    "order_id": order_id,
-                    "amount": str(grand_total),
-                },
-                supabase=supabase,
-            )
-        except Exception as notif_error:
-            logger.error("notification_failed", error=str(notif_error))
-
-        logger.info(
-            "wallet_delivery_payment_processed",
-            tx_ref=tx_ref,
-            order_id=order_id,
-        )
-
-        return {
-            "status": "success",
-            "order_id": order_id,
-            "tx_ref": tx_ref,
-            "grand_total": str(grand_total),
-            "message": "Food payment processed successfully via wallet",
-        }
 
     # Verify payment
     # verified = await verify_transaction_tx_ref(tx_ref)
@@ -821,11 +515,11 @@ async def process_successful_topup_payment(
     logger.info("processing_topup_payment", tx_ref=tx_ref, paid_amount=paid_amount)
 
     # 1. Verify — CARD only
-    # if payment_method == "CARD":
-    verified = await verify_transaction_tx_ref(tx_ref)
-    if not verified or verified.get("status") != "success":
-        logger.error("topup_payment_verification_failed", tx_ref=tx_ref)
-        return
+    if payment_method == "CARD":
+        verified = await verify_transaction_tx_ref(tx_ref)
+        if not verified or verified.get("status") != "success":
+            logger.error("topup_payment_verification_failed", tx_ref=tx_ref)
+            return
 
     # 2. Idempotency check BEFORE anything else
     existing = (
@@ -960,52 +654,6 @@ async def process_successful_product_payment(
         paid_amount=paid_amount,
     )
 
-    if payment_method == "WALLET":
-        existing = (
-            await supabase.table("product_orders")
-            .select("id, customer_id, grand_total")
-            .eq("tx_ref", tx_ref)
-            .execute()
-        )
-
-        if not existing.data:
-            logger.warning("wallet_product_order_not_found", tx_ref=tx_ref)
-            return {"status": "order_not_found"}
-
-        order = existing.data[0]
-        order_id = order["id"]
-        customer_id = str(order["customer_id"])
-        grand_total = Decimal(str(order["grand_total"]))
-
-        try:
-            await notify_user(
-                customer_id,
-                "Payment Successful",
-                f"Your product payment of ₦{grand_total} has been received.",
-                data={
-                    "type": "PRODUCT_PAYMENT_SUCCESS",
-                    "order_id": order_id,
-                    "amount": str(grand_total),
-                },
-                supabase=supabase,
-            )
-        except Exception as notif_error:
-            logger.error("notification_failed", error=str(notif_error))
-
-        logger.info(
-            "wallet_product_payment_processed",
-            tx_ref=tx_ref,
-            order_id=order_id,
-        )
-
-        return {
-            "status": "success",            
-            "order_id": order_id,
-            "tx_ref": tx_ref,
-            "grand_total": str(grand_total),
-            "message": "Product payment processed successfully via wallet",
-        }
-
     if payment_method == "CARD":
         verified = await verify_transaction_tx_ref(tx_ref)
         if not verified or verified.get("status") != "success":
@@ -1016,7 +664,7 @@ async def process_successful_product_payment(
     pending_key = f"pending_product_{tx_ref}"
     if payment_method == "WALLET" and pending_data:
         pending = pending_data
-
+   
     else:
         pending = await get_pending(pending_key)  # CARD reads from Redis
 
@@ -1137,145 +785,147 @@ async def process_successful_product_payment_non_rpc(
             logger.error("product_payment_verification_failed", tx_ref=tx_ref)
             return {"status": "verification_failed"}
 
-        # 1. Get pending data from Redis
-        pending_key = f"pending_product_{tx_ref}"
-        if payment_method == "WALLET" and pending_data:
-            pending = pending_data
-            logger.info("using_embedded_pending_data", tx_ref=tx_ref)
-        else:
-            pending = await get_pending(pending_key)  # CARD reads from Redis
+    # 1. Get pending data from Redis
+    pending_key = f"pending_product_{tx_ref}"
+    if payment_method == "WALLET" and pending_data:
+        pending = pending_data
+        logger.info("using_embedded_pending_data", tx_ref=tx_ref)
+    else:
+        pending = await get_pending(pending_key)  # CARD reads from Redis
 
-        if not pending:
-            logger.warning(event="pending_order_not_found", tx_ref=tx_ref)
-            return
+    if not pending:
+        logger.warning(event="pending_order_not_found", tx_ref=tx_ref)
+        return
 
-        expected_total = Decimal(pending["grand_total"])
-        customer_id = pending["customer_id"]
-        vendor_id = pending["vendor_id"]
-        product_id = pending["item_id"]  # item_id refers to product_id
+    expected_total = Decimal(pending["grand_total"])
+    customer_id = pending["customer_id"]
+    vendor_id = pending["vendor_id"]
+    product_id = pending["item_id"]  # item_id refers to product_id
+    quantity = int(pending["quantity"])
+
+    # Idempotency check
+    existing = (
+        await supabase.table("transactions").select("id").eq("tx_ref", tx_ref).execute()
+    )
+
+    if existing.data:
+        await delete_pending(pending_key)
+        return
+
+    expected_rounded = Decimal(str(expected_total)).quantize(Decimal("0.00"))
+    paid_rounded = Decimal(str(paid_amount)).quantize(Decimal("0.00"))
+
+    if paid_rounded != expected_rounded:
+        logger.error(
+            event="payment_amount_mismatch",
+            tx_ref=tx_ref,
+            expected=str(expected_rounded),
+            paid=str(paid_rounded),
+        )
+        await delete_pending(pending_key)
+        return
+
+    try:
+        # 1 Create the main product_order
+        product_id = pending["item_id"]
         quantity = int(pending["quantity"])
+        product_name = pending.get("product_name", "Product")
+        unit_price = pending.get("price", 0)
 
-        # Idempotency check
-        existing = (
-            await supabase.table("transactions").select("id").eq("tx_ref", tx_ref).execute()
+        # 2. Create the main product_order
+        order_resp = (
+            await supabase.table("product_orders")
+            .insert(
+                {
+                    "tx_ref": tx_ref,
+                    "customer_id": pending["customer_id"],
+                    "vendor_id": pending["vendor_id"],
+                    "grand_total": pending["grand_total"],
+                    "amount_due_vendor": pending["subtotal"],
+                    "shipping_cost": pending.get("shipping_cost", 0),
+                    "delivery_option": pending["delivery_option"],
+                    "delivery_address": pending["delivery_address"],
+                    "additional_info": pending["additional_info"],
+                    "order_status": "PENDING",
+                    "payment_status": "SUCCESS",
+                    "escrow_status": "HELD",
+                    "order_type": "PRODUCT",
+                }
+            )
+            .execute()
         )
 
-        if existing.data:
-            await delete_pending(pending_key)
-            return
+        order_id = order_resp.data[0]["id"]
 
-        expected_rounded = Decimal(str(expected_total)).quantize(Decimal("0.00"))
-        paid_rounded = Decimal(str(paid_amount)).quantize(Decimal("0.00"))
-
-        if paid_rounded != expected_rounded:
-            logger.error(
-                event="payment_amount_mismatch",
-                tx_ref=tx_ref,
-                expected=str(expected_rounded),
-                paid=str(paid_rounded),
-            )
-            await delete_pending(pending_key)
-            return
-
-        try:
-            # 1 Create the main product_order
-            product_id = pending["item_id"]
-            quantity = int(pending["quantity"])
-            product_name = pending.get("product_name", "Product")
-            unit_price = pending.get("price", 0)
-
-            # 2. Create the main product_order
-            order_resp = (
-                await supabase.table("product_orders")
-                .insert(
-                    {
-                        "tx_ref": tx_ref,
-                        "customer_id": pending["customer_id"],
-                        "vendor_id": pending["vendor_id"],
-                        "grand_total": pending["grand_total"],
-                        "amount_due_vendor": pending["subtotal"],
-                        "shipping_cost": pending.get("shipping_cost", 0),
-                        "delivery_option": pending["delivery_option"],
-                        "delivery_address": pending["delivery_address"],
-                        "additional_info": pending["additional_info"],
-                        "order_status": "PENDING",
-                        "payment_status": "SUCCESS",
-                        "escrow_status": "HELD",
-                        "order_type": "PRODUCT",
-                    }
-                )
-                .execute()
-            )
-
-            order_id = order_resp.data[0]["id"]
-
-            await (
-                supabase.table("product_order_items")
-                .insert(
-                    {
-                        "order_id": order_id,
-                        "product_id": product_id,
-                        "quantity": quantity,
-                        "name": product_name,
-                        "images": pending.get("images", None),
-                        "price": unit_price,
-                        "selected_size": pending.get("selected_size", None),
-                        "selected_color": pending.get("selected_color", None),
-                    }
-                )
-                .execute()
-            )
-
-            # Update buyer escrow balance
-            await supabase.rpc(
-                "update_user_wallet",
+        await (
+            supabase.table("product_order_items")
+            .insert(
                 {
-                    "p_user_id": customer_id,
-                    "p_balance_change": "0",
-                    "p_escrow_balance_change": expected_total,
-                },
-            ).execute()
-
-            # Create transaction record
-            await (
-                supabase.table("transactions")
-                .insert(
-                    {
-                        "tx_ref": tx_ref,
-                        "amount": expected_total,
-                        "from_user_id": customer_id,
-                        "to_user_id": vendor_id,
-                        "wallet_id": customer_id,
-                        "order_id": order_id,
-                        "transaction_type": "ESCROW_HOLD",
-                        "payment_method": f'{payment_method}',
-                        "order_type": "PRODUCT",
-                        "details": {"flw_ref": flw_ref, "label": "DEBIT"},
-                    }
-                )
-                .execute()
+                    "order_id": order_id,
+                    "product_id": product_id,
+                    "quantity": quantity,
+                    "name": product_name,
+                    "images": pending.get("images", None),
+                    "price": unit_price,
+                    "selected_size": pending.get("selected_size", None),
+                    "selected_color": pending.get("selected_color", None),
+                }
             )
+            .execute()
+        )
 
-            # Notify rider on success
-            await notify_user(
-                user_id=vendor_id,
-                title="New Order",
-                body=f"You have a new order",
-                data={"order_id": str(order_id), "type": "PRODUCT_PAYMENT"},
-                supabase=supabase,
+        # Update buyer escrow balance
+        await supabase.rpc(
+            "update_user_wallet",
+            {
+                "p_user_id": customer_id,
+                "p_balance_change": "0",
+                "p_escrow_balance_change": expected_total,
+            },
+        ).execute()
+
+        # Create transaction record
+        await (
+            supabase.table("transactions")
+            .insert(
+                {
+                    "tx_ref": tx_ref,
+                    "amount": expected_total,
+                    "from_user_id": customer_id,
+                    "to_user_id": vendor_id,
+                    "wallet_id": customer_id,
+                    "order_id": order_id,
+                    "transaction_type": "ESCROW_HOLD",
+                    "payment_method": f'{payment_method}',
+                    "order_type": "PRODUCT",
+                    "details": {"flw_ref": flw_ref, "label": "DEBIT"},
+                }
             )
+            .execute()
+        )
 
-            await delete_pending(pending_key)
+        # Notify rider on success
+        await notify_user(
+            user_id=vendor_id,
+            title="New Order",
+            body=f"You have a new order",
+            data={"order_id": str(order_id), "type": "PRODUCT_PAYMENT"},
+            supabase=supabase,
+        )
 
-        except Exception as e:
-            logger.error(
-                event="product_payment_processing_error",
-                tx_ref=tx_ref,
-                error=str(e),
-                exc_info=True,
-            )
-        
-            raise
+        await delete_pending(pending_key)
+
+    except Exception as e:
+        logger.error(
+            event="product_payment_processing_error",
+            tx_ref=tx_ref,
+            error=str(e),
+            exc_info=True,
+        )
+        # Depending on your failure strategy, you might not want to delete pending here
+        # so it can be retried, but keeping it as per your original logic.
+      
+        raise
 
 
 async def process_successful_laundry_payment(
@@ -1289,52 +939,6 @@ async def process_successful_laundry_payment(
 ):
     """Process successful laundry order payment using atomic RPC."""
     logger.info("processing_laundry_payment", tx_ref=tx_ref, paid_amount=paid_amount)
-
-    if payment_method == "WALLET":
-        existing = (
-            await supabase.table("laundry_orders")
-            .select("id, customer_id, grand_total")
-            .eq("tx_ref", tx_ref)
-            .execute()
-        )
-
-        if not existing.data:
-            logger.warning("wallet_laundry_order_not_found", tx_ref=tx_ref)
-            return {"status": "order_not_found"}
-
-        order = existing.data[0]
-        order_id = order["id"]
-        customer_id = str(order["customer_id"])
-        grand_total = Decimal(str(order["grand_total"]))
-
-        try:
-            await notify_user(
-                customer_id,
-                "Payment Successful",
-                f"Your laundry payment of ₦{grand_total} has been received.",
-                data={
-                    "type": "LAUNDRY_PAYMENT_SUCCESS",
-                    "order_id": order_id,
-                    "amount": str(grand_total),
-                },
-                supabase=supabase,
-            )
-        except Exception as notif_error:
-            logger.error("notification_failed", error=str(notif_error))
-
-        logger.info(
-            "laundry_payment_processed",
-            tx_ref=tx_ref,
-            order_id=order_id,
-        )
-
-        return {
-            "status": "success",
-            "order_id": order_id,
-            "tx_ref": tx_ref,
-            "grand_total": str(grand_total),
-            "message": "Laundry payment processed successfully via wallet",
-        }
 
     # Verify payment
     # verified = await verify_transaction_tx_ref(tx_ref)
@@ -1455,3 +1059,22 @@ def empty_to_none(val):
     if isinstance(val, list) and len(val) == 0:
         return None
     return val
+
+"""
+ {
+ "additional_info": "", 
+ "["#ebd093"], 
+ "delivery_address": "Gh bhhhvb vgg",
+ "delivery_option": "VENDOR_DELIVERY", 
+ "images": ["https://fehrsomiswgjtcjuqyot.
+supabase.co/storage/v1/object/public/product-images/ec147cc9-7467-4fb6-ae72-2cee
+bd0440af/1771586512570_0.jpeg", "https://fehrsomiswgjtcjuqyot.supabase.co/storag
+e/v1/object/public/product-images/ec147cc9-7467-4fb6-ae72-2ceebd0440af/177158651
+3689_1.jpeg", "https://fehrsomiswgjtcjuqyot.supabase.co/storage/v1/object/public
+/product-images/ec147cc9-7467-4fb6-ae72-2ceebd0440af/1771586514481_2.jpeg"], 
+"item_id": "d1b0ea45-ba35-4786-8056-7ba997c4764b", 
+"quantity": 1, 
+"sizes": ["40"], 
+"vendor_id": "ec147cc9-7467-4fb6-ae72-2ceebd0440af"}
+
+"""
