@@ -27,45 +27,80 @@ def parse_coordinates(value):
 # ───────────────────────────────────────────────
 
 
-async def process_successful_delivery_payment_rpc(
+async def process_successful_delivery_payment(
     tx_ref: str,
-    paid_amount: float,
-    payment_method: Literal["CARD", "WALLET"],
+    paid_amount: Decimal,
     flw_ref: str,
     supabase: AsyncClient,
+    payment_method: Literal["CARD", "WALLET"],
     pending_data: dict = None,
 ):
-    logger.info(
-        event="processing_delivery_payment",
-        tx_ref=tx_ref,
-        paid_amount=paid_amount,
-    )
+    logger.info("processing_delivery_payment", tx_ref=tx_ref, paid_amount=paid_amount)
 
-    if payment_method == "CARD":
-        verified = await verify_transaction_tx_ref(tx_ref)
-        if not verified or verified.get("status") != "success":
-            logger.error("delivery_payment_verification_failed", tx_ref=tx_ref)
-            return {"status": "verification_failed"}
+    # ── WALLET ──────────────────────────────────────────
+    # Order already created by pay_with_wallet RPC — just notify
+    if payment_method == "WALLET":
+        existing = (
+            await supabase.table("delivery_orders")
+            .select("id, sender_id, delivery_fee")
+            .eq("tx_ref", tx_ref)
+            .execute()
+        )
 
-    # 1. Get pending data from Redis
+        if not existing.data:
+            logger.warning("wallet_delivery_order_not_found", tx_ref=tx_ref)
+            return {"status": "order_not_found"}
+
+        order = existing.data[0]
+        order_id = order["id"]
+        sender_id = str(order["sender_id"])
+        delivery_fee = Decimal(str(order["delivery_fee"]))
+
+        try:
+            await notify_user(
+                sender_id,
+                "Payment Successful",
+                f"Your delivery payment of ₦{delivery_fee} has been received.",
+                data={
+                    "type": "DELIVERY_PAYMENT_SUCCESS",
+                    "order_id": order_id,
+                    "amount": str(delivery_fee),
+                },
+                supabase=supabase,
+            )
+        except Exception as e:
+            logger.error("notification_failed", error=str(e))
+
+        return {
+            "status": "success",
+            "order_id": order_id,
+            "tx_ref": tx_ref,
+            "delivery_fee": str(delivery_fee),
+            "message": "Delivery payment processed successfully via wallet",
+        }
+
+    # ── CARD ─────────────────────────────────────────────
+    # Verify payment
+    verified = await verify_transaction_tx_ref(tx_ref)
+    if not verified or verified.get("status") != "success":
+        logger.error("delivery_payment_verification_failed", tx_ref=tx_ref)
+        return {"status": "verification_failed"}
+
+    # Get pending data from Redis
     pending_key = f"pending_delivery_{tx_ref}"
-    if payment_method == "WALLET" and pending_data:
-        pending = pending_data
-        logger.info("using_embedded_pending_data", tx_ref=tx_ref)
-    else:
-        pending = await get_pending(pending_key)  # CARD reads from Redis
+    pending = await get_pending(pending_key)
 
     if not pending:
-        logger.warning(event="pending_delivery_not_found", tx_ref=tx_ref)
-        return
+        logger.warning("delivery_payment_pending_not_found", tx_ref=tx_ref)
+        return {"status": "pending_not_found"}
+
+    sender_id = str(pending["sender_id"])
+    delivery_data = pending["delivery_data"]
+    distance = Decimal(str(pending.get("distance", 0)))
 
     try:
-        delivery_data = pending["delivery_data"]
-        distance = Decimal(str(pending.get("distance", 0)))
-        sender_id = str(pending["sender_id"])
-
-        # 2. Call RPC (fee recalculated inside RPC from distance — source of truth)
-        response = None
+        # Call RPC — handles order creation, wallet credit, transaction atomically
+        result_data = None
         try:
             result = await supabase.rpc(
                 "process_delivery_payment",
@@ -80,73 +115,69 @@ async def process_successful_delivery_payment_rpc(
                     "p_sender_phone_number": delivery_data.get("sender_phone_number"),
                     "p_pickup_location": delivery_data["pickup_location"],
                     "p_destination": delivery_data["destination"],
-                    "p_pickup_coordinates": parse_coordinates(
-                        delivery_data["pickup_coordinates"]
-                    ),
-                    "p_dropoff_coordinates": parse_coordinates(
-                        delivery_data["dropoff_coordinates"]
-                    ),
+                    "p_pickup_coordinates": delivery_data["pickup_coordinates"],
+                    "p_dropoff_coordinates": delivery_data["dropoff_coordinates"],
                     "p_additional_info": delivery_data.get("description"),
                     "p_delivery_type": delivery_data.get("delivery_type", "STANDARD"),
                     "p_duration": delivery_data.get("duration"),
                     "p_package_image_url": delivery_data.get("package_image_url"),
                 },
             ).execute()
-
-            response = result.data
+            result_data = result.data
 
         except APIError as e:
-            response = extract_rpc_data(e)
-            if not response:
+            result_data = extract_rpc_data(e)
+            if not result_data:
                 raise
 
-        if not response:
+        if not result_data:
             raise Exception("No data returned from RPC")
 
-        if response.get("status") == "already_processed":
-            logger.info(
-                event="delivery_payment_already_processed",
-                tx_ref=tx_ref,
-                order_id=response.get("order_id"),
-            )
+        if result_data.get("status") == "already_processed":
+            logger.info("delivery_payment_already_processed", tx_ref=tx_ref)
             await delete_pending(pending_key)
-            return
+            return result_data
 
-        logger.info(
-            event="delivery_payment_success",
-            tx_ref=tx_ref,
-            order_id=response.get("order_id"),
-            delivery_fee=response.get("delivery_fee"),
-            platform_commission=response.get("platform_commission"),
-        )
-
-        # 3. Notify sender
-        await notify_user(
-            user_id=sender_id,
-            title="Payment Successful",
-            body=f"Your delivery payment of ₦{response.get('delivery_fee')} has been received.",
-            data={
-                "type": "DELIVERY_PAYMENT_SUCCESS",
-                "order_id": str(response.get("order_id")),
-                "amount": str(response.get("delivery_fee")),
-            },
-            supabase=supabase,
-        )
+        order_id = result_data["order_id"]
+        delivery_fee = Decimal(str(result_data["delivery_fee"]))
 
         await delete_pending(pending_key)
 
+        try:
+            await notify_user(
+                sender_id,
+                "Payment Successful",
+                f"Your delivery payment of ₦{delivery_fee} has been received.",
+                data={
+                    "type": "DELIVERY_PAYMENT_SUCCESS",
+                    "order_id": order_id,
+                    "amount": str(delivery_fee),
+                },
+                supabase=supabase,
+            )
+        except Exception as e:
+            logger.error("notification_failed", error=str(e))
+
+        logger.info(
+            "delivery_payment_processed_success",
+            tx_ref=tx_ref,
+            order_id=order_id,
+            delivery_fee=str(delivery_fee),
+        )
+
+        return result_data
+
     except Exception as e:
         logger.error(
-            event="delivery_payment_processing_error",
+            "delivery_payment_processing_error",
             tx_ref=tx_ref,
             error=str(e),
             exc_info=True,
         )
-        await delete_pending(pending_key)
         raise
 
 
-async def process_successful_delivery_payment(
+async def process_successful_delivery_payment_non_rpc(
     tx_ref: str,
     paid_amount: Decimal,
     flw_ref: str,
@@ -685,94 +716,94 @@ async def process_successful_food_payment(
             logger.error("food_payment_verification_failed", tx_ref=tx_ref)
             return {"status": "verification_failed"}
 
-        # 1. Get pending data from Redis
-        pending_key = f"pending_food_{tx_ref}"
-        if payment_method == "WALLET" and pending_data:
-            pending = pending_data
-            logger.info("using_embedded_pending_data", tx_ref=tx_ref)
-        else:
-            pending = await get_pending(pending_key)  # CARD reads from Redis
+    # 1. Get pending data from Redis
+    pending_key = f"pending_food_{tx_ref}"
+    if payment_method == "WALLET" and pending_data:
+        pending = pending_data
+        logger.info("using_embedded_pending_data", tx_ref=tx_ref)
+    else:
+        pending = await get_pending(pending_key)  # CARD reads from Redis
 
-        if not pending:
-            logger.warning("food_payment_pending_not_found", tx_ref=tx_ref)
-            return
+    if not pending:
+        logger.warning("food_payment_pending_not_found", tx_ref=tx_ref)
+        return
 
+    try:
+        # Call atomic RPC
+        result_data = None
         try:
-            # Call atomic RPC
-            result_data = None
-            try:
-                result = await supabase.rpc(
-                    "process_food_payment",
-                    {
-                        "p_tx_ref": tx_ref,
-                        "p_flw_ref": flw_ref,
-                        "p_paid_amount": float(paid_amount),
-                        "p_customer_id": pending["customer_id"],
-                        "p_vendor_id": pending["vendor_id"],
-                        "p_order_data": pending["items"],
-                        "p_total_price": float(Decimal(pending["total_price"])),
-                        "p_delivery_fee": float(Decimal(pending.get("delivery_fee", 0))),
-                        "p_grand_total": float(Decimal(pending["grand_total"])),
-                        "p_delivery_option": pending["delivery_option"],
-                        "p_additional_info": pending.get("additional_info"),
-                        "p_customer_name": pending.get("name", "Customer"),
-                        "p_destination": pending.get("delivery_address", None),
-                    },
-                ).execute()
+            result = await supabase.rpc(
+                "process_food_payment",
+                {
+                    "p_tx_ref": tx_ref,
+                    "p_flw_ref": flw_ref,
+                    "p_paid_amount": float(paid_amount),
+                    "p_customer_id": pending["customer_id"],
+                    "p_vendor_id": pending["vendor_id"],
+                    "p_order_data": pending["items"],
+                    "p_total_price": float(Decimal(pending["total_price"])),
+                    "p_delivery_fee": float(Decimal(pending.get("delivery_fee", 0))),
+                    "p_grand_total": float(Decimal(pending["grand_total"])),
+                    "p_delivery_option": pending["delivery_option"],
+                    "p_additional_info": pending.get("additional_info"),
+                    "p_customer_name": pending.get("name", "Customer"),
+                    "p_destination": pending.get("delivery_address", None),
+                },
+            ).execute()
 
-                result_data = result.data
+            result_data = result.data
 
-            except APIError as e:
-                result_data = extract_rpc_data(e)
-                if not result_data:
-                    raise
-
+        except APIError as e:
+            result_data = extract_rpc_data(e)
             if not result_data:
-                raise Exception("No data returned from RPC")
+                raise
 
-            if result_data.get("status") == "already_processed":
-                logger.info("food_payment_already_processed", tx_ref=tx_ref)
-                await delete_pending(pending_key)
-                return result_data
+        if not result_data:
+            raise Exception("No data returned from RPC")
 
-            # Success! Cleanup Redis
+        if result_data.get("status") == "already_processed":
+            logger.info("food_payment_already_processed", tx_ref=tx_ref)
             await delete_pending(pending_key)
-
-            order_id = result_data["order_id"]
-
-            # Notify vendor
-            await notify_user(
-                user_id=f'{result_data["vendor_id"]}',
-                title="New Order",
-                body=f"You have a new order from {pending.get('name', 'Customer')}",
-                data={"order_id": str(order_id), "type": "FOOD_PAYMENT"},
-                supabase=supabase,
-            )
-            # Audit log
-            await log_audit_event(
-                supabase,
-                entity_type="FOOD_ORDER",
-                entity_id=str(order_id),
-                action="PAYMENT_RECEIVED",
-                new_value={"payment_status": "PAID", "amount": result_data["grand_total"]},
-                actor_id=result_data["customer_id"],
-                actor_type="USER",
-                change_amount=Decimal(str(result_data["grand_total"])),
-                notes=f"Food order payment received via {payment_method}: {tx_ref}",
-                request=request,
-            )
-
-            logger.info(
-                "food_payment_processed_success", tx_ref=tx_ref, order_id=str(order_id)
-            )
-
             return result_data
 
-        except Exception as e:
-            logger.error(
-                "food_payment_processing_error", tx_ref=tx_ref, error=str(e), exc_info=True
-            )
-            raise
+        # Success! Cleanup Redis
+        await delete_pending(pending_key)
+
+        order_id = result_data["order_id"]
+
+        # Notify vendor
+        await notify_user(
+            user_id=f'{result_data["vendor_id"]}',
+            title="New Order",
+            body=f"You have a new order from {pending.get('name', 'Customer')}",
+            data={"order_id": str(order_id), "type": "FOOD_PAYMENT"},
+            supabase=supabase,
+        )
+        # Audit log
+        await log_audit_event(
+            supabase,
+            entity_type="FOOD_ORDER",
+            entity_id=str(order_id),
+            action="PAYMENT_RECEIVED",
+            new_value={"payment_status": "PAID", "amount": result_data["grand_total"]},
+            actor_id=result_data["customer_id"],
+            actor_type="USER",
+            change_amount=Decimal(str(result_data["grand_total"])),
+            notes=f"Food order payment received via {payment_method}: {tx_ref}",
+            request=request,
+        )
+
+        logger.info(
+            "food_payment_processed_success", tx_ref=tx_ref, order_id=str(order_id)
+        )
+
+        return result_data
+
+    except Exception as e:
+        logger.error(
+            "food_payment_processing_error", tx_ref=tx_ref, error=str(e), exc_info=True
+        )
+        raise
 
 
 # ───────────────────────────────────────────────
@@ -981,111 +1012,111 @@ async def process_successful_product_payment(
             logger.error("product_payment_verification_failed", tx_ref=tx_ref)
             return {"status": "verification_failed"}
 
-        # 1. Get pending data from Redis
-        pending_key = f"pending_product_{tx_ref}"
-        if payment_method == "WALLET" and pending_data:
-            pending = pending_data
-    
-        else:
-            pending = await get_pending(pending_key)  # CARD reads from Redis
+    # 1. Get pending data from Redis
+    pending_key = f"pending_product_{tx_ref}"
+    if payment_method == "WALLET" and pending_data:
+        pending = pending_data
 
-        if not pending:
-            logger.warning(event="pending_order_not_found", tx_ref=tx_ref)
+    else:
+        pending = await get_pending(pending_key)  # CARD reads from Redis
+
+    if not pending:
+        logger.warning(event="pending_order_not_found", tx_ref=tx_ref)
+        return
+
+    try:
+        shipping = to_decimal(pending.get("shipping_cost"))
+        grand_total = to_decimal(pending.get("grand_total"))
+        paid_rounded = to_decimal(str(paid_amount)).quantize(Decimal("0.00"))
+        expected_rounded = grand_total.quantize(Decimal("0.00"))
+
+        # 2. Amount validation
+        if paid_rounded != expected_rounded:
+            logger.error(
+                event="product_payment_amount_mismatch",
+                tx_ref=tx_ref,
+                expected=str(expected_rounded),
+                paid=str(paid_rounded),
+            )
+            await delete_pending(pending_key)
             return
 
+        # 3. Call RPC
+        response = None
         try:
-            shipping = to_decimal(pending.get("shipping_cost"))
-            grand_total = to_decimal(pending.get("grand_total"))
-            paid_rounded = to_decimal(str(paid_amount)).quantize(Decimal("0.00"))
-            expected_rounded = grand_total.quantize(Decimal("0.00"))
+            result = await supabase.rpc(
+                "process_product_payment",
+                {
+                    "p_tx_ref": tx_ref,
+                    "p_flw_ref": flw_ref,
+                    "p_customer_id": pending["customer_id"],
+                    "p_vendor_id": pending["vendor_id"],
+                    "p_product_id": pending["item_id"],
+                    "p_quantity": int(pending["quantity"]),
+                    "p_product_name": pending.get("product_name", "Product"),
+                    "p_unit_price": str(pending.get("price", 0)) if pending.get("price") is not None else None,
+                    "p_subtotal": str(pending["subtotal"]),
+                    "p_shipping_cost": str(shipping) if shipping is not None else None,
+                    "p_grand_total": str(grand_total),
+                    "p_paid_amount": str(paid_rounded),
+                    "p_delivery_option": pending["delivery_option"],
+                    "p_delivery_address": pending["delivery_address"],
+                    "p_additional_info": pending.get("additional_info"),
+                    "p_images": empty_to_none(pending.get("images")),
+                    "p_selected_size": empty_to_none(pending.get("selected_size")),
+                    "p_selected_color": empty_to_none(pending.get("selected_color")),
+                    "p_payment_method": payment_method,
+                },
+            ).execute()
 
-            # 2. Amount validation
-            if paid_rounded != expected_rounded:
-                logger.error(
-                    event="product_payment_amount_mismatch",
-                    tx_ref=tx_ref,
-                    expected=str(expected_rounded),
-                    paid=str(paid_rounded),
-                )
-                await delete_pending(pending_key)
-                return
+            response = result.data
 
-            # 3. Call RPC
-            response = None
-            try:
-                result = await supabase.rpc(
-                    "process_product_payment",
-                    {
-                        "p_tx_ref": tx_ref,
-                        "p_flw_ref": flw_ref,
-                        "p_customer_id": pending["customer_id"],
-                        "p_vendor_id": pending["vendor_id"],
-                        "p_product_id": pending["item_id"],
-                        "p_quantity": int(pending["quantity"]),
-                        "p_product_name": pending.get("product_name", "Product"),
-                        "p_unit_price": str(pending.get("price", 0)) if pending.get("price") is not None else None,
-                        "p_subtotal": str(pending["subtotal"]),
-                        "p_shipping_cost": str(shipping) if shipping is not None else None,
-                        "p_grand_total": str(grand_total),
-                        "p_paid_amount": str(paid_rounded),
-                        "p_delivery_option": pending["delivery_option"],
-                        "p_delivery_address": pending["delivery_address"],
-                        "p_additional_info": pending.get("additional_info"),
-                        "p_images": empty_to_none(pending.get("images")),
-                        "p_selected_size": empty_to_none(pending.get("selected_size")),
-                        "p_selected_color": empty_to_none(pending.get("selected_color")),
-                        "p_payment_method": payment_method,
-                    },
-                ).execute()
-
-                response = result.data
-
-            except APIError as e:
-                response = extract_rpc_data(e)
-                if not response:
-                    raise
-
+        except APIError as e:
+            response = extract_rpc_data(e)
             if not response:
-                raise Exception("No data returned from RPC")
+                raise
 
-            if response.get("status") == "already_processed":
-                logger.info(
-                    event="product_payment_already_processed",
-                    tx_ref=tx_ref,
-                    order_id=response.get("order_id"),
-                )
-                await delete_pending(pending_key)
-                return
+        if not response:
+            raise Exception("No data returned from RPC")
 
+        if response.get("status") == "already_processed":
             logger.info(
-                event="product_payment_success",
+                event="product_payment_already_processed",
                 tx_ref=tx_ref,
                 order_id=response.get("order_id"),
-                grand_total=str(grand_total),
             )
-
-            # 4. Notify vendor
-            await notify_user(
-                user_id=pending["vendor_id"],
-                title="New Order",
-                body="You have a new product order",
-                data={
-                    "order_id": str(response.get("order_id")),
-                    "type": "PRODUCT_PAYMENT",
-                },
-                supabase=supabase,
-            )
-
             await delete_pending(pending_key)
+            return
 
-        except Exception as e:
-            logger.error(
-                event="product_payment_processing_error",
-                tx_ref=tx_ref,
-                error=str(e),
-                exc_info=True,
-            )
-            raise
+        logger.info(
+            event="product_payment_success",
+            tx_ref=tx_ref,
+            order_id=response.get("order_id"),
+            grand_total=str(grand_total),
+        )
+
+        # 4. Notify vendor
+        await notify_user(
+            user_id=pending["vendor_id"],
+            title="New Order",
+            body="You have a new product order",
+            data={
+                "order_id": str(response.get("order_id")),
+                "type": "PRODUCT_PAYMENT",
+            },
+            supabase=supabase,
+        )
+
+        await delete_pending(pending_key)
+
+    except Exception as e:
+        logger.error(
+            event="product_payment_processing_error",
+            tx_ref=tx_ref,
+            error=str(e),
+            exc_info=True,
+        )
+        raise
 
 
 async def process_successful_product_payment_non_rpc(
@@ -1320,98 +1351,98 @@ async def process_successful_laundry_payment(
             logger.error("laundry_payment_verification_failed", tx_ref=tx_ref)
             return {"status": "verification_failed"}
 
-        # 1. Get pending data from Redis
-        pending_key = f"pending_laundry_{tx_ref}"
-        if payment_method == "WALLET" and pending_data:
-            pending = pending_data
-            logger.info("using_embedded_pending_data", tx_ref=tx_ref)
-        else:
-            pending = await get_pending(pending_key)  # CARD reads from Redis
+    # 1. Get pending data from Redis
+    pending_key = f"pending_laundry_{tx_ref}"
+    if payment_method == "WALLET" and pending_data:
+        pending = pending_data
+        logger.info("using_embedded_pending_data", tx_ref=tx_ref)
+    else:
+        pending = await get_pending(pending_key)  # CARD reads from Redis
 
-        if not pending:
-            logger.warning("laundry_payment_pending_not_found", tx_ref=tx_ref)
-            return
+    if not pending:
+        logger.warning("laundry_payment_pending_not_found", tx_ref=tx_ref)
+        return
 
+    try:
+        # Call atomic RPC
+        result_data = None
         try:
-            # Call atomic RPC
-            result_data = None
-            try:
-                result = await supabase.rpc(
-                    "process_laundry_payment",
-                    {
-                        "p_tx_ref": tx_ref,
-                        "p_flw_ref": flw_ref,
-                        "p_paid_amount": str(paid_amount),
-                        "p_customer_id": pending["customer_id"],
-                        "p_vendor_id": pending["vendor_id"],
-                        "p_order_data": pending["items"],
-                        "p_subtotal": str(Decimal(pending["subtotal"])),
-                        "p_delivery_fee": str(Decimal(pending.get("delivery_fee", 0))),
-                        "p_grand_total": str(Decimal(pending["grand_total"])),
-                        "p_delivery_option": pending.get("delivery_option", "PICKUP"),
-                        "p_additional_info": pending.get("additional_info"),
-                        "p_customer_name": pending.get("name", "Customer"),
-                        "p_destination": pending.get("delivery_address", None),
-                    },
-                ).execute()
+            result = await supabase.rpc(
+                "process_laundry_payment",
+                {
+                    "p_tx_ref": tx_ref,
+                    "p_flw_ref": flw_ref,
+                    "p_paid_amount": str(paid_amount),
+                    "p_customer_id": pending["customer_id"],
+                    "p_vendor_id": pending["vendor_id"],
+                    "p_order_data": pending["items"],
+                    "p_subtotal": str(Decimal(pending["subtotal"])),
+                    "p_delivery_fee": str(Decimal(pending.get("delivery_fee", 0))),
+                    "p_grand_total": str(Decimal(pending["grand_total"])),
+                    "p_delivery_option": pending.get("delivery_option", "PICKUP"),
+                    "p_additional_info": pending.get("additional_info"),
+                    "p_customer_name": pending.get("name", "Customer"),
+                    "p_destination": pending.get("delivery_address", None),
+                },
+            ).execute()
 
-                result_data = result.data
+            result_data = result.data
 
-            except APIError as e:
-                result_data = extract_rpc_data(e)
-                if not result_data:
-                    raise
-
+        except APIError as e:
+            result_data = extract_rpc_data(e)
             if not result_data:
-                raise Exception("No data returned from RPC")
+                raise
 
-            if result_data.get("status") == "already_processed":
-                logger.info("laundry_payment_already_processed", tx_ref=tx_ref)
-                await delete_pending(pending_key)
-                return result_data
+        if not result_data:
+            raise Exception("No data returned from RPC")
 
-            # Success! Cleanup Redis
+        if result_data.get("status") == "already_processed":
+            logger.info("laundry_payment_already_processed", tx_ref=tx_ref)
             await delete_pending(pending_key)
-
-            order_id = result_data["order_id"]
-
-            # Notify vendor
-            await notify_user(
-                user_id=result_data["vendor_id"],
-                title="New Laundry Order",
-                body="You have a new laundry order",
-                data={"order_id": str(order_id), "type": "LAUNDRY_PAYMENT"},
-                supabase=supabase,
-            )
-
-            # Audit log
-            await log_audit_event(
-                supabase,
-                entity_type="LAUNDRY_ORDER",
-                entity_id=str(order_id),
-                action="PAYMENT_RECEIVED",
-                new_value={"payment_status": "PAID", "amount": result_data["grand_total"]},
-                actor_id=result_data["customer_id"],
-                actor_type="USER",
-                change_amount=Decimal(str(result_data["grand_total"])),
-                notes=f"Laundry payment received via {payment_method}: {tx_ref}",
-                request=request,
-            )
-
-            logger.info(
-                "laundry_payment_processed_success", tx_ref=tx_ref, order_id=str(order_id)
-            )
-
             return result_data
 
-        except Exception as e:
-            logger.error(
-                "laundry_payment_processing_error",
-                tx_ref=tx_ref,
-                error=str(e),
-                exc_info=True,
-            )
-            raise
+        # Success! Cleanup Redis
+        await delete_pending(pending_key)
+
+        order_id = result_data["order_id"]
+
+        # Notify vendor
+        await notify_user(
+            user_id=result_data["vendor_id"],
+            title="New Laundry Order",
+            body="You have a new laundry order",
+            data={"order_id": str(order_id), "type": "LAUNDRY_PAYMENT"},
+            supabase=supabase,
+        )
+
+        # Audit log
+        await log_audit_event(
+            supabase,
+            entity_type="LAUNDRY_ORDER",
+            entity_id=str(order_id),
+            action="PAYMENT_RECEIVED",
+            new_value={"payment_status": "PAID", "amount": result_data["grand_total"]},
+            actor_id=result_data["customer_id"],
+            actor_type="USER",
+            change_amount=Decimal(str(result_data["grand_total"])),
+            notes=f"Laundry payment received via {payment_method}: {tx_ref}",
+            request=request,
+        )
+
+        logger.info(
+            "laundry_payment_processed_success", tx_ref=tx_ref, order_id=str(order_id)
+        )
+
+        return result_data
+
+    except Exception as e:
+        logger.error(
+            "laundry_payment_processing_error",
+            tx_ref=tx_ref,
+            error=str(e),
+            exc_info=True,
+        )
+        raise
 
 
 def to_decimal(val, default="0"):
