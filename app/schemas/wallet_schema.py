@@ -78,7 +78,7 @@ class WalletTopUpInitiationResponse(BaseModel):
 
 class PayWithWalletResponse(BaseModel):
     status: str = Field(..., description="Status of the payment")
-    order_id: UUID = Field(..., description="The order ID associated with the payment")
+    order_id: UUID = Field(None, description="The order ID associated with the payment")
     tx_ref: str = Field(..., description="Unique transaction reference for this top-up")
     grand_total: Decimal = Field(..., description="Total amount of the payment")
     message: str = Field(..., description="Payment successful from wallet")

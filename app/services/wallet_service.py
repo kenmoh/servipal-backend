@@ -232,7 +232,17 @@ async def pay_with_wallet(
             order_id=response.get("order_id"),
             tx_ref=response.get("tx_ref"),
         )
-
+        notify_user(
+            user_id=f'{customer_id}',
+            title="Wallet Payment",
+            body=f"Payment successful from wallet",
+            data={
+                "order_id": response.get("order_id"),
+                "tx_ref": response.get("tx_ref"),
+                "grand_total": response.get("grand_total"),
+                "message": response.get("message"),
+            },
+        )
         return response
 
     except HTTPException:

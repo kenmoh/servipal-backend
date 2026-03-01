@@ -53,4 +53,4 @@ EXPOSE 8080
 # Run the application
 # We use the shell form or strict exec form. 
 # Cloud Run injects the PORT env var.
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"]
+CMD fastapi run --port $PORT
