@@ -62,6 +62,7 @@ async def process_successful_delivery_payment(
     pickup_coordinates = parse_coordinates(delivery_data["pickup_coordinates"])
     dropoff_coordinates = parse_coordinates(delivery_data["dropoff_coordinates"])
 
+    logger.info('='*100)
     logger.info(
         "delivery_coordinates",
         pickup=pickup_coordinates,
@@ -69,6 +70,7 @@ async def process_successful_delivery_payment(
         pickup_type=type(pickup_coordinates).__name__,
         dropoff_type=type(dropoff_coordinates).__name__,
     )
+    logger.info('='*100)
 
     try:
         result_data = None
