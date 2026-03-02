@@ -659,7 +659,7 @@ async def verify_wallet_balance(
     """Check wallet balance before hitting the RPC."""
     result = (
         await supabase.table("wallets")
-        .select("balance")
+        .select("balance, escrow_balance") 
         .eq("user_id", customer_id)
         .single()
         .execute()
@@ -671,17 +671,18 @@ async def verify_wallet_balance(
             detail="Wallet not found",
         )
 
-    balance = Decimal(result.data["balance"] or 0)
+    balance = Decimal(str(result.data["balance"] or 0))
+   
 
     if balance < required_amount:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={
                 "error": "insufficient_balance",
-                "message": f"Insufficient wallet balance",
-                "current_balance": balance,
-                "required": required_amount,
-                "shortfall": round(required_amount - balance, 2),
+                "message": "Insufficient wallet balance",
+                "current_balance": str(balance),      
+                "required": str(required_amount),        
+                "shortfall": str(round(required_amount - balance, 2)), 
             },
         )
 
