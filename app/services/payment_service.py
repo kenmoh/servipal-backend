@@ -26,7 +26,6 @@ def parse_coordinates(value):
 # Delivery Payment
 # ───────────────────────────────────────────────
 
-
 async def process_successful_delivery_payment(
     tx_ref: str,
     paid_amount: Decimal,
@@ -59,10 +58,20 @@ async def process_successful_delivery_payment(
     delivery_data = pending["delivery_data"]
     distance = Decimal(str(pending.get("distance", 0)))
 
+    # Parse coordinates — may be list or string depending on source
+    pickup_coordinates = parse_coordinates(delivery_data["pickup_coordinates"])
+    dropoff_coordinates = parse_coordinates(delivery_data["dropoff_coordinates"])
+
+    logger.info(
+        "delivery_coordinates",
+        pickup=pickup_coordinates,
+        dropoff=dropoff_coordinates,
+        pickup_type=type(pickup_coordinates).__name__,
+        dropoff_type=type(dropoff_coordinates).__name__,
+    )
+
     try:
-        # 3. Call RPC — handles both CARD and WALLET
         result_data = None
-        
         try:
             result = await supabase.rpc(
                 "process_delivery_payment",
@@ -77,8 +86,8 @@ async def process_successful_delivery_payment(
                     "p_sender_phone_number": delivery_data.get("sender_phone_number"),
                     "p_pickup_location": delivery_data["pickup_location"],
                     "p_destination": delivery_data["destination"],
-                    "p_pickup_coordinates": parse_coordinates(delivery_data["pickup_coordinates"]),
-                    "p_dropoff_coordinates": parse_coordinates(delivery_data["dropoff_coordinates"]),
+                    "p_pickup_coordinates": pickup_coordinates,  
+                    "p_dropoff_coordinates": dropoff_coordinates,
                     "p_additional_info": delivery_data.get("description"),
                     "p_delivery_type": delivery_data.get("delivery_type", "STANDARD"),
                     "p_duration": delivery_data.get("duration"),
@@ -104,10 +113,8 @@ async def process_successful_delivery_payment(
         order_id = result_data["order_id"]
         delivery_fee = Decimal(str(result_data["delivery_fee"]))
 
-        # 4. Cleanup Redis
         await delete_pending(pending_key)
 
-        # 5. Notify
         try:
             await notify_user(
                 sender_id,
