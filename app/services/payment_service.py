@@ -77,18 +77,8 @@ async def process_successful_delivery_payment(
                     "p_sender_phone_number": delivery_data.get("sender_phone_number"),
                     "p_pickup_location": delivery_data["pickup_location"],
                     "p_destination": delivery_data["destination"],
-                    # "p_pickup_coordinates": delivery_data["pickup_coordinates"],
-                    "p_pickup_coordinates": (
-                        delivery_data["pickup_coordinates"]
-                        if isinstance(delivery_data["pickup_coordinates"], list)
-                        else json.loads(delivery_data["pickup_coordinates"])
-                    ),
-                    "p_dropoff_coordinates": (
-                        delivery_data["dropoff_coordinates"]
-                        if isinstance(delivery_data["dropoff_coordinates"], list)
-                        else json.loads(delivery_data["dropoff_coordinates"])
-                    ),
-                    # "p_dropoff_coordinates": delivery_data["dropoff_coordinates"],
+                    "p_pickup_coordinates": parse_coordinates(delivery_data["pickup_coordinates"]),
+                    "p_dropoff_coordinates": parse_coordinates(delivery_data["dropoff_coordinates"]),
                     "p_additional_info": delivery_data.get("description"),
                     "p_delivery_type": delivery_data.get("delivery_type", "STANDARD"),
                     "p_duration": delivery_data.get("duration"),
@@ -1066,6 +1056,16 @@ def empty_to_none(val):
     if isinstance(val, list) and len(val) == 0:
         return None
     return val
+
+def parse_coordinates(value) -> list:
+    """Ensure coordinates are always a list for JSONB."""
+    if isinstance(value, list):
+        return value
+    if isinstance(value, str):
+        return json.loads(value)
+    if isinstance(value, tuple):
+        return list(value)
+    return value
 
 """
  {
