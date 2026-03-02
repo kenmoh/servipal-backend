@@ -676,15 +676,9 @@ async def verify_wallet_balance(
 
     if balance < required_amount:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail={
-                "error": "insufficient_balance",
-                "message": "Insufficient wallet balance",
-                "current_balance": str(balance),      
-                "required": str(required_amount),        
-                "shortfall": str(round(required_amount - balance, 2)), 
-            },
-        )
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail=f"Insufficient wallet balance. Available: ₦{balance}, Required: ₦{required_amount}, Shortfall: ₦{round(required_amount - balance, 2)}",
+    )
 
     return balance
 
