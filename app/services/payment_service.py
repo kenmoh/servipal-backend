@@ -27,45 +27,41 @@ def parse_coordinates(value):
 # ───────────────────────────────────────────────
 
 
-async def process_successful_delivery_payment_rpc(
+async def process_successful_delivery_payment(
     tx_ref: str,
-    paid_amount: float,
-    payment_method: Literal["CARD", "WALLET"],
+    paid_amount: Decimal,
     flw_ref: str,
     supabase: AsyncClient,
+    payment_method: Literal["CARD", "WALLET"],
     pending_data: dict = None,
 ):
-    logger.info(
-        event="processing_delivery_payment",
-        tx_ref=tx_ref,
-        paid_amount=paid_amount,
-    )
+    logger.info("processing_delivery_payment", tx_ref=tx_ref, paid_amount=paid_amount)
 
+    # 1. Verify — CARD only
     if payment_method == "CARD":
         verified = await verify_transaction_tx_ref(tx_ref)
         if not verified or verified.get("status") != "success":
             logger.error("delivery_payment_verification_failed", tx_ref=tx_ref)
             return {"status": "verification_failed"}
 
-    # 1. Get pending data from Redis
+    # 2. Get pending data
     pending_key = f"pending_delivery_{tx_ref}"
     if payment_method == "WALLET" and pending_data:
         pending = pending_data
-        logger.info("using_embedded_pending_data", tx_ref=tx_ref)
     else:
-        pending = await get_pending(pending_key)  # CARD reads from Redis
+        pending = await get_pending(pending_key)
 
     if not pending:
-        logger.warning(event="pending_delivery_not_found", tx_ref=tx_ref)
-        return
+        logger.warning("delivery_payment_pending_not_found", tx_ref=tx_ref)
+        return {"status": "pending_not_found"}
+
+    sender_id = str(pending["sender_id"])
+    delivery_data = pending["delivery_data"]
+    distance = Decimal(str(pending.get("distance", 0)))
 
     try:
-        delivery_data = pending["delivery_data"]
-        distance = Decimal(str(pending.get("distance", 0)))
-        sender_id = str(pending["sender_id"])
-
-        # 2. Call RPC (fee recalculated inside RPC from distance — source of truth)
-        response = None
+        # 3. Call RPC — handles both CARD and WALLET
+        result_data = None
         try:
             result = await supabase.rpc(
                 "process_delivery_payment",
@@ -80,73 +76,71 @@ async def process_successful_delivery_payment_rpc(
                     "p_sender_phone_number": delivery_data.get("sender_phone_number"),
                     "p_pickup_location": delivery_data["pickup_location"],
                     "p_destination": delivery_data["destination"],
-                    "p_pickup_coordinates": parse_coordinates(
-                        delivery_data["pickup_coordinates"]
-                    ),
-                    "p_dropoff_coordinates": parse_coordinates(
-                        delivery_data["dropoff_coordinates"]
-                    ),
+                    "p_pickup_coordinates": delivery_data["pickup_coordinates"],
+                    "p_dropoff_coordinates": delivery_data["dropoff_coordinates"],
                     "p_additional_info": delivery_data.get("description"),
                     "p_delivery_type": delivery_data.get("delivery_type", "STANDARD"),
                     "p_duration": delivery_data.get("duration"),
                     "p_package_image_url": delivery_data.get("package_image_url"),
+                    "p_payment_method": payment_method,
                 },
             ).execute()
-
-            response = result.data
+            result_data = result.data
 
         except APIError as e:
-            response = extract_rpc_data(e)
-            if not response:
+            result_data = extract_rpc_data(e)
+            if not result_data:
                 raise
 
-        if not response:
+        if not result_data:
             raise Exception("No data returned from RPC")
 
-        if response.get("status") == "already_processed":
-            logger.info(
-                event="delivery_payment_already_processed",
-                tx_ref=tx_ref,
-                order_id=response.get("order_id"),
-            )
+        if result_data.get("status") == "already_processed":
+            logger.info("delivery_payment_already_processed", tx_ref=tx_ref)
             await delete_pending(pending_key)
-            return
+            return result_data
+
+        order_id = result_data["order_id"]
+        delivery_fee = Decimal(str(result_data["delivery_fee"]))
+
+        # 4. Cleanup Redis
+        await delete_pending(pending_key)
+
+        # 5. Notify
+        try:
+            await notify_user(
+                sender_id,
+                "Payment Successful",
+                f"Your delivery payment of ₦{delivery_fee} has been received.",
+                data={
+                    "type": "DELIVERY_PAYMENT_SUCCESS",
+                    "order_id": order_id,
+                    "amount": str(delivery_fee),
+                },
+                supabase=supabase,
+            )
+        except Exception as e:
+            logger.error("notification_failed", error=str(e))
 
         logger.info(
-            event="delivery_payment_success",
+            "delivery_payment_processed_success",
             tx_ref=tx_ref,
-            order_id=response.get("order_id"),
-            delivery_fee=response.get("delivery_fee"),
-            platform_commission=response.get("platform_commission"),
+            order_id=order_id,
+            payment_method=payment_method,
         )
 
-        # 3. Notify sender
-        await notify_user(
-            user_id=sender_id,
-            title="Payment Successful",
-            body=f"Your delivery payment of ₦{response.get('delivery_fee')} has been received.",
-            data={
-                "type": "DELIVERY_PAYMENT_SUCCESS",
-                "order_id": str(response.get("order_id")),
-                "amount": str(response.get("delivery_fee")),
-            },
-            supabase=supabase,
-        )
-
-        await delete_pending(pending_key)
+        return result_data
 
     except Exception as e:
         logger.error(
-            event="delivery_payment_processing_error",
+            "delivery_payment_processing_error",
             tx_ref=tx_ref,
             error=str(e),
             exc_info=True,
         )
-        await delete_pending(pending_key)
         raise
 
-
-async def process_successful_delivery_payment(
+async def process_successful_delivery_payment_non_rpc(
     tx_ref: str,
     paid_amount: Decimal,
     flw_ref: str,
@@ -442,6 +436,7 @@ async def process_successful_food_payment(
                     "p_additional_info": pending.get("additional_info"),
                     "p_customer_name": pending.get("name", "Customer"),
                     "p_destination": pending.get("delivery_address", None),
+                    "p_payment_method": payment_method,
                 },
             ).execute()
 
@@ -987,6 +982,7 @@ async def process_successful_laundry_payment(
                     "p_additional_info": pending.get("additional_info"),
                     "p_customer_name": pending.get("name", "Customer"),
                     "p_destination": pending.get("delivery_address", None),
+                    "p_payment_method": payment_method,
                 },
             ).execute()
 
