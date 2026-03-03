@@ -62,15 +62,7 @@ async def process_successful_delivery_payment(
     pickup_coordinates = parse_coordinates(delivery_data["pickup_coordinates"])
     dropoff_coordinates = parse_coordinates(delivery_data["dropoff_coordinates"])
 
-    logger.info('='*100)
-    logger.info(
-        "delivery_coordinates",
-        pickup=pickup_coordinates,
-        dropoff=dropoff_coordinates,
-        pickup_type=type(pickup_coordinates).__name__,
-        dropoff_type=type(dropoff_coordinates).__name__,
-    )
-    logger.info('='*100)
+  
 
     try:
         result_data = None
@@ -678,6 +670,8 @@ async def process_successful_product_payment(
         return
 
     try:
+        delivery_option = pending.get("delivery_option", "PICKUP")
+        apply_shipping = delivery_option == "VENDOR_DELIVERY"
         shipping = to_decimal(pending.get("shipping_cost"))
         grand_total = to_decimal(pending.get("grand_total"))
         paid_rounded = to_decimal(str(paid_amount)).quantize(Decimal("0.00"))
@@ -709,7 +703,7 @@ async def process_successful_product_payment(
                     "p_product_name": pending.get("product_name", "Product"),
                     "p_unit_price": str(pending.get("price", 0)) if pending.get("price") is not None else None,
                     "p_subtotal": str(pending["subtotal"]),
-                    "p_shipping_cost": str(shipping) if shipping is not None else None,
+                    "p_shipping_cost": str(shipping) if apply_shipping else "0",
                     "p_grand_total": str(grand_total),
                     "p_paid_amount": str(paid_rounded),
                     "p_delivery_option": pending["delivery_option"],
