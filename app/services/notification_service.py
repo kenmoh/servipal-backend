@@ -100,4 +100,3 @@ async def notify_user(
         return await send_push_notification(token, title, body, data)
     else:
         logger.warning("push_notification_no_token", user_id=str(user_id))
-       

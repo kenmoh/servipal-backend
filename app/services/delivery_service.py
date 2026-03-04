@@ -24,7 +24,6 @@ from app.utils.audit import log_audit_event
 from app.services.notification_service import notify_user
 
 
-
 async def get_charges(supabase: AsyncClient) -> dict:
     charges = (
         await supabase.table("charges_and_commissions")
@@ -115,7 +114,6 @@ async def initiate_delivery_payment(
             status.HTTP_500_INTERNAL_SERVER_ERROR,
             f"Payment initiation failed: {str(e)}",
         )
-
 
 
 # ============================================================
@@ -299,7 +297,7 @@ async def assign_rider(
                 "assign_rider_to_delivery",
                 {
                     "p_tx_ref": tx_ref,
-                    "p_rider_id": f'{rider_id}',
+                    "p_rider_id": f"{rider_id}",
                 },
             ).execute()
             result_data = result.data
@@ -326,8 +324,8 @@ async def assign_rider(
         await _send_delivery_notifications(
             order_number=order_number,
             new_status=DeliveryStatus.ASSIGNED,
-            sender_id=f'{sender_id}',
-            rider_id=f'{rider_id}',
+            sender_id=f"{sender_id}",
+            rider_id=f"{rider_id}",
             dispatch_id=str(result_data.get("dispatch_id")),
             supabase=supabase,
         )
@@ -336,7 +334,7 @@ async def assign_rider(
             "status": "success",
             "delivery_status": "ASSIGNED",
             "tx_ref": tx_ref,
-            "rider_id": f'{rider_id}',
+            "rider_id": f"{rider_id}",
             "dispatch_id": str(result_data.get("dispatch_id")),
         }
 

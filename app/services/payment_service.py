@@ -26,6 +26,7 @@ def parse_coordinates(value):
 # Delivery Payment
 # ───────────────────────────────────────────────
 
+
 async def process_successful_delivery_payment(
     tx_ref: str,
     paid_amount: Decimal,
@@ -62,8 +63,6 @@ async def process_successful_delivery_payment(
     pickup_coordinates = parse_coordinates(delivery_data["pickup_coordinates"])
     dropoff_coordinates = parse_coordinates(delivery_data["dropoff_coordinates"])
 
-  
-
     try:
         result_data = None
         try:
@@ -80,7 +79,7 @@ async def process_successful_delivery_payment(
                     "p_sender_phone_number": delivery_data.get("sender_phone_number"),
                     "p_pickup_location": delivery_data["pickup_location"],
                     "p_destination": delivery_data["destination"],
-                    "p_pickup_coordinates": pickup_coordinates,  
+                    "p_pickup_coordinates": pickup_coordinates,
                     "p_dropoff_coordinates": dropoff_coordinates,
                     "p_additional_info": delivery_data.get("description"),
                     "p_delivery_type": delivery_data.get("delivery_type", "STANDARD"),
@@ -141,6 +140,7 @@ async def process_successful_delivery_payment(
             exc_info=True,
         )
         raise
+
 
 async def process_successful_delivery_payment_non_rpc(
     tx_ref: str,
@@ -335,7 +335,7 @@ async def process_successful_delivery_payment_non_rpc(
         # 11. Send notification
         try:
             await notify_user(
-                f'{sender_id}',
+                f"{sender_id}",
                 "Payment Successful",
                 f"Your delivery payment of ₦{delivery_fee} has been received.",
                 data={
@@ -464,7 +464,7 @@ async def process_successful_food_payment(
 
         # Notify vendor
         await notify_user(
-            user_id=f'{result_data["vendor_id"]}',
+            user_id=f"{result_data['vendor_id']}",
             title="New Order",
             body=f"You have a new order from {pending.get('name', 'Customer')}",
             data={"order_id": str(order_id), "type": "FOOD_PAYMENT"},
@@ -520,10 +520,7 @@ async def process_successful_topup_payment(
 
     # 2. Idempotency check BEFORE anything else
     existing = (
-        await supabase.table("transactions")
-        .select("id")
-        .eq("tx_ref", tx_ref)
-        .execute()
+        await supabase.table("transactions").select("id").eq("tx_ref", tx_ref).execute()
     )
     if existing.data:
         logger.info("topup_payment_already_processed", tx_ref=tx_ref)
@@ -632,6 +629,7 @@ async def process_successful_topup_payment(
         )
         raise
 
+
 # ───────────────────────────────────────────────
 # Product Payment
 # ───────────────────────────────────────────────
@@ -661,7 +659,7 @@ async def process_successful_product_payment(
     pending_key = f"pending_product_{tx_ref}"
     if payment_method == "WALLET" and pending_data:
         pending = pending_data
-   
+
     else:
         pending = await get_pending(pending_key)  # CARD reads from Redis
 
@@ -701,7 +699,9 @@ async def process_successful_product_payment(
                     "p_product_id": pending["item_id"],
                     "p_quantity": int(pending["quantity"]),
                     "p_product_name": pending.get("product_name", "Product"),
-                    "p_unit_price": str(pending.get("price", 0)) if pending.get("price") is not None else None,
+                    "p_unit_price": str(pending.get("price", 0))
+                    if pending.get("price") is not None
+                    else None,
                     "p_subtotal": str(pending["subtotal"]),
                     "p_shipping_cost": str(shipping) if apply_shipping else "0",
                     "p_grand_total": str(grand_total),
@@ -895,7 +895,7 @@ async def process_successful_product_payment_non_rpc(
                     "wallet_id": customer_id,
                     "order_id": order_id,
                     "transaction_type": "ESCROW_HOLD",
-                    "payment_method": f'{payment_method}',
+                    "payment_method": f"{payment_method}",
                     "order_type": "PRODUCT",
                     "details": {"flw_ref": flw_ref, "label": "DEBIT"},
                 }
@@ -923,7 +923,7 @@ async def process_successful_product_payment_non_rpc(
         )
         # Depending on your failure strategy, you might not want to delete pending here
         # so it can be retried, but keeping it as per your original logic.
-      
+
         raise
 
 
@@ -1054,11 +1054,13 @@ def to_decimal(val, default="0"):
         return Decimal(default)
     return Decimal(str(val))
 
+
 def empty_to_none(val):
     """Convert empty lists to None so Postgres gets NULL instead of []"""
     if isinstance(val, list) and len(val) == 0:
         return None
     return val
+
 
 def parse_coordinates(value) -> list:
     """Ensure coordinates are always a list for JSONB."""
@@ -1069,6 +1071,7 @@ def parse_coordinates(value) -> list:
     if isinstance(value, tuple):
         return list(value)
     return value
+
 
 """
  {

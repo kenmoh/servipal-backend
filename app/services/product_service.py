@@ -195,7 +195,7 @@ async def initiate_product_payment(
         # Save pending state
         pending_data = {
             "product_name": item["name"],
-            "price":  safe_numeric_str(item["price"]),
+            "price": safe_numeric_str(item["price"]),
             "customer_id": str(customer_info.get("id")),
             "vendor_id": str(data.vendor_id),
             "item_id": str(data.item_id),
@@ -209,7 +209,7 @@ async def initiate_product_payment(
             "delivery_option": data.delivery_option,
             "delivery_address": data.delivery_address,
             "additional_info": data.additional_info,
-            "tx_ref": tx_ref
+            "tx_ref": tx_ref,
         }
         await save_pending(f"pending_product_{tx_ref}", pending_data)
 
@@ -312,21 +312,18 @@ async def customer_confirm_product_order(
         raise HTTPException(500, f"Confirmation failed: {str(e)}")
 
 
-
-
-
 async def update_order_status(
     order_id: UUID,
     payload: UpdateOrderStatusRequest,
     current_user: dict,
-    supabase: AsyncClient 
+    supabase: AsyncClient,
 ):
     try:
         result = await supabase.rpc(
             "update_product_order_status",
             {
                 "p_order_id": str(order_id),
-                "p_user_id": str(current_user['id']),
+                "p_user_id": str(current_user["id"]),
                 "p_new_status": payload.new_status,
                 "p_cancel_reason": payload.cancel_reason,
             },
@@ -342,24 +339,33 @@ async def update_order_status(
         message_map = {
             "SHIPPED": ("Order Shipped", "Your order is on its way!"),
             "DELIVERED": ("Order Delivered", "Your order has been delivered."),
-            "COMPLETED": ("Order Completed", "Order completed. Payment has been released."),
+            "COMPLETED": (
+                "Order Completed",
+                "Order completed. Payment has been released.",
+            ),
             "CANCELLED": ("Order Cancelled", "An order has been cancelled."),
             "REJECTED": ("Order Rejected", "The buyer has rejected the order."),
             "RETURNED": ("Item Returned", "The item has been marked as returned."),
             "DISPUTED": ("Order Disputed", "A dispute has been raised on your order."),
         }
 
-        title, body = message_map.get(payload.new_status, ("Order Update", "Your order status has changed."))
+        title, body = message_map.get(
+            payload.new_status, ("Order Update", "Your order status has changed.")
+        )
 
         # Notify the other party
-        order = await supabase.table("product_orders").select(
-            "customer_id, vendor_id"
-        ).eq("id", str(order_id)).single().execute()
+        order = (
+            await supabase.table("product_orders")
+            .select("customer_id, vendor_id")
+            .eq("id", str(order_id))
+            .single()
+            .execute()
+        )
 
         if order.data:
             other_user_id = (
                 order.data["vendor_id"]
-                if str(current_user['id']) == order.data["customer_id"]
+                if str(current_user["id"]) == order.data["customer_id"]
                 else order.data["customer_id"]
             )
             await notify_user(
@@ -378,7 +384,7 @@ async def update_order_status(
             "order_status_updated",
             order_id=str(order_id),
             new_status=payload.new_status,
-            updated_by=str(current_user['id']),
+            updated_by=str(current_user["id"]),
         )
 
         return response
@@ -390,7 +396,10 @@ async def update_order_status(
             error=str(e),
             exc_info=True,
         )
-        raise HTTPException(status_code=400, detail='Invalid status transition or input')
+        raise HTTPException(
+            status_code=400, detail="Invalid status transition or input"
+        )
+
 
 async def vendor_mark_product_ready(
     order_id: UUID, vendor_id: UUID, supabase: AsyncClient

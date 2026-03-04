@@ -1,5 +1,4 @@
 from fastapi import APIRouter, Depends, Request, status, HTTPException
-from fastapi.responses import RedirectResponse
 from decimal import Decimal
 from uuid import UUID
 from app.schemas.wallet_schema import (
@@ -10,23 +9,13 @@ from app.schemas.wallet_schema import (
 )
 from app.services import wallet_service
 from app.dependencies.auth import get_current_profile
-import hmac
 from app.routes.payment_route import PaymentWebhookResponse
 from app.database.supabase import get_supabase_client, get_supabase_admin_client
 from supabase import AsyncClient
 from app.config.logging import logger
-from app.config.config import settings
 from postgrest.exceptions import APIError
-from rq import Retry
-from app.services.payment_service import (
-    process_successful_delivery_payment,
-    process_successful_food_payment,
-    process_successful_topup_payment,
-    process_successful_laundry_payment,
-    process_successful_product_payment,
-)
-from app.worker import enqueue_job
-from app.utils.redis_utils import get_pending, delete_pending
+
+from app.utils.redis_utils import get_pending
 
 router = APIRouter(prefix="/api/v1/wallet", tags=["Wallet"])
 

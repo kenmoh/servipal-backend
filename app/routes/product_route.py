@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Form, File, UploadFile,status
+from fastapi import APIRouter, Depends, Form, File, UploadFile, status
 from typing import List, Optional
 from decimal import Decimal
 from uuid import UUID
@@ -15,7 +15,7 @@ from app.schemas.product_schemas import (
     ProductVendorMarkReadyResponse,
     ProductCustomerConfirmResponse,
     ProductType,
-    UpdateOrderStatusRequest
+    UpdateOrderStatusRequest,
 )
 from app.services import product_service
 from app.dependencies.auth import get_current_profile, require_user_type
@@ -287,5 +287,7 @@ async def update_order_status(
     current_user: dict = Depends(get_current_profile),
     supabase: AsyncClient = Depends(get_supabase_client),
 ):
-    
-    return await product_service.update_order_status(order_id, payload, current_user, supabase)
+
+    return await product_service.update_order_status(
+        order_id, payload, current_user, supabase
+    )

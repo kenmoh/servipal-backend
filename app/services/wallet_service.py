@@ -233,7 +233,7 @@ async def pay_with_wallet(
             tx_ref=response.get("tx_ref"),
         )
         notify_user(
-            user_id=f'{customer_id}',
+            user_id=f"{customer_id}",
             title="Wallet Payment",
             body=f"Payment successful from wallet",
             data={
@@ -659,7 +659,7 @@ async def verify_wallet_balance(
     """Check wallet balance before hitting the RPC."""
     result = (
         await supabase.table("wallets")
-        .select("balance, escrow_balance") 
+        .select("balance, escrow_balance")
         .eq("user_id", customer_id)
         .single()
         .execute()
@@ -672,13 +672,12 @@ async def verify_wallet_balance(
         )
 
     balance = Decimal(str(result.data["balance"] or 0))
-   
 
     if balance < required_amount:
         raise HTTPException(
-        status_code=status.HTTP_400_BAD_REQUEST,
-        detail=f"Insufficient wallet balance. Available: ₦{balance}, Required: ₦{required_amount}, Shortfall: ₦{round(required_amount - balance, 2)}",
-    )
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Insufficient wallet balance. Available: ₦{balance}, Required: ₦{required_amount}, Shortfall: ₦{round(required_amount - balance, 2)}",
+        )
 
     return balance
 

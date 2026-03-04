@@ -244,3 +244,25 @@ async def reset_password(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Failed to reset password. Link may be invalid or expired.",
         )
+
+
+ADMIN_ROLES = {"ADMIN", "MODERATOR", "SUPER_ADMIN"}
+SUPER_ADMIN_ROLES = {"SUPER_ADMIN"}
+ADMIN_OR_SUPER = {"ADMIN", "SUPER_ADMIN"}
+
+
+def require_roles(*roles: str):
+    async def _checker(profile: dict = Depends(get_current_profile)) -> dict:
+        if profile.get("user_type") not in roles:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Access denied. Required roles: {', '.join(roles)}",
+            )
+        return profile
+
+    return _checker
+
+
+require_admin = require_roles("ADMIN", "MODERATOR", "SUPER_ADMIN")
+require_super_admin = require_roles("SUPER_ADMIN")
+require_admin_or_super = require_roles("ADMIN", "SUPER_ADMIN")

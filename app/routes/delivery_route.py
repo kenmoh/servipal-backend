@@ -112,7 +112,7 @@ async def update_delivery_status(
     return await delivery_service.update_delivery_status(
         tx_ref=tx_ref,
         data=data,
-        triggered_by_user_id=f'{current_profile["id"]}',
+        triggered_by_user_id=f"{current_profile['id']}",
         supabase=supabase,
         request=request,
     )

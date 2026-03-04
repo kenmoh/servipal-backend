@@ -60,6 +60,8 @@ sync_redis_client = None
 if settings.REDIS_URL:
     try:
         redis_client = AsyncRedis.from_url(settings.REDIS_URL, decode_responses=True)
-        sync_redis_client = SyncRedis.from_url(settings.REDIS_URL, decode_responses=True)
+        sync_redis_client = SyncRedis.from_url(
+            settings.REDIS_URL, decode_responses=True
+        )
     except Exception as e:
         print(f"Warning: Failed to initialize Redis clients: {e}")

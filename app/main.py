@@ -17,6 +17,12 @@ from app.routes import (
     dispute_route,
     escrow_route,
     order_create,
+    audit_logs_routes,
+    delivery_order_mgt_admin_routes,
+    dispute_mgt_admin_routes,
+    laundry_order_mgt_admin_routes,
+    product_order_mgt_admin_routes,
+    restaurant_order_mgt_admin_routes
 )
 from app.config.logging import logger
 from app.utils.payment import get_all_banks
@@ -211,7 +217,14 @@ app.include_router(review_router.router)
 app.include_router(food_router.router)
 app.include_router(laundry_route.router)
 app.include_router(product_route.router)
-app.include_router(dispute_route.router)
-app.include_router(escrow_route.router)
+# app.include_router(dispute_route.router)
+# app.include_router(escrow_route.router)
 app.include_router(admin_router.router, include_in_schema=False)
 app.include_router(order_create.router, include_in_schema=False)
+app.include_router(audit_logs_routes.router)
+app.include_router(dispute_mgt_admin_routes.router)
+app.include_router(delivery_order_mgt_admin_routes.router)
+app.include_router(dispute_mgt_admin_routes.router)
+app.include_router(laundry_order_mgt_admin_routes.router)
+app.include_router(product_order_mgt_admin_routes.router)
+app.include_router(restaurant_order_mgt_admin_routes.router)

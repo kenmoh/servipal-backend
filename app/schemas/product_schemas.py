@@ -62,7 +62,8 @@ class ProductOrderCreate(BaseModel):
     item_id: UUID
     quantity: int = Field(..., ge=1)
     delivery_option: Literal["PICKUP", "VENDOR_DELIVERY"]
-    delivery_address: Optional[str] = Field(..., description="Full delivery address if VENDOR_DELIVERY"
+    delivery_address: Optional[str] = Field(
+        ..., description="Full delivery address if VENDOR_DELIVERY"
     )
     additional_info: Optional[str] = Field(None, description="Extra notes/instructions")
     sizes: List[str] = None
@@ -108,10 +109,16 @@ class ProductCustomerConfirmResponse(BaseModel):
     amount_released: Decimal
     message: str
 
+
 class UpdateOrderStatusRequest(BaseModel):
     order_id: UUID
     new_status: Literal[
-        "SHIPPED", "DELIVERED", "COMPLETED",
-        "CANCELLED", "REJECTED", "RETURNED", "DISPUTED"
+        "SHIPPED",
+        "DELIVERED",
+        "COMPLETED",
+        "CANCELLED",
+        "REJECTED",
+        "RETURNED",
+        "DISPUTED",
     ]
     cancel_reason: str | None = None
