@@ -76,3 +76,13 @@ async def reset_password(
     supabase: AsyncClient = Depends(get_supabase_client),
 ):
     return await auth.reset_password(data, supabase)
+
+
+@router.put("/change-password", status_code=status.HTTP_200_OK, include_in_schema=False)
+async def change_password(
+    data: auth.ChangePasswordRequest,
+    current_user: dict = Depends(auth.get_current_user),
+    supabase: AsyncClient = Depends(get_supabase_client),
+) -> auth.Status:
+    
+    return auth.change_password(data, current_user, supabase)

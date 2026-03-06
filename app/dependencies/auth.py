@@ -5,7 +5,7 @@ from app.database.supabase import get_supabase_client
 from app.schemas.user_schemas import UserType
 from supabase import AsyncClient
 from app.config.logging import logger
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 
 
 class ForgotPasswordRequest(BaseModel):
@@ -15,6 +15,16 @@ class ForgotPasswordRequest(BaseModel):
 class ResetPasswordRequest(BaseModel):
     access_token: str
     new_password: str
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password:str =  Field(min_length=8)
+
+
+class Status(BaseModel):
+    success: str
+    message:str 
+
 
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/token")
@@ -243,6 +253,66 @@ async def reset_password(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Failed to reset password. Link may be invalid or expired.",
+        )
+
+
+
+
+async def change_password(
+    data: ChangePasswordRequest,
+    current_user: dict = Depends(get_current_user),
+    supabase: AsyncClient = Depends(get_supabase_client),
+) -> Status:
+    """
+    Change user's password.
+    User must provide current password for verification.
+    """
+    try:
+        # 1. Verify current password by attempting sign in
+        try:
+            await supabase.auth.sign_in_with_password({
+                "email": current_user["email"],
+                "password": data.current_password,
+            })
+        except Exception:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Current password is incorrect"
+            )
+        
+        # 2. Update to new password
+        result = await supabase.auth.update_user({
+            "password": data.new_password
+        })
+        
+        if not result.user:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Failed to update password"
+            )
+        
+        logger.info(
+            "password_changed",
+            user_id=current_user["id"],
+        )
+        
+        return {
+            "status": "success",
+            "message": "Password changed successfully"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(
+            "change_password_error",
+            user_id=current_user["id"],
+            error=str(e),
+            exc_info=True,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to change password"
         )
 
 
