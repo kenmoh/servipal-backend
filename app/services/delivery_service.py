@@ -139,6 +139,17 @@ async def update_delivery_status(
         triggered_by=f"{triggered_by_user_id}",
     )
 
+    logger.info('*'*100)
+    logger.info(
+        "validating_state_transition",
+        current_status=delivery["delivery_status"],
+        current_status_type=type(delivery["delivery_status"]).__name__,
+        new_status=data.new_status.value,
+        new_status_type=type(data.new_status.value).__name__,
+        delivery_id=delivery["id"],
+    )
+    logger.info('*'*100)
+
     try:
         # Fetch delivery for validation
         delivery = await _get_delivery(tx_ref, supabase)
@@ -151,14 +162,7 @@ async def update_delivery_status(
             sender_id=delivery["sender_id"],
             rider_id=delivery["rider_id"] or None,
         )
-
-        escrow_check = await supabase.table("transactions").select("id").match({
-            "order_id": delivery_id,
-            "transaction_type": "ESCROW_HOLD"
-        }).limit(1).execute()
-        
-        
-
+       
         # Validate state transition
         _validate_state_transition(delivery["delivery_status"], data.new_status.value, delivery=delivery)
 
@@ -922,65 +926,56 @@ def _validate_authorization(
 # STATE TRANSITION VALIDATION (State Machine)
 # ============================================================
 
-# delivery_service.py
-
 def _validate_state_transition(
     current_status: str, 
     new_status: str,
     delivery: Optional[dict] = None
 ) -> None:
-    """
-    Validate that the status transition is allowed.
+    """Validate delivery status transitions"""
 
-    State Machine:
-    PENDING → ASSIGNED | CANCELLED
-    ASSIGNED → ACCEPTED | DECLINED | CANCELLED
-    DECLINED → ASSIGNED (reassignment after decline)
-    ACCEPTED → PICKED_UP | CANCELLED
-    PICKED_UP → IN_TRANSIT | DELIVERED | CANCELLED
-    IN_TRANSIT → DELIVERED | CANCELLED
-    DELIVERED → COMPLETED | CANCELLED
-    CANCELLED → ASSIGNED (conditional - only if no escrow was held)
-    COMPLETED → (terminal state)
-
-    Args:
-        current_status: Current delivery status
-        new_status: Desired new status
-        delivery: Optional delivery data (required for CANCELLED → ASSIGNED validation)
-
-    Raises:
-        HTTPException: If transition is not allowed
-    """
+    # Normalize statuses (handle enum values)
+    current_status = str(current_status).upper().strip()
+    new_status = str(new_status).upper().strip()
+    
+    # Remove enum prefix if present (e.g., "DeliveryStatus.CANCELLED" → "CANCELLED")
+    if "." in current_status:
+        current_status = current_status.split(".")[-1]
+    if "." in new_status:
+        new_status = new_status.split(".")[-1]
 
     # Define allowed transitions
     ALLOWED_TRANSITIONS = {
         "PENDING": ["ASSIGNED", "CANCELLED"],
         "ASSIGNED": ["ACCEPTED", "DECLINED", "CANCELLED"],
-        "DECLINED": ["ASSIGNED"],  # Can reassign after decline
+        "DECLINED": ["ASSIGNED"],
         "ACCEPTED": ["PICKED_UP", "CANCELLED"],
         "PICKED_UP": ["IN_TRANSIT", "DELIVERED", "CANCELLED"],
         "IN_TRANSIT": ["DELIVERED", "CANCELLED"],
         "DELIVERED": ["COMPLETED", "CANCELLED"],
-        "COMPLETED": [],  # Terminal state - delivery finished
-        "CANCELLED": ["ASSIGNED"] # Allow reassignment
+        "COMPLETED": [],
+        "CANCELLED": ["ASSIGNED"],  # Allow reassignment after cancellation
     }
 
-    # Get allowed transitions for current status
     allowed = ALLOWED_TRANSITIONS.get(current_status, [])
 
-    # Basic state machine validation
     if new_status not in allowed:
+        # Add debug info
+        logger.error(
+            "invalid_state_transition",
+            current_status=current_status,
+            new_status=new_status,
+            current_status_type=type(current_status).__name__,
+            new_status_type=type(new_status).__name__,
+            allowed=allowed,
+        )
+        
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Cannot transition from {current_status} to {new_status}. "
                    f"Allowed transitions: {', '.join(allowed) if allowed else 'None (terminal state)'}",
         )
 
-    # ============================================================
-    # Special Validation: CANCELLED → ASSIGNED
-    # ============================================================
-    # Allow reassignment only if delivery was cancelled BEFORE
-    # any money was held in escrow (i.e., before rider picked up)
+    # Special validation: CANCELLED → ASSIGNED
     if current_status == "CANCELLED" and new_status == "ASSIGNED":
         if delivery is None:
             raise HTTPException(
@@ -988,22 +983,19 @@ def _validate_state_transition(
                 detail="Delivery data required for reassignment validation"
             )
         
-        # Check if escrow was ever held
-        # This happens when rider accepts (ACCEPTED → PICKED_UP creates escrow)
         had_escrow = delivery.get("had_escrow", False)
         
         if had_escrow:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Cannot reassign delivery after funds were held in escrow. "
-                       "The delivery has already progressed beyond the assignment stage. "
                        "Please create a new order instead.",
             )
         
         logger.info(
             "cancelled_delivery_reassignment_allowed",
             delivery_id=delivery.get("id"),
-            reason="No escrow was held - cancelled before rider accepted"
+            reason="No escrow was held - cancelled before rider picked up"
         )
 
 
