@@ -139,21 +139,23 @@ async def update_delivery_status(
         triggered_by=f"{triggered_by_user_id}",
     )
 
-    logger.info('*'*100)
-    logger.info(
-        "validating_state_transition",
-        current_status=delivery["delivery_status"],
-        current_status_type=type(delivery["delivery_status"]).__name__,
-        new_status=data.new_status.value,
-        new_status_type=type(data.new_status.value).__name__,
-        delivery_id=delivery["id"],
-    )
-    logger.info('*'*100)
+    
 
     try:
         # Fetch delivery for validation
         delivery = await _get_delivery(tx_ref, supabase)
         delivery_id = f"{delivery['id']}"
+
+        logger.info('*'*100)
+        logger.info(
+            "validating_state_transition",
+            current_status=delivery["delivery_status"],
+            current_status_type=type(delivery["delivery_status"]).__name__,
+            new_status=data.new_status.value,
+            new_status_type=type(data.new_status.value).__name__,
+            delivery_id=delivery["id"],
+        )
+        logger.info('*'*100)
 
         # Validate authorization
         _validate_authorization(
