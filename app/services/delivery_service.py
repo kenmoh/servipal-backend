@@ -318,7 +318,7 @@ async def assign_rider(
         except APIError as e:
             result_data = extract_rpc_data(e)
             if not result_data:
-                raise  # real error — re-raise
+                raise
 
         if not result_data:
             raise HTTPException(
@@ -724,17 +724,15 @@ async def cancel_delivery(
 
         return result_data
 
-    except APIError as e:
-        logger.error(
-            "cancel_delivery_rpc_error",
-            delivery_id=delivery_id,
-            error=str(e),
-            exc_info=True,
-        )
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to cancel delivery: {str(e)}"
-        )
+    except APIError as e:  
+        result_data = extract_rpc_data(e)
+        if not result_data:
+            raise 
+
+        # raise HTTPException(
+        #     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        #     detail=f"Failed to cancel delivery: {str(e)}"
+        # )
 
 
 # async def cancel_delivery(
