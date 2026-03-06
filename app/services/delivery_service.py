@@ -644,7 +644,6 @@ async def complete_delivery(
 # 7. CANCEL DELIVERY (Money operation)
 # ============================================================
 
-
 async def cancel_delivery(
     delivery_id: str,
     triggered_by_user_id: str,
@@ -657,53 +656,133 @@ async def cancel_delivery(
     - Handles refunds if escrow held
     - Handles returns if picked up
     """
-    result = await supabase.rpc(
-        "mark_delivery_as_cancelled",
-        {
-            "p_delivery_id": delivery_id,
-            "p_triggered_by_user_id": triggered_by_user_id,
-            "p_cancellation_reason": cancellation_reason,
-        },
-    ).execute()
+    try:
+        result = await supabase.rpc(
+            "mark_delivery_as_cancelled",
+            {
+                "p_delivery_id": delivery_id,
+                "p_triggered_by_user_id": triggered_by_user_id,
+                "p_cancellation_reason": cancellation_reason or "",
+            },
+        ).execute()
 
-    if not result.data:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Delivery order not found"
+        if not result.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, 
+                detail="Delivery order not found"
+            )
+
+        result_data = result.data
+        
+        order_number = result_data.get("order_number", "N/A")
+        sender_id = result_data.get("sender_id")
+        rider_id = result_data.get("rider_id")
+        dispatch_id = result_data.get("dispatch_id")
+        cancelled_by = result_data.get("cancelled_by", "UNKNOWN")
+        refund_amount = float(result_data.get("refund_amount", 0))
+
+        await _send_delivery_notifications(
+            order_number=order_number,
+            new_status=DeliveryStatus.CANCELLED,
+            sender_id=sender_id,
+            rider_id=rider_id,
+            dispatch_id=dispatch_id,
+            cancellation_reason=cancellation_reason,
+            cancelled_by_rider=(cancelled_by == "RIDER"),
+            supabase=supabase,
         )
 
-    result_data = result.data
+        await log_audit_event(
+            supabase,
+            entity_type="DELIVERY_ORDER",
+            entity_id=delivery_id,
+            action="CANCELLED",
+            new_value={
+                "status": "CANCELLED",
+                "cancelled_by": cancelled_by,
+                "requires_return": result_data.get("requires_return", False),
+            },
+            actor_id=triggered_by_user_id,
+            actor_type="USER",
+            change_amount=Decimal(str(refund_amount)) if refund_amount > 0 else None,
+            notes=result_data.get("message", "Delivery cancelled"),
+            request=request,
+        )
 
-    await _send_delivery_notifications(
-        order_number=result_data.get("order_number", ""),
-        new_status=DeliveryStatus.CANCELLED,
-        sender_id=result_data["sender_id"],
-        rider_id=result_data.get("rider_id"),
-        dispatch_id=result_data.get("dispatch_id"),
-        cancellation_reason=cancellation_reason,
-        cancelled_by_rider=result_data["cancelled_by"] == "RIDER",
-        supabase=supabase,
-    )
+        return result_data
 
-    await log_audit_event(
-        supabase,
-        entity_type="DELIVERY_ORDER",
-        entity_id=delivery_id,
-        action="CANCELLED",
-        new_value={
-            "status": "CANCELLED",
-            "cancelled_by": result_data["cancelled_by"],
-            "requires_return": result_data.get("requires_return", False),
-        },
-        actor_id=triggered_by_user_id,
-        actor_type="USER",
-        change_amount=Decimal(str(result_data["refund_amount"]))
-        if result_data["refund_amount"] > 0
-        else None,
-        notes=result_data["message"],
-        request=request,
-    )
+    except APIError as e:
+        logger.error(
+            "cancel_delivery_rpc_error",
+            delivery_id=delivery_id,
+            error=str(e),
+            exc_info=True,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to cancel delivery: {str(e)}"
+        )
 
-    return result_data
+
+# async def cancel_delivery(
+#     delivery_id: str,
+#     triggered_by_user_id: str,
+#     cancellation_reason: Optional[str],
+#     supabase: AsyncClient,
+#     request: Optional[Request] = None,
+# ) -> dict:
+#     """
+#     Sender or Rider cancels delivery.
+#     - Handles refunds if escrow held
+#     - Handles returns if picked up
+#     """
+#     result = await supabase.rpc(
+#         "mark_delivery_as_cancelled",
+#         {
+#             "p_delivery_id": delivery_id,
+#             "p_triggered_by_user_id": triggered_by_user_id,
+#             "p_cancellation_reason": cancellation_reason,
+#         },
+#     ).execute()
+
+#     if not result.data:
+#         raise HTTPException(
+#             status_code=status.HTTP_404_NOT_FOUND, detail="Delivery order not found"
+#         )
+
+#     result_data = result.data
+
+#     await _send_delivery_notifications(
+#         order_number=result_data.get("order_number", ""),
+#         new_status=DeliveryStatus.CANCELLED,
+#         sender_id=result_data["sender_id"],
+#         rider_id=result_data.get("rider_id"),
+#         dispatch_id=result_data.get("dispatch_id"),
+#         cancellation_reason=cancellation_reason,
+#         cancelled_by_rider=result_data["cancelled_by"] == "RIDER",
+#         supabase=supabase,
+#     )
+
+#     await log_audit_event(
+#         supabase,
+#         entity_type="DELIVERY_ORDER",
+#         entity_id=delivery_id,
+#         action="CANCELLED",
+#         new_value={
+#             "status": "CANCELLED",
+#             "cancelled_by": result_data["cancelled_by"],
+#             "requires_return": result_data.get("requires_return", False),
+#         },
+#         actor_id=triggered_by_user_id,
+#         actor_type="USER",
+#         change_amount=Decimal(str(result_data["refund_amount"]))
+#         if result_data["refund_amount"] > 0
+#         else None,
+#         notes=result_data["message"],
+#         request=request,
+#     )
+
+#     return result_data
 
 
 # ============================================================
