@@ -1,5 +1,6 @@
 from fastapi import HTTPException, status, Request
 from typing import Optional
+import json
 import uuid
 import datetime
 from uuid import UUID
@@ -360,79 +361,6 @@ async def assign_rider(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Something went wrong!",
         )
-
-
-# async def assign_rider(
-#     delivery_id: str,
-#     rider_id: str,
-#     sender_id: str,
-#     supabase: AsyncClient,
-# ) -> dict:
-# """
-# Sender assigns a rider to delivery.
-# - Validates rider availability
-# - Updates status to ASSIGNED
-# - Sets rider as busy
-# - Sends notification to rider
-# """
-#     if not rider_id:
-#         raise HTTPException(
-#             status_code=status.HTTP_400_BAD_REQUEST, detail="rider_id is required"
-#         )
-
-#     try:
-#         # Get tx_ref
-#         delivery = (
-#             await supabase.table("delivery_orders")
-#             .select("tx_ref, order_number")
-#             .eq("id", delivery_id)
-#             .single()
-#             .execute()
-#         )
-
-#         tx_ref = delivery.data["tx_ref"]
-#         order_number = delivery.data["order_number"]
-
-#         # Call RPC
-#         result = await supabase.rpc(
-#             "assign_rider_to_delivery",
-#             {
-#                 "p_tx_ref": tx_ref,
-#                 "p_rider_id": f"{rider_id}",
-#             },
-#         ).execute()
-
-#         result_data = result.data
-
-#         # Send notifications
-#         await _send_delivery_notifications(
-#             order_number=order_number,
-#             new_status=DeliveryStatus.ASSIGNED,
-#             sender_id=f"{sender_id}",
-#             rider_id=f"{rider_id}",
-#             dispatch_id=f"{result_data.get('dispatch_id')}",
-#             supabase=supabase,
-#         )
-
-#         return {
-#             "status": "success",
-#             "delivery_status": "ASSIGNED",
-#             "tx_ref": tx_ref,
-#             "rider_id": f"{rider_id}",
-#             "dispatch_id": f"{result_data.get('dispatch_id')}",
-#         }
-
-#     except APIError as e:
-#         logger.error(
-#             "assign_rider_error",
-#             error=str(e),
-#             error_message=f"{e.message}",
-#             exc_info=True,
-#         )
-#         raise HTTPException(
-#             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-#             detail=f"Something went wrong!",
-#         )
 
 
 # ============================================================
@@ -953,7 +881,7 @@ def _validate_state_transition(
         "IN_TRANSIT": ["DELIVERED", "CANCELLED"],
         "DELIVERED": ["COMPLETED", "CANCELLED"],
         "COMPLETED": [],
-        "CANCELLED": ["ASSIGNED"],  # Allow reassignment after cancellation
+        "CANCELLED": ["ASSIGNED", "COMPLETED"],  # Allow reassignment/completion(When item in transit) after cancellation
     }
 
     allowed = ALLOWED_TRANSITIONS.get(current_status, [])
@@ -997,43 +925,6 @@ def _validate_state_transition(
             delivery_id=delivery.get("id"),
             reason="No escrow was held - cancelled before rider picked up"
         )
-
-
-# def _validate_state_transition(current_status: str, new_status: str):
-#     """
-#     Validate that the status transition is allowed.
-
-#     State Machine:
-#     PENDING → ASSIGNED
-#     ASSIGNED → ACCEPTED | DECLINED
-#     ACCEPTED → PICKED_UP | CANCELLED
-#     PICKED_UP → IN_TRANSIT | DELIVERED | CANCELLED
-#     IN_TRANSIT → DELIVERED | CANCELLED
-#     DELIVERED → COMPLETED | CANCELLED
-
-#     Terminal states: COMPLETED, CANCELLED (cannot transition from these)
-#     """
-#     # Define allowed transitions
-#     ALLOWED_TRANSITIONS = {
-#         "PENDING": ["ASSIGNED", "CANCELLED"],
-#         "ASSIGNED": ["ACCEPTED", "DECLINED", "CANCELLED"],
-#         "DECLINED": ["ASSIGNED"],  # Can reassign after decline
-#         "ACCEPTED": ["PICKED_UP", "CANCELLED"],
-#         "PICKED_UP": ["IN_TRANSIT", "DELIVERED", "CANCELLED"],
-#         "IN_TRANSIT": ["DELIVERED", "CANCELLED"],
-#         "DELIVERED": ["COMPLETED", "CANCELLED"],
-#         "COMPLETED": [],  # Terminal state
-#         "CANCELLED": ["ASSIGNED"],  # Allow reassignment
-#     }
-
-
-#     allowed = ALLOWED_TRANSITIONS.get(current_status, [])
-
-#     if new_status not in allowed:
-#         raise HTTPException(
-#             status_code=status.HTTP_400_BAD_REQUEST,
-#             detail=f"Cannot transition from {current_status} to {new_status}. Allowed transitions: {', '.join(allowed) if allowed else 'None (terminal state)'}",
-#         )
 
 
 async def _send_delivery_notifications(
@@ -1234,10 +1125,6 @@ async def _send_delivery_notifications(
                 data=notif["data"],
                 supabase=supabase,
             )
-
-
-import json
-
 
 def extract_rpc_data(e: APIError) -> dict | None:
     """Extract actual RPC response from APIError details when postgrest
