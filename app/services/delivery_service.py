@@ -12,6 +12,8 @@ from app.schemas.delivery_schemas import (
     PackageDeliveryCreate,
     DeliveryStatus,
     DeliveryStatusUpdate,
+    AssignRiderRequest,
+    AssignRiderResponse,
 )
 from app.schemas.common import (
     PaymentInitializationResponse,
@@ -362,6 +364,28 @@ async def assign_rider(
             detail="Something went wrong!",
         )
 
+async def assign_rider_to_order(
+    order_id: str,
+    data: AssignRiderRequest,
+    sender_id: str,
+    supabase: AsyncClient,
+) -> AssignRiderResponse:
+    result = await supabase.rpc(
+        "assign_rider_to_paid_delivery",
+        {
+            "p_order_id": str(order_id),
+            "p_rider_id": str(data.rider_id),
+        },
+    ).execute()
+    payload = result.data or {}
+    return AssignRiderResponse(
+        success=bool(payload.get("success", True)),
+        message=str(payload.get("message", "Rider assigned")),
+        delivery_status=str(
+            payload.get("delivery_status", DeliveryStatus.ASSIGNED.value)
+        ),
+        rider_name=payload.get("rider_name"),
+    )
 
 # ============================================================
 # 2. ACCEPT DELIVERY

@@ -30,6 +30,9 @@ class Settings(BaseSettings):
     FLW_SECRET_KEY: Optional[str] = None
     FLW_SECRET_HASH: Optional[str] = None
     FLUTTERWAVE_PUBLIC_KEY: Optional[str] = "Kenneth-TEST-1234567"
+    FLUTTERWAVE_BASE_URL: str = os.getenv("FLUTTERWAVE_BASE_URL", "https://api.flutterwave.com/v3")
+    FLWSECK_TEST: Optional[str] = os.getenv("FLWSECK_TEST")
+    FLW_PROD_SECRET_KEY: Optional[str] = os.getenv("FLW_PROD_SECRET_KEY")
 
     # SUPABASE
     SUPABASE_URL: str = os.getenv("SUPABASE_URL")

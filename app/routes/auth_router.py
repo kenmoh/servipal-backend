@@ -1,11 +1,19 @@
+from os import name
+
 from fastapi import APIRouter, Depends, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
+from pydantic import BaseModel
 from app.services import user_service
 from app.schemas.user_schemas import UserCreate, LoginRequest, TokenResponse
 from app.database.supabase import get_supabase_client, get_supabase_admin_client
 from app.config.logging import logger
 from app.dependencies import auth
 from supabase import AsyncClient
+
+from app.utils.utils import send_otp, verify_otp
+
+class OTPRequest(BaseModel):
+    otp: int
 
 router = APIRouter(prefix="/api/v1/auth", tags=["Authentication"])
 
@@ -86,3 +94,29 @@ async def change_password(
 ) -> auth.Status:
     
     return auth.change_password(data, current_user, supabase)
+
+
+@router.post("/request-otp", status_code=status.HTTP_200_OK)
+async def reques_otp(
+    current_user: dict = Depends(auth.get_current_profile),
+    supabase: AsyncClient = Depends(get_supabase_client),
+) -> str:
+    
+    phone_number = current_user.get("phone_number")
+    email = current_user.get("email")
+    name_from_email = email.split("@")[0] if email else "User"
+    name = current_user.get("full_name") or current_user.get("business_name") or current_user.get("store_name") or name_from_email
+    
+    return await send_otp(name=name, email=email, phone=phone_number, supabase=supabase, user_id=current_user.get("id"))
+
+
+
+@router.post("/verify-otp", status_code=status.HTTP_200_OK)
+async def confirm_phone_number(
+    otp: OTPRequest,
+    current_user: dict = Depends(auth.get_current_profile),
+    supabase: AsyncClient = Depends(get_supabase_client),
+) -> str:
+    
+    
+    return await verify_otp(otp=int(otp), supabase=supabase, user_id=current_user.get("id"))

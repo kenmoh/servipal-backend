@@ -456,12 +456,45 @@ class MockSupabaseClient:
             "audit_logs": [],
         }
         self.auth = MockSupabaseAuth(self._data)
+        self.table = MagicMock(side_effect=self._table)
+        self.rpc = MagicMock(side_effect=self._rpc)
 
-    def table(self, name):
+    def _table(self, name):
         return MockQueryBuilder(name, self._data)
 
-    def rpc(self, name, params=None):
+    def _rpc(self, name, params=None):
         return MockRPCBuilder(self._data, name, params or {})
+
+
+class AsyncRedisMock:
+    def __init__(self):
+        self.store = {}
+
+    async def get(self, key):
+        return self.store.get(key)
+
+    async def setex(self, key, seconds, value):
+        self.store[key] = str(value)
+        return True
+
+    async def incr(self, key):
+        current = int(self.store.get(key, "0"))
+        self.store[key] = str(current + 1)
+        return int(self.store[key])
+
+    async def expire(self, key, seconds):
+        return True
+
+    async def delete(self, key):
+        self.store.pop(key, None)
+        return 1
+
+
+@pytest.fixture(autouse=True)
+def mock_redis(monkeypatch):
+    from app.config import config as app_config
+    app_config.redis_client = AsyncRedisMock()
+    return app_config.redis_client
 
 
 @pytest.fixture

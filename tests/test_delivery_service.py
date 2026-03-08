@@ -14,13 +14,18 @@ async def test_initiate_delivery_payment(mock_supabase):
     sender_id = uuid4()
 
     data = PackageDeliveryCreate(
+        receiver_phone="+2348012345678",
+        sender_phone_number="+2348000000000",
+        package_name="Box",
         pickup_location="Loc A",
         destination="Loc B",
-        pickup_coordinates=[6.5, 3.4],
-        dropoff_coordinates=[6.6, 3.5],
-        receiver_name="John",
-        receiver_phone="+2348012345678",
-        package_description="Box",
+        pickup_coordinates=(6.5, 3.4),
+        dropoff_coordinates=(6.6, 3.5),
+        description="Box",
+        delivery_type="STANDARD",
+        distance="5",
+        duration="10m",
+        package_image_url=None,
     )
 
     # Mock Redis save_pending and charges table

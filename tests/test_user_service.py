@@ -23,7 +23,7 @@ async def test_create_user_account(mock_supabase):
     data = UserCreate(
         email="test_signup@example.com",
         password="password123",
-        phone="+1234567890",
+        phone="+2348012345678",
         user_type=UserType.CUSTOMER,
         full_name="Signup User",
     )
@@ -111,7 +111,8 @@ async def test_create_rider_by_dispatch(mock_supabase):
     data = RiderCreateByDispatch(
         full_name="Rider 1",
         email="rider@fast.com",
-        phone="+1112223333",
+        phone="+2348098765432",
+        password="securepwd",
         bike_number="BK-123",
     )
 
@@ -119,9 +120,8 @@ async def test_create_rider_by_dispatch(mock_supabase):
     # The service uses `supabase_admin.auth.admin.create_user`
     # And then upserts profile.
 
-    result = await create_rider_by_dispatch(
-        data, {"id": str(dispatch_id)}, mock_supabase
-    )
+    current_profile = type("Profile", (), {"id": str(dispatch_id)})()
+    result = await create_rider_by_dispatch(data, current_profile, mock_supabase)
 
     assert result.full_name == "Rider 1"
     assert result.bike_number == "BK-123"

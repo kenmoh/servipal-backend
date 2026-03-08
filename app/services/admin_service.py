@@ -134,6 +134,23 @@ async def toggle_block(
     return _row_to_detail(result.data[0])
 
 
+async def block_unblock_user(
+    supabase: AsyncClient,
+    target_id: UUID,
+    actor_id: UUID,
+    reason: str,
+    actor_type: UserType,
+    request: Request | None = None,
+) -> ProfileDetail:
+    return await toggle_block(
+        supabase=supabase,
+        target_id=target_id,
+        actor_id=actor_id,
+        reason=reason,
+        actor_type=actor_type,
+        request=request,
+    )
+
 # ── Create management user (SUPER_ADMIN only) ─────────────────────────────────
 
 
