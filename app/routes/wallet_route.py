@@ -166,37 +166,6 @@ async def pay_with_wallet(
         )
         return PaymentWebhookResponse(status="error", message="Missing tx_ref")
 
-    # 5. Determine which handler is based on the tx_ref prefix
-    # handler = None
-    # if tx_ref.startswith("DELIVERY-"):
-    #     handler = process_successful_delivery_payment
-    # elif tx_ref.startswith("FOOD-"):
-    #     handler = process_successful_food_payment
-    # elif tx_ref.startswith("TOPUP-"):
-    #     handler = process_successful_topup_payment
-    # elif tx_ref.startswith("LAUNDRY-"):
-    #     handler = process_successful_laundry_payment
-    # elif tx_ref.startswith("PRODUCT-"):
-    #     handler = process_successful_product_payment
-
-    # if not handler:
-    #     logger.warning(
-    #         event="wallet_payment_unknown_transaction_type",
-    #         level="warning",
-    #         tx_ref=tx_ref,
-    #     )
-    #     return PaymentWebhookResponse(status="unknown_transaction_type")
-
-    # 6. Queue the job with retry (5 attempts, exponential backoff)
-    # job_id = enqueue_job(
-    #     handler,
-    #     tx_ref=str(tx_ref),
-    #     paid_amount=paid_amount,
-    #     flw_ref=f"{tx_ref}",
-    #     payment_method="WALLET",
-    #     retry=Retry(max=5, interval=[30, 60, 120, 300, 600]),
-    # )
-
     # Supabase Que
     result = (
         await supabase.schema("pgmq_public")

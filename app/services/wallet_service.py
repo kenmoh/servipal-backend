@@ -13,11 +13,10 @@ from app.schemas.wallet_schema import (
     WalletBalanceResponse,
     WalletTransactionResponse,
     TopUpRequest,
-    PayWithWalletRequest,
     PayWithWalletResponse,
     WithdrawalCreate,
     WithdrawalResponse,
-    WithdrawalListResponse,
+   
 )
 from app.config.config import settings
 from app.utils.redis_utils import save_pending
@@ -199,7 +198,7 @@ async def pay_with_wallet(
     await verify_wallet_balance(customer_id, data.grand_total, supabase)
 
     # 2. Validate payload and build RPC params
-    rpc_params = validate_payload(data, customer_id)
+    rpc_params = await validate_payload(data, customer_id, supabase)
 
     # 3. Inject customer_name from token
     rpc_params["p_customer_name"] = customer_name
