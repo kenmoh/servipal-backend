@@ -2,7 +2,6 @@ from asyncio import streams
 import datetime
 from decimal import Decimal
 import json
-from time import strftime
 import httpx
 from fastapi import HTTPException, status
 from pydantic import BaseModel, EmailStr
@@ -13,7 +12,7 @@ from app.config.logging import logger
 
 class AuthorizationResponse(BaseModel):
 
-    transfer_reference: strftime
+    transfer_reference: str
     transfer_account: str
     transfer_bank: str
     account_expiration: datetime.datetime
