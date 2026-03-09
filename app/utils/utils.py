@@ -93,7 +93,7 @@ async def send_otp(name: str, email: EmailStr, phone: str, supabase: AsyncClient
         "length": 6,
         "send": "true",
         "medium": ['sms'],
-        "expiry": 1,
+        "expiry": 30,
         'customer': {
             "name": name,
             "email": email,
