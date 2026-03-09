@@ -135,7 +135,7 @@ async def send_otp(name: str, email: EmailStr, phone: str, supabase: AsyncClient
         otp = data['data'][0].get('otp')
         expiry = data['data'][0].get('expiry')
 
-        await supabase.table("otp").insert({
+        await supabase.table("otp").upsert({
             "user_id": user_id,
             "otp": otp,
             "expires_at": expiry
