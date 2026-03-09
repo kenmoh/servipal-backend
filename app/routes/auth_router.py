@@ -123,4 +123,4 @@ async def confirm_phone_number(
 ) -> str:
     
     
-    return await verify_otp(otp=int(otp), supabase=supabase, user_id=current_user.get("id"))
+    return await verify_otp(otp=otp, supabase=supabase, user_id=current_user.get("id"))
