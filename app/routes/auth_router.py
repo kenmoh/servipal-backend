@@ -13,11 +13,11 @@ from supabase import AsyncClient
 from app.utils.utils import send_otp, verify_otp
 
 class OTPRequest(BaseModel):
-    otp: int
+    otp: str
 
 class OPTResponse(BaseModel):
-    message: str
-    status:str
+    message: str | None
+    status:str | None
 
 router = APIRouter(prefix="/api/v1/auth", tags=["Authentication"])
 
