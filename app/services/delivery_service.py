@@ -811,11 +811,14 @@ async def mark_returned(
     Used when delivery was cancelled after pickup and item needs to be returned.
     """
     try:
-        result = await supabase.table("delivery_orders").update({
+        await supabase.table("delivery_orders").update({
             "delivery_status": DeliveryStatus.RETURNED.value,
-        }).eq("id", delivery_id).select(
+        }).eq("id", delivery_id).execute()
+
+        
+        result = await supabase.table("delivery_orders").select(
             "id, sender_id, rider_id, dispatch_id, delivery_status, order_number"
-        ).maybe_single().execute()
+        ).eq("id", delivery_id).single().execute()
 
         if not result.data:
             raise HTTPException(
@@ -849,6 +852,7 @@ async def mark_returned(
         return result_data
 
     except APIError as e:
+        logger.error("mark_returned_error", error=str(e), exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=e.message

@@ -4,7 +4,7 @@ from decimal import Decimal
 import json
 import httpx
 from fastapi import HTTPException, status
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel
 from app.config.config import settings
 from app.utils.redis_utils import cache_data, get_cached_data
 from app.schemas.bank_schema import BankSchema, AccountDetails, AccountDetailResponse
