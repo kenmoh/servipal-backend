@@ -32,13 +32,13 @@ async def process_successful_delivery_payment(
     paid_amount: Decimal,
     flw_ref: str,
     supabase: AsyncClient,
-    payment_method: Literal["CARD", "WALLET"],
+    payment_method: Literal["CARD", "WALLET", "BANK_TRANSFER"],
     pending_data: dict = None,
 ):
     logger.info("processing_delivery_payment", tx_ref=tx_ref, paid_amount=paid_amount)
 
     # 1. Verify — CARD only
-    if payment_method == "CARD":
+    if payment_method == "CARD" or payment_method == 'BANK_TRANSFER':
         verified = await verify_transaction_tx_ref(tx_ref)
         if not verified or verified.get("status") != "success":
             logger.error("delivery_payment_verification_failed", tx_ref=tx_ref)
@@ -147,7 +147,7 @@ async def process_successful_delivery_payment_non_rpc(
     paid_amount: Decimal,
     flw_ref: str,
     supabase: AsyncClient,
-    payment_method: Literal["CARD", "WALLET"],
+    payment_method: Literal["CARD", "WALLET",'BANK_TRANSFER'],
     pending_data: dict = None,
 ):
     """
@@ -384,7 +384,7 @@ async def process_successful_food_payment(
     paid_amount: float,
     flw_ref: str,
     supabase: AsyncClient,
-    payment_method: Literal["CARD", "WALLET"],
+    payment_method: Literal["CARD", "WALLET", 'BANK_TRANSFER'],
     request: Optional[Request] = None,
     pending_data: dict = None,
 ):
@@ -400,7 +400,7 @@ async def process_successful_food_payment(
     # # Get pending data
     # pending_key = f"pending_food_{tx_ref}"
     # pending = await get_pending(pending_key)
-    if payment_method == "CARD":
+    if payment_method == "CARD" or payment_method == 'BANK_TRANSFER':
         verified = await verify_transaction_tx_ref(tx_ref)
         if not verified or verified.get("status") != "success":
             logger.error("food_payment_verification_failed", tx_ref=tx_ref)
@@ -505,14 +505,14 @@ async def process_successful_topup_payment(
     paid_amount: float,
     flw_ref: str,
     supabase: AsyncClient,
-    payment_method: Literal["CARD", "WALLET"] = "CARD",
+    payment_method: Literal["CARD", "BANK_TRANSFER"] = "CARD",
     pending_data: dict = None,
     request: Optional[Request] = None,
 ):
     logger.info("processing_topup_payment", tx_ref=tx_ref, paid_amount=paid_amount)
 
     # 1. Verify — CARD only
-    if payment_method == "CARD":
+    if payment_method == "CARD" or payment_method == 'BANK_TRANSFER':
         verified = await verify_transaction_tx_ref(tx_ref)
         if not verified or verified.get("status") != "success":
             logger.error("topup_payment_verification_failed", tx_ref=tx_ref)
@@ -528,10 +528,8 @@ async def process_successful_topup_payment(
 
     # 3. Get pending data
     pending_key = f"pending_topup_{tx_ref}"
-    if payment_method == "WALLET" and pending_data:
-        pending = pending_data
-    else:
-        pending = await get_pending(pending_key)
+   
+    pending = await get_pending(pending_key)
 
     if not pending:
         logger.warning("topup_payment_pending_not_found", tx_ref=tx_ref)
@@ -640,7 +638,7 @@ async def process_successful_product_payment(
     paid_amount: str,
     flw_ref: str,
     supabase: AsyncClient,
-    payment_method: Literal["CARD", "WALLET"],
+    payment_method: Literal["CARD", "WALLET",'BANK_TRANSFER'],
     pending_data: dict = None,
 ):
     logger.info(
@@ -649,7 +647,7 @@ async def process_successful_product_payment(
         paid_amount=paid_amount,
     )
 
-    if payment_method == "CARD":
+    if payment_method == "CARD" or payment_method == 'BANK_TRANSFER':
         verified = await verify_transaction_tx_ref(tx_ref)
         if not verified or verified.get("status") != "success":
             logger.error("product_payment_verification_failed", tx_ref=tx_ref)
@@ -771,14 +769,14 @@ async def process_successful_product_payment_non_rpc(
     paid_amount: float,
     flw_ref: str,
     supabase: AsyncClient,
-    payment_method: Literal["CARD", "WALLET"],
+    payment_method: Literal["CARD", "WALLET", 'BANK_TRANSFER'],
     pending_data: dict = None,
 ):
     logger.info(
         event="processing_product_payment", tx_ref=tx_ref, paid_amount=paid_amount
     )
 
-    if payment_method == "CARD":
+    if payment_method == "CARD" or payment_method == 'BANK_TRANSFER':
         verified = await verify_transaction_tx_ref(tx_ref)
         if not verified or verified.get("status") != "success":
             logger.error("product_payment_verification_failed", tx_ref=tx_ref)
@@ -921,9 +919,7 @@ async def process_successful_product_payment_non_rpc(
             error=str(e),
             exc_info=True,
         )
-        # Depending on your failure strategy, you might not want to delete pending here
-        # so it can be retried, but keeping it as per your original logic.
-
+        
         raise
 
 
@@ -932,7 +928,7 @@ async def process_successful_laundry_payment(
     paid_amount: float,
     flw_ref: str,
     supabase: AsyncClient,
-    payment_method: Literal["CARD", "WALLET"],
+    payment_method: Literal["CARD", "WALLET", 'BANK_TRANSFER'],
     pending_data: dict = None,
     request: Optional[Request] = None,
 ):
@@ -948,7 +944,7 @@ async def process_successful_laundry_payment(
     # # Get pending data
     # pending_key = f"pending_laundry_{tx_ref}"
     # pending = await get_pending(pending_key)
-    if payment_method == "CARD":
+    if payment_method == "CARD" or payment_method == 'BANK_TRANSFER':
         verified = await verify_transaction_tx_ref(tx_ref)
         if not verified or verified.get("status") != "success":
             logger.error("laundry_payment_verification_failed", tx_ref=tx_ref)
@@ -1073,21 +1069,3 @@ def parse_coordinates(value) -> list:
     return value
 
 
-"""
- {
- "additional_info": "", 
- "["#ebd093"], 
- "delivery_address": "Gh bhhhvb vgg",
- "delivery_option": "VENDOR_DELIVERY", 
- "images": ["https://fehrsomiswgjtcjuqyot.
-supabase.co/storage/v1/object/public/product-images/ec147cc9-7467-4fb6-ae72-2cee
-bd0440af/1771586512570_0.jpeg", "https://fehrsomiswgjtcjuqyot.supabase.co/storag
-e/v1/object/public/product-images/ec147cc9-7467-4fb6-ae72-2ceebd0440af/177158651
-3689_1.jpeg", "https://fehrsomiswgjtcjuqyot.supabase.co/storage/v1/object/public
-/product-images/ec147cc9-7467-4fb6-ae72-2ceebd0440af/1771586514481_2.jpeg"], 
-"item_id": "d1b0ea45-ba35-4786-8056-7ba997c4764b", 
-"quantity": 1, 
-"sizes": ["40"], 
-"vendor_id": "ec147cc9-7467-4fb6-ae72-2ceebd0440af"}
-
-"""

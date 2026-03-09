@@ -1,16 +1,41 @@
+from asyncio import streams
+import datetime
+from decimal import Decimal
 import json
+from time import strftime
 import httpx
 from fastapi import HTTPException, status
+from pydantic import BaseModel, EmailStr
 from app.config.config import settings
 from app.utils.redis_utils import cache_data, get_cached_data
 from app.schemas.bank_schema import BankSchema, AccountDetails, AccountDetailResponse
 from app.config.logging import logger
-import hmac
 
-flutterwave_base_url = "https://api.flutterwave.com/v3"
-# https://api.flutterwave.com/v3/otps
-servipal_base_url = "https://servipalbackend.onrender.com/api"
-bank_url = "https://api.flutterwave.com/v3/banks/NG"
+class AuthorizationResponse(BaseModel):
+
+    transfer_reference: strftime
+    transfer_account: str
+    transfer_bank: str
+    account_expiration: datetime.datetime
+    transfer_note: str
+    transfer_amount: str
+    mode: str
+   
+
+class TransferMeta(BaseModel):
+    
+    authorization: AuthorizationResponse
+
+
+class InitBankTransfer(BaseModel): 
+  status: str
+  message:str
+  meta: TransferMeta
+
+
+flutterwave_base_url = settings.FLUTTERWAVE_BASE_URL
+servipal_base_url = settings.API_URL
+bank_url = f"{flutterwave_base_url}/banks/NG"
 
 
 async def get_all_banks() -> list[BankSchema]:
@@ -111,7 +136,8 @@ async def verify_transaction_tx_ref(tx_ref: str):
         headers = {"Authorization": f"Bearer {settings.FLW_SECRET_KEY}"}
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.get(
-                f"{flutterwave_base_url}/transactions/verify_by_reference?tx_ref={tx_ref}",
+                f"{flutterwave_base_url}/transactions/{tx_ref}/verify",
+                # f"{flutterwave_base_url}/transactions/verify_by_reference?tx_ref={tx_ref}",
                 headers=headers,
             )
             response_data = response.json()
@@ -126,3 +152,69 @@ async def verify_transaction_tx_ref(tx_ref: str):
         raise HTTPException(
             status_code=500, detail=f"Failed to verify transaction reference: {str(e)}"
         )
+    
+async def generate_virtual_account_for_bank_transfer_payment(
+    amount: Decimal,
+    tx_ref: str,
+    customer: dict,
+) -> InitBankTransfer:
+
+    payload = {
+        "amount": str(amount),
+        "email": customer["email"],
+        "currency": "NGN",
+        "tx_ref": tx_ref,
+        "fullname": customer["account_holder_name"],
+        "phone_number": customer["phone_number"],
+        "meta": {
+            "message": f"Pay the sum of NGN {amount} for transaction reference {tx_ref} to SERVIPAL LIMITED"
+        },
+    }
+
+    headers = {
+        "Authorization": f"Bearer {settings.FLW_SECRET_KEY}",
+        "Content-Type": "application/json",
+        "accept": "application/json",
+    }
+
+    try:
+        async with httpx.AsyncClient() as client: 
+            response = await client.post(
+                f"{settings.FLUTTERWAVE_BASE_URL}/charges?type=bank_transfer",
+                json=payload,
+                headers=headers,
+            )
+
+        data = response.json()
+
+        if response.status_code != 200 or data.get("status") != "success":
+            logger.error(
+                "virtual_account_generation_failed",
+                tx_ref=tx_ref,
+                status_code=response.status_code,
+                response=data,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="Failed to generate virtual account. Please try again.",
+            )
+
+        return data
+
+    except HTTPException:
+        raise  
+
+    except httpx.TimeoutException:
+        logger.error("virtual_account_timeout", tx_ref=tx_ref)
+        raise HTTPException(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            detail="Bank transfer service timed out. Please try again.",
+        )
+
+    except httpx.RequestError as e:
+        logger.error("virtual_account_request_error", tx_ref=tx_ref, error=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Could not reach payment provider. Please try again.",
+        )
+

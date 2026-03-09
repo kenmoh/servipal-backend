@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Request, HTTPException, Depends, status, Header
 from supabase import AsyncClient
+from app.dependencies.auth import get_current_user
 from app.services.payment_service import (
     process_successful_delivery_payment,
     process_successful_food_payment,
@@ -10,6 +11,7 @@ from app.services.payment_service import (
 from app.config.config import settings
 from app.config.logging import logger
 from app.database.supabase import get_supabase_client, get_supabase_admin_client
+from app.utils.payment import generate_virtual_account_for_bank_transfer_payment
 from app.worker import enqueue_job
 from rq import Retry
 from pydantic import BaseModel
@@ -77,14 +79,20 @@ async def flutterwave_webhook(
 
     data = payload.get("data") if payload.get("data") else payload
 
-    flw_ref = data.get("flw_ref") or payload.get("flw_ref")
+    flw_ref = data.get("flw_ref")
+    payment_type = data.get("payment_type ")
+    payment_status = data.get("status")
+    paid_amount = data.get('amount')
+    tx_ref = data.get('tx_ref')
+
     logger.info(
         event="flutterwave_webhook_received",
         webhook_event=webhook_event,
-        payment_status=data.get("status"),
-        tx_ref=data.get("tx_ref"),
-        amount=data.get("amount"),
+        payment_status=payment_status,
+        tx_ref=tx_ref,
+        amount=paid_amount,
         flw_ref=flw_ref,
+        payment_type=payment_type,
     )
 
     # 3. Only process successful charge events
@@ -97,11 +105,9 @@ async def flutterwave_webhook(
         )
         return PaymentWebhookResponse(
             status="ignored",
-            message=f"Payment status is {data.get('status')}, not successful",
+            message=f"Payment status is {payment_status}, not successful",
         )
 
-    tx_ref = data.get("tx_ref")
-    paid_amount = data.get("amount")
 
     if not tx_ref:
         logger.warning(
@@ -110,7 +116,6 @@ async def flutterwave_webhook(
         return PaymentWebhookResponse(status="error", message="Missing tx_ref")
 
     # 4. Idempotency check (prevent double-processing)
-    # We use the raw supabase client here as it's available in the route
     existing = (
         await supabase.table("transactions").select("id").eq("tx_ref", tx_ref).execute()
     )
@@ -165,7 +170,7 @@ async def flutterwave_webhook(
                     "tx_ref": tx_ref,
                     "paid_amount": str(paid_amount),
                     "flw_ref": str(flw_ref),
-                    "payment_method": "CARD",
+                    "payment_method": f'{payment_type.upper()}',
                 },
             },
         )
@@ -179,8 +184,6 @@ async def flutterwave_webhook(
         level="info",
         tx_ref=tx_ref,
         msg_id=msg_id,
-        # job_id=job_id,
-        # handler=handler.__name__,
     )
     return PaymentWebhookResponse(
         status="queued_with_retry", trx_ref=tx_ref, message="Payment processing queued"
@@ -194,3 +197,12 @@ async def process_successful_order_payment(
     supabase: AsyncClient = Depends(get_supabase_client),
 ):
     return await order.process_payment(data, x_internal_key, supabase)
+
+
+@router.post("/init-bank-transfer", status_code=status.HTTP_200_OK)
+async def init_bank_transfer(
+    data: order.ProcessPaymentRequest,
+    supabase: AsyncClient = Depends(get_supabase_client),
+    current_user: dict = Depends(get_current_user),
+):
+    return await generate_virtual_account_for_bank_transfer_payment(amount=data.paid_amount, customer=current_user, supabase=supabase)

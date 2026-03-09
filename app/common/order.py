@@ -49,7 +49,7 @@ class ProcessPaymentRequest(BaseModel):
     tx_ref: str
     paid_amount: float
     flw_ref: str
-    payment_method: str  # 'CARD' or 'WALLET'
+    payment_method: str  # 'CARD' or 'WALLET' or 'BANK_TRANSFER'
 
 
 class OrderStatusUpdate(BaseModel):

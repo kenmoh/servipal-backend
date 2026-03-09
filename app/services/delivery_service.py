@@ -189,6 +189,9 @@ async def update_delivery_status(
         elif data.new_status == DeliveryStatus.DELIVERED:
             result = await mark_delivered(delivery_id, triggered_by_user_id, supabase)
 
+        elif data.new_status == DeliveryStatus.RETURNED:
+            result = await mark_returned(delivery_id, triggered_by_user_id, supabase, request)
+
         elif data.new_status == DeliveryStatus.COMPLETED:
             result = await complete_delivery(
                 delivery_id, triggered_by_user_id, supabase, request
@@ -797,6 +800,61 @@ async def decline_delivery(
     return result_data
 
 
+async def mark_returned(
+    delivery_id: str,
+    rider_id: str,
+    supabase: AsyncClient,
+    request: Optional[Request] = None,
+) -> dict:
+    """
+    Rider marks delivery as returned to sender.
+    Used when delivery was cancelled after pickup and item needs to be returned.
+    """
+    try:
+        result = await supabase.table("delivery_orders").update({
+            "delivery_status": DeliveryStatus.RETURNED.value,
+        }).eq("id", delivery_id).select(
+            "id, sender_id, rider_id, dispatch_id, delivery_status, order_number"
+        ).maybe_single().execute()
+
+        if not result.data:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to mark as returned"
+            )
+
+        result_data = result.data
+
+        await _send_delivery_notifications(
+            order_number=result_data["order_number"],
+            new_status=DeliveryStatus.RETURNED,
+            sender_id=result_data["sender_id"],
+            rider_id=rider_id,
+            dispatch_id=result_data.get("dispatch_id"),
+            supabase=supabase,
+        )
+
+        await log_audit_event(
+            supabase,
+            entity_type="DELIVERY_ORDER",
+            entity_id=delivery_id,
+            action="RETURNED",
+            new_value={"status": "RETURNED"},
+            actor_id=rider_id,
+            actor_type="USER",
+            notes="Item returned to sender",
+            request=request,
+        )
+
+        return result_data
+
+    except APIError as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=e.message
+        )
+
+
 # ============================================================
 # REUSABLE VALIDATORS
 # ============================================================
@@ -804,9 +862,77 @@ async def decline_delivery(
 # ============================================================
 # AUTHORIZATION VALIDATION
 # ============================================================
-
-
 def _validate_authorization(
+    new_status: DeliveryStatus,
+    triggered_by_user_id: str,
+    sender_id: str,
+    rider_id: Optional[str],
+):
+    """
+    Validate that the user has permission to set this status.
+
+    Authorization Matrix:
+    - ASSIGNED: Sender only
+    - ACCEPTED: Rider only
+    - PICKED_UP: Rider only
+    - IN_TRANSIT: Rider only
+    - DELIVERED: Rider only
+    - RETURNED: Rider only
+    - COMPLETED: Sender only
+    - CANCELLED: Sender only 
+    - DECLINED: Rider only
+    """
+
+    if new_status == DeliveryStatus.ASSIGNED:
+        if triggered_by_user_id != sender_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Only sender can assign a rider",
+            )
+
+    elif new_status == DeliveryStatus.ACCEPTED:
+        if not rider_id or triggered_by_user_id != rider_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Only the assigned rider can accept delivery",
+            )
+
+    elif new_status in [
+        DeliveryStatus.PICKED_UP,
+        DeliveryStatus.IN_TRANSIT,
+        DeliveryStatus.DELIVERED,
+        DeliveryStatus.RETURNED,  # Rider marks as returned
+    ]:
+        if not rider_id or triggered_by_user_id != rider_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Only the assigned rider can set status to {new_status.value}",
+            )
+
+    elif new_status == DeliveryStatus.COMPLETED:
+        if triggered_by_user_id != sender_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Only sender can mark delivery as completed",
+            )
+
+    elif new_status == DeliveryStatus.CANCELLED:
+        # Only SENDER can cancel
+        if triggered_by_user_id != sender_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Only sender can cancel delivery",
+            )
+
+    elif new_status == DeliveryStatus.DECLINED:
+        if not rider_id or triggered_by_user_id != rider_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Only the assigned rider can decline delivery",
+            )
+
+
+def _validate_authorization_old(
     new_status: DeliveryStatus,
     triggered_by_user_id: str,
     sender_id: str,
@@ -877,8 +1003,104 @@ def _validate_authorization(
 # ============================================================
 # STATE TRANSITION VALIDATION (State Machine)
 # ============================================================
+# delivery_service.py
 
 def _validate_state_transition(
+    current_status: str, 
+    new_status: str,
+    delivery: Optional[dict] = None
+) -> None:
+    """
+    Validate that the status transition is allowed.
+
+    State Machine:
+    PENDING → ASSIGNED | CANCELLED
+    ASSIGNED → ACCEPTED | DECLINED | CANCELLED
+    DECLINED → ASSIGNED (reassignment after decline)
+    ACCEPTED → PICKED_UP | CANCELLED
+    PICKED_UP → IN_TRANSIT | DELIVERED | CANCELLED
+    IN_TRANSIT → DELIVERED | CANCELLED
+    DELIVERED → COMPLETED | RETURNED | CANCELLED
+    CANCELLED → RETURNED (if item needs to be returned after cancellation)
+    RETURNED → COMPLETED (after successful return)
+    COMPLETED → (terminal state)
+
+    Authorization Rules:
+    - CANCELLED: Only SENDER can cancel
+    - DECLINED: Only RIDER can decline
+    - RETURNED: Item returned to sender (after cancellation)
+
+    Args:
+        current_status: Current delivery status
+        new_status: Desired new status
+        delivery: Optional delivery data (required for CANCELLED → ASSIGNED validation)
+
+    Raises:
+        HTTPException: If transition is not allowed
+    """
+
+    # Normalize statuses
+    current_status = str(current_status).upper().strip()
+    new_status = str(new_status).upper().strip()
+    
+    # Remove enum prefix if present
+    if "." in current_status:
+        current_status = current_status.split(".")[-1]
+    if "." in new_status:
+        new_status = new_status.split(".")[-1]
+
+    # Define allowed transitions
+    ALLOWED_TRANSITIONS = {
+        "PENDING": ["ASSIGNED", "CANCELLED"],
+        "ASSIGNED": ["ACCEPTED", "DECLINED", "CANCELLED"],
+        "DECLINED": ["ASSIGNED"],  # Can reassign after decline
+        "ACCEPTED": ["PICKED_UP", "CANCELLED"],
+        "PICKED_UP": ["IN_TRANSIT", "DELIVERED", "CANCELLED"],
+        "IN_TRANSIT": ["DELIVERED", "CANCELLED"],
+        "DELIVERED": ["COMPLETED", "RETURNED", "CANCELLED"],  
+        "CANCELLED": ["ASSIGNED", "RETURNED"],  # Can be returned after cancellation
+        "RETURNED": ["COMPLETED"],  # After return, sender completes
+        "COMPLETED": [],  # Terminal state
+    }
+
+    # Get allowed transitions for current status
+    allowed = ALLOWED_TRANSITIONS.get(current_status, [])
+
+    # Basic state machine validation
+    if new_status not in allowed:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Cannot transition from {current_status} to {new_status}. "
+                   f"Allowed transitions: {', '.join(allowed) if allowed else 'None (terminal state)'}",
+        )
+
+    # ============================================================
+    # Special Validation: CANCELLED → ASSIGNED
+    # ============================================================
+    if current_status == "CANCELLED" and new_status == "ASSIGNED":
+        if delivery is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Delivery data required for reassignment validation"
+            )
+        
+        had_escrow = delivery.get("had_escrow", False)
+        
+        if had_escrow:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot reassign delivery after funds were held in escrow. "
+                       "The delivery has already progressed beyond the assignment stage. "
+                       "Please create a new order instead.",
+            )
+        
+        logger.info(
+            "cancelled_delivery_reassignment_allowed",
+            delivery_id=delivery.get("id"),
+            reason="No escrow was held - cancelled before rider accepted"
+        )
+
+def _validate_state_transition_old(
     current_status: str, 
     new_status: str,
     delivery: Optional[dict] = None

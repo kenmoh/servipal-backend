@@ -17,6 +17,7 @@ class DeliveryStatus(str, Enum):
     DELIVERED = "DELIVERED"
     COMPLETED = "COMPLETED"
     CANCELLED = "CANCELLED"
+    RETURNED = "RETURNED"
 
 
 # class DeliveryStatus(str, Enum):
