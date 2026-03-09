@@ -174,7 +174,7 @@ async def verify_otp(otp: str, supabase: AsyncClient, user_id: str) -> bool:
         )
 
     # Check OTP match
-    if record.get("otp") != otp:
+    if str(record.get("otp")) != str(otp):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid OTP. Please try again."
