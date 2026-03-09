@@ -84,7 +84,7 @@ def normalize_nigerian_phone(phone: str) -> str:
     # Otherwise return as is
     return phone
 
-async def send_otp(name: str, email: EmailStr, phone: str, supabase: AsyncClient, user_id: str) -> str:
+async def send_otp(name: str, email: EmailStr, phone: str, supabase: AsyncClient, user_id: str) -> dict:
     """Send a 6-digit OTP"""
     # Normalize phone number to 234XXXXXXXXXX format
     phone = normalize_nigerian_phone(phone)
@@ -140,6 +140,10 @@ async def send_otp(name: str, email: EmailStr, phone: str, supabase: AsyncClient
             "otp": otp,
             "expires_at": expiry
         }).execute()
+
+        logger.info("otp_sent",  phone=phone, user_id=user_id)
+
+        return {"status": data.get("status"), "message": f"OTP sent to {phone}"}
 
 
 async def verify_otp(otp: str, supabase: AsyncClient, user_id: str) -> bool:

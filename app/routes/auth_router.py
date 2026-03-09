@@ -15,6 +15,10 @@ from app.utils.utils import send_otp, verify_otp
 class OTPRequest(BaseModel):
     otp: int
 
+class OPTResponse(BaseModel):
+    message: str
+    status:str
+
 router = APIRouter(prefix="/api/v1/auth", tags=["Authentication"])
 
 
@@ -100,7 +104,7 @@ async def change_password(
 async def reques_otp(
     current_user: dict = Depends(auth.get_current_profile),
     supabase: AsyncClient = Depends(get_supabase_client),
-) -> str:
+) -> OPTResponse:
     
     phone_number = current_user.get("phone_number")
     email = current_user.get("email")
