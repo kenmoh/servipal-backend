@@ -146,7 +146,7 @@ async def send_otp(name: str, email: EmailStr, phone: str, supabase: AsyncClient
         return {"status": data.get("status"), "message": f"OTP sent to {phone}"}
 
 
-async def verify_otp(otp: str, supabase: AsyncClient, user_id: str) -> bool:
+async def verify_otp(otp: str, supabase: AsyncClient, user_id: str) -> dict:
     """Verify a 6-digit OTP"""
     
     data = await supabase.table("otp").select("otp, expires_at, phone_verified").eq("user_id", user_id).execute()
@@ -194,5 +194,10 @@ async def verify_otp(otp: str, supabase: AsyncClient, user_id: str) -> bool:
     }).eq("id", user_id).execute()
 
     logger.info("phone_verified", user_id=user_id)
-    return True
+    return {
+
+        "message": "Account verified",
+        "phone_verified": True,
+        "account_status": 'ACTIVE'
+    }
 
