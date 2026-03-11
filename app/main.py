@@ -207,7 +207,7 @@ async def get_banks():
 
     return await get_all_banks()
 
-@app.get("/api/v1/banks/resolve", tags=["Banks"])
+@app.post("/api/v1/banks/resolve", tags=["Banks"])
 async def get_banks(data: AccountDetails,)-> AccountDetailResponse:
     """Get list of all supported bank(Nigeria)"""
 
