@@ -190,9 +190,8 @@ async def verify_transaction_tx_ref(tx_ref: str):
         headers = {"Authorization": f"Bearer {settings.FLW_SECRET_KEY}"}
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.get(
-                f"{flutterwave_base_url}/transactions/{tx_ref}/verify",
-                # f"{flutterwave_base_url}/transactions/verify_by_reference?tx_ref={tx_ref}",
-                headers=headers,
+                f"{settings.FLUTTERWAVE_BASE_URL}/transactions/verify_by_reference?tx_ref={tx_ref}", headers=headers
+                
             )
             response_data = response.json()
             return response_data

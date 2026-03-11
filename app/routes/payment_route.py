@@ -84,6 +84,7 @@ async def flutterwave_webhook(
     payment_status = data.get("status")
     paid_amount = data.get('amount')
     tx_ref = data.get('tx_ref')
+    tx_id = data.get('id')
 
     logger.info(
         event="flutterwave_webhook_received",
@@ -92,6 +93,7 @@ async def flutterwave_webhook(
         tx_ref=tx_ref,
         amount=paid_amount,
         flw_ref=flw_ref,
+        id=id,
         payment_type=payment_type,
     )
 
@@ -171,6 +173,7 @@ async def flutterwave_webhook(
                     "paid_amount": str(paid_amount),
                     "flw_ref": str(flw_ref),
                     "payment_method": f'{payment_type.upper()}',
+                    "tx_id": tx_id
                 },
             },
         )

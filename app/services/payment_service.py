@@ -421,7 +421,7 @@ async def process_successful_food_payment(
     # # Get pending data
     # pending_key = f"pending_food_{tx_ref}"
     # pending = await get_pending(pending_key)
-    if payment_method == "CARD" or payment_method == 'BANK_TRANSFER':
+    if payment_method in ['CARD','BANK_TRANSFER']:
         verified = await verify_transaction_tx_ref(tx_ref)
         if not verified or verified.get("status") != "success":
             logger.error("food_payment_verification_failed", tx_ref=tx_ref)

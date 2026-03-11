@@ -26,7 +26,7 @@ from app.routes import (
     charge_mgr_routes
 )
 from app.config.logging import logger
-from app.utils.payment import get_all_banks, resolve_account_details
+from app.utils.payment import get_all_banks, resolve_account_details, verify_transaction_tx_ref
 from app.schemas.bank_schema import AccountDetailResponse, AccountDetails, BankSchema
 from app.config.config import settings, sync_redis_client
 import logfire
@@ -213,6 +213,22 @@ async def resolve_bank(data: AccountDetails,)-> AccountDetailResponse:
 
     return await resolve_account_details(data)
 
+@app.get("/test/verify")
+async def test_verify_transaction():
+    """Test endpoint to verify a transaction"""
+    
+    # Test with tx_ref
+    result_tx_ref = await verify_transaction_tx_ref('DELIVERY-1B09C45993FB44F8A9E961A280BBEB0F')
+    
+    # Also test with flw_ref if you have it
+    # result_flw_ref = await verify_transaction_flw_ref("FLW-MOCK-7e9875d2e4361a3c39614470a5e56520")
+    
+    return {
+        # "tx_ref": tx_ref,
+        "verification_by_tx_ref": result_tx_ref,
+        # "verification_by_flw_ref": result_flw_ref,
+    }
+
 
 # Include Routers
 app.include_router(auth_router.router, include_in_schema=False)
@@ -236,5 +252,4 @@ app.include_router(dispute_mgt_admin_routes.router)
 app.include_router(laundry_order_mgt_admin_routes.router)
 app.include_router(product_order_mgt_admin_routes.router)
 app.include_router(restaurant_order_mgt_admin_routes.router)
-
 
