@@ -35,16 +35,33 @@ async def process_successful_delivery_payment(
     payment_method: Literal["CARD", "WALLET", "BANK_TRANSFER"],
     pending_data: dict = None,
 ):
-    logger.info("processing_delivery_payment", tx_ref=tx_ref, paid_amount=paid_amount)
+    logger.info("processing_delivery_payment", tx_ref=tx_ref, paid_amount=paid_amount, payment_method=payment_method)
 
-    # 1. Verify — CARD only
-    if payment_method == "CARD" or payment_method == 'BANK_TRANSFER':
+    # 1. Verify — CARD and BANK_TRANSFER
+    if payment_method in ["CARD", "BANK_TRANSFER"]:
+        logger.info("verifying_transaction", tx_ref=tx_ref, payment_method=payment_method)
+        
         verified = await verify_transaction_tx_ref(tx_ref)
+        
+        # Log verification result
+        logger.info(
+            "verification_result",
+            tx_ref=tx_ref,
+            verified_status=verified.get("status") if verified else None,
+            verified_data=verified
+        )
+        
         if not verified or verified.get("status") != "success":
-            logger.error("delivery_payment_verification_failed", tx_ref=tx_ref)
+            logger.error(
+                "delivery_payment_verification_failed", 
+                tx_ref=tx_ref,
+                verified=verified,
+                payment_method=payment_method
+            )
             return {"status": "verification_failed"}
 
-    # 2. Get pending data
+
+     # 2. Get pending data
     pending_key = f"pending_delivery_{tx_ref}"
     if payment_method == "WALLET" and pending_data:
         pending = pending_data
@@ -54,6 +71,7 @@ async def process_successful_delivery_payment(
     if not pending:
         logger.warning("delivery_payment_pending_not_found", tx_ref=tx_ref)
         return {"status": "pending_not_found"}
+
 
     sender_id = str(pending["sender_id"])
     delivery_data = pending["delivery_data"]

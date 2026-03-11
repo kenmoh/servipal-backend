@@ -153,10 +153,7 @@ async def resolve_account_details(
                 headers=headers,
             )
 
-            print('='*100)
-            print(response.json())
-            print('='*100)
-
+          
             response.raise_for_status()
 
             raw_response = response.json()
