@@ -26,8 +26,8 @@ from app.routes import (
     charge_mgr_routes
 )
 from app.config.logging import logger
-from app.utils.payment import get_all_banks
-from app.schemas.bank_schema import BankSchema
+from app.utils.payment import get_all_banks, resolve_account_details
+from app.schemas.bank_schema import AccountDetailResponse, AccountDetails, BankSchema
 from app.config.config import settings, sync_redis_client
 import logfire
 from rq import Worker
@@ -206,6 +206,12 @@ async def get_banks():
     """Get list of all supported bank(Nigeria)"""
 
     return await get_all_banks()
+
+@app.get("/api/v1/resolve", tags=["Resolve Bank Account"])
+async def get_banks(data: AccountDetails,)-> AccountDetailResponse:
+    """Get list of all supported bank(Nigeria)"""
+
+    return await resolve_account_details(data)
 
 
 # Include Routers
