@@ -75,11 +75,11 @@ CONVENTIONAL_BANK_NAMES = {
 
 
 async def get_all_banks() -> list[BankSchema]:
-    cache_key = "banks_list"
-    # cached_banks = await get_cached_data(cache_key)
+    cache_key = "supported_banks_list"
+    cached_banks = await get_cached_data(cache_key)
 
-    # if cached_banks:
-    #     return json.loads(cached_banks)
+    if cached_banks:
+        return json.loads(cached_banks)
     try:
         headers = {"Authorization": f"Bearer {settings.FLW_SECRET_KEY}"}
 
@@ -100,7 +100,7 @@ async def get_all_banks() -> list[BankSchema]:
                 ),
             )
 
-            # await cache_data(cache_key, json.dumps(sorted_banks, default=str), 86400)
+            await cache_data(cache_key, json.dumps(sorted_banks, default=str), 86400)
             return sorted_banks
 
     except httpx.HTTPStatusError as e:
