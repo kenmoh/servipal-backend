@@ -34,7 +34,7 @@ class InitBankTransfer(BaseModel):
 
 flutterwave_base_url = settings.FLUTTERWAVE_BASE_URL
 servipal_base_url = settings.API_URL
-bank_url = f"{flutterwave_base_url}/banks/NG"
+bank_url = f"{flutterwave_base_url}/banks/NG?include_provider_type=1"
 
 
 async def get_all_banks() -> list[BankSchema]:

@@ -36,7 +36,7 @@ async def upload_to_supabase_storage(
                 detail="Only JPG, PNG, WEBP images allowed",
             )
 
-        if file.size and file.size > 8 * 1024 * 1024:  # 10MB limit
+        if file.size and file.size > 8 * 1024 * 1024:  # 8 MB limit
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="File too large. Max 8MB",
@@ -51,7 +51,7 @@ async def upload_to_supabase_storage(
         file_path = f"{folder}/{unique_filename}" if folder else unique_filename
 
         # 4. Upload to Supabase Storage
-        upload_resp = await supabase.storage.from_(bucket).upload(
+        await supabase.storage.from_(bucket).upload(
             path=file_path,
             file=contents,
             file_options={"content-type": file.content_type, "upsert": False},

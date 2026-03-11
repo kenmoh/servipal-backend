@@ -120,7 +120,6 @@ async def reques_otp(
     return await send_otp(name=name, email=email, phone=phone_number, supabase=supabase, user_id=current_user.get("id"))
 
 
-
 @router.post("/verify-otp", status_code=status.HTTP_200_OK)
 async def confirm_phone_number(
     data: OTPRequest,
