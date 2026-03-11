@@ -36,35 +36,43 @@ flutterwave_base_url = settings.FLUTTERWAVE_BASE_URL
 servipal_base_url = settings.API_URL
 bank_url = f"{flutterwave_base_url}/banks/NG?include_provider_type=1"
 
-CONVENTIONAL_BANK_CODES = {
-    "044",    
-    "050",   
-    "070",   
-    "011",   
-    "214",   
-    "058",    
-    "301",    
-    "082",   
-    "076",    
-    "221",   
-    "232",    
-    "032",   
-    "033",   
-    "215",    
-    "035",   
-    "057",   
-    "101",    
-    "000030",
-    "000029", 
-    "000031", 
-    "000034", 
-    "103",    
-    "000025", 
-    "068",    
-    "100", 
-    "044"   
-    "000036", 
+CONVENTIONAL_BANK_NAMES = {
+    "Access Bank",
+    "Ecobank Plc",
+    "Fidelity Bank",
+    "First Bank of Nigeria",
+    "First City Monument Bank",
+    "GTBank Plc",
+    "JAIZ Bank",
+    "Keystone Bank",
+    "Polaris Bank",
+    "Stanbic IBTC Bank",
+    "Sterling Bank",
+    "Union Bank",
+    "United Bank for Africa",
+    "Unity Bank",
+    "Wema Bank",
+    "Zenith Bank",
+    "ProvidusBank PLC",
+    "Parallex Bank",
+    "Lotus Bank",
+    "PremiumTrust Bank",
+    "SIGNATURE BANK",
+    "Globus Bank",
+    "Titan Trust Bank",
+    "Standard Chartered Bank",
+    "SunTrust Bank",
+    "Optimus Bank",
+    # Digital banks
+    "Opay",
+    "Moniepoint Microfinance Bank",
+    "One Finance",
+    "PALMPAY",
+    "Kuda",
+    "VFD Micro Finance Bank",
 }
+
+
 
 async def get_all_banks() -> list[BankSchema]:
     cache_key = "banks_list"
@@ -79,11 +87,16 @@ async def get_all_banks() -> list[BankSchema]:
             response = await client.get(bank_url, headers=headers)
             banks = response.json()["data"]
 
+            supported_banks = [
+                bank for bank in banks
+                if bank["name"].strip() in CONVENTIONAL_BANK_NAMES
+            ]
+
             sorted_banks = sorted(
-                banks,
+                supported_banks,
                 key=lambda bank: (
-                    0 if bank["code"] in CONVENTIONAL_BANK_CODES else 1, 
-                    bank["name"],
+                    0 if bank["name"].strip() in CONVENTIONAL_BANK_NAMES else 1,
+                    bank["name"].strip(),
                 ),
             )
 
