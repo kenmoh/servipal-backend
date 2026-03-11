@@ -78,8 +78,8 @@ async def get_all_banks() -> list[BankSchema]:
     cache_key = "banks_list"
     cached_banks = await get_cached_data(cache_key)
 
-    if cached_banks:
-        return json.loads(cached_banks)
+    # if cached_banks:
+    #     return json.loads(cached_banks)
     try:
         headers = {"Authorization": f"Bearer {settings.FLW_SECRET_KEY}"}
 
@@ -100,7 +100,7 @@ async def get_all_banks() -> list[BankSchema]:
                 ),
             )
 
-            await cache_data(cache_key, json.dumps(sorted_banks, default=str), 86400)
+            # await cache_data(cache_key, json.dumps(sorted_banks, default=str), 86400)
             return sorted_banks
 
     except httpx.HTTPStatusError as e:
@@ -175,7 +175,7 @@ async def resolve_account_details(
         "Content-Type": "application/json",
     }
 
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(timeout=30.0) as client:
         try:
             response = await client.post(
                 f"{flutterwave_base_url}/accounts/resolve",
@@ -183,30 +183,40 @@ async def resolve_account_details(
                 headers=headers,
             )
 
+            print('='*100)
+            print(response.json())
+            print('='*100)
+
             response.raise_for_status()
 
-            # Get the raw response
             raw_response = response.json()
 
-            # Extract and flatten the required fields
             if raw_response.get("status") == "success" and "data" in raw_response:
                 data = raw_response["data"]
-
-                formatted_response = {
+                return {
                     "account_number": data["account_number"],
                     "account_name": data["account_name"],
                 }
-                return formatted_response
 
-        except httpx.HTTPStatusError as e:
-            logger.error(
-                f"Error response from payment gateway: {e.response.status_code} - {e.response.text}"
+        except httpx.TimeoutException:
+            raise HTTPException(
+                status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+                detail="Payment gateway timed out. Please try again.",
             )
-            raise
+        except httpx.HTTPStatusError as e:
+            logger.error(f"Error response from payment gateway: {e.response.status_code} - {e.response.text}")
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="Payment gateway error. Please try again.",
+            )
         except httpx.RequestError as e:
             logger.error(f"Network error occurred: {str(e)}")
-            raise
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Unable to reach payment gateway. Please try again.",
+            )
 
+    
 
 async def verify_transaction_tx_ref(tx_ref: str):
     try:
