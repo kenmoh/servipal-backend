@@ -69,13 +69,12 @@ async def process_payment(
             detail="Unauthorized",
         )
 
-    logger.info("=" * 100)
-    logger.info("Payment processing webhook received", payload=payload.model_dump())
-    logger.info("Payload", payload=payload)
-    logger.info("=" * 100)
-
-    # 2. Only process INSERT events
+     # 2. Only process INSERT events
     if payload.type != "INSERT":
+        logger('*'*100)
+        logger.info('Payload', payload)
+        logger.info("process_payment_event_not_insert", event_type=payload.type)
+        logger('*'*100)
         return {"status": "ignored", "reason": f"Event type {payload.type} not handled"}
 
     # 3. Extract message directly from record

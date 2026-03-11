@@ -85,14 +85,6 @@ async def flutterwave_webhook(
     paid_amount = data.get('amount')
     tx_ref = data.get('tx_ref')
 
-    logger.info('='*100)
-    print('FLW_REF', flw_ref)
-    print('payment_type', payment_type)
-    print('payment_status', payment_status)
-    print('paid_amount', paid_amount)
-    print('tx_ref', tx_ref)
-    logger.info('='*100)
-
     logger.info(
         event="flutterwave_webhook_received",
         webhook_event=webhook_event,
