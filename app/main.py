@@ -201,13 +201,13 @@ def favicon():
     return RedirectResponse(url=FAVICON_URL)
 
 
-@app.get("/api/v1/banks", response_model=list[BankSchema], tags=["Get Banks"])
+@app.get("/api/v1/banks", response_model=list[BankSchema], tags=["Banks"])
 async def get_banks():
     """Get list of all supported bank(Nigeria)"""
 
     return await get_all_banks()
 
-@app.get("/api/v1/resolve", tags=["Resolve Bank Account"])
+@app.get("/api/v1/banks/resolve", tags=["Banks"])
 async def get_banks(data: AccountDetails,)-> AccountDetailResponse:
     """Get list of all supported bank(Nigeria)"""
 
