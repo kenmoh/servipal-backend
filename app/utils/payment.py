@@ -36,6 +36,11 @@ flutterwave_base_url = settings.FLUTTERWAVE_BASE_URL
 servipal_base_url = settings.API_URL
 bank_url = f"{flutterwave_base_url}/banks/NG?include_provider_type=1"
 
+CONVENTIONAL_BANK_CODES = {
+    "044", "050", "084", "070", "011", "214", "058", "301", "082", "014",
+    "076", "039", "232", "032", "033", "215", "035", "057", "101", "104",
+    "303", "105", "106", "103", "102", "067", "107", "068", "100"
+}
 
 async def get_all_banks() -> list[BankSchema]:
     cache_key = "banks_list"
@@ -50,7 +55,13 @@ async def get_all_banks() -> list[BankSchema]:
             response = await client.get(bank_url, headers=headers)
             banks = response.json()["data"]
 
-            sorted_banks = sorted(banks, key=lambda bank: bank["name"])
+            sorted_banks = sorted(
+                banks,
+                key=lambda bank: (
+                    0 if bank["code"] in CONVENTIONAL_BANK_CODES else 1, 
+                    bank["name"],
+                ),
+            )
 
             await cache_data(cache_key, json.dumps(sorted_banks, default=str), 86400)
             return sorted_banks
@@ -65,6 +76,36 @@ async def get_all_banks() -> list[BankSchema]:
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to get banks: {str(e)}",
         )
+
+
+# async def get_all_banks() -> list[BankSchema]:
+#     cache_key = "banks_list"
+#     cached_banks = await get_cached_data(cache_key)
+
+#     if cached_banks:
+#         return json.loads(cached_banks)
+#     try:
+#         headers = {"Authorization": f"Bearer {settings.FLW_SECRET_KEY}"}
+
+#         async with httpx.AsyncClient(timeout=30.0) as client:
+#             response = await client.get(bank_url, headers=headers)
+#             banks = response.json()["data"]
+
+#             sorted_banks = sorted(banks, key=lambda bank: bank["name"])
+
+#             await cache_data(cache_key, json.dumps(sorted_banks, default=str), 86400)
+#             return sorted_banks
+
+#     except httpx.HTTPStatusError as e:
+#         raise HTTPException(
+#             status_code=status.HTTP_502_BAD_GATEWAY,
+#             detail=f"Failed to get banks: {str(e)}",
+#         )
+#     except Exception as e:
+#         raise HTTPException(
+#             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+#             detail=f"Failed to get banks: {str(e)}",
+#         )
 
 
 async def resolve_account_details(

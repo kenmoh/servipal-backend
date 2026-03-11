@@ -13,11 +13,6 @@ if __name__ == "__main__":
     asyncio.run(send_one_time_password())
 
 """
-{"tx_ref": "DELIVERY-FCCECAC6C9AE4C338456D341E418C555", 
-"error": "{'message': 'Cancellation failed: new row for relation \"delivery_orders\" violates check constraint \"delivery_orders_cancelled_by_check\"', 'code': 'P0001', 'hint': None, 'details': None}", "exc_info": true, "event": "update_delivery_status_failed", 
-"level": "error", 
-"timestamp": "2026-03-08T08:52:35.947604Z"}
-
 
 
 CBN Code	Bank Name
