@@ -52,7 +52,6 @@ async def list_delivery_orders(
         ),
     )
 
-
 async def get_delivery_order(
     supabase: AsyncClient, order_id: UUID
 ) -> DeliveryOrderDetail:
