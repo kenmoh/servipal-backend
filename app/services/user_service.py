@@ -114,21 +114,20 @@ async def create_user_account(
 # ───────────────────────────────────────────────
 # 2. Login
 # ───────────────────────────────────────────────
+ALLOWED_USER_TYPES = {"ADMIN", "MODERATOR", "SUPER_USER"}
+
 async def login_user(
     data: LoginRequest, supabase: AsyncClient, request: Optional[Request] = None
 ) -> TokenResponse:
     logger.info("login_attempt", email=data.email)
 
-    ALLOWED_USER_TYPES = {"ADMIN", "MODERATOR", "SUPER_USER"}
-
-    # Check for too many failed attempts
     await check_login_attempts(data.email, redis_client)
 
     try:
         credentials = {"password": data.password, "email": data.email}
         session = await supabase.auth.sign_in_with_password(credentials)
 
-        # Check user_type before proceeding
+        # Check user_type
         user_type = (session.user.user_metadata or {}).get("user_type")
         if user_type not in ALLOWED_USER_TYPES:
             logger.warning(
@@ -137,11 +136,8 @@ async def login_user(
                 user_id=session.user.id,
                 user_type=user_type,
             )
-            # Sign them back out so the session isn't left open
             await supabase.auth.sign_out()
-            raise HTTPException(
-                status_code=403, detail="Access denied. Insufficient permissions."
-            )
+            raise HTTPException(status_code=403, detail="Access denied. Insufficient permissions.")
 
         profile_resp = (
             await supabase.table("profiles")
@@ -171,15 +167,17 @@ async def login_user(
         await reset_login_attempts(data.email, redis_client)
 
         logger.info("login_success", user_id=session.user.id, email=data.email)
-        return TokenResponse(
-            access_token=session.session.access_token,
-            refresh_token=session.session.refresh_token,
-            expires_in=session.session.expires_in,
-            user=user_profile,
-        )
+
+        # Return tokens separately so the router can set cookies
+        return {
+            "access_token": session.session.access_token,
+            "refresh_token": session.session.refresh_token,
+            "expires_in": session.session.expires_in,
+            "user": user_profile,
+        }
 
     except HTTPException:
-        raise  # re-raise HTTPExceptions without recording a failed login attempt
+        raise
     except Exception as e:
         logger.warning("login_failed", email=data.email, error=str(e))
         await record_failed_attempt(data.email, redis_client)

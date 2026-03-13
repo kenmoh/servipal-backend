@@ -1,10 +1,11 @@
 from os import name
 
-from fastapi import APIRouter, Depends, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi.responses import Response
 from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel, Field
 from app.services import user_service
-from app.schemas.user_schemas import UserCreate, LoginRequest, TokenResponse
+from app.schemas.user_schemas import UserCreate, LoginRequest, TokenResponse, UserProfileResponse
 from app.database.supabase import get_supabase_client, get_supabase_admin_client
 from app.config.logging import logger
 from app.dependencies import auth
@@ -49,22 +50,94 @@ async def signup(
     return await user_service.create_user_account(user_data, supabase, request)
 
 
-@router.post("/login", response_model=TokenResponse)
+@router.post("/login", response_model=UserProfileResponse)
 async def login(
-    login_data: LoginRequest, request: Request, supabase=Depends(get_supabase_client)
+    login_data: LoginRequest,
+    request: Request,
+    response: Response,                          # inject Response to set cookies
+    supabase=Depends(get_supabase_client),
 ):
-    """
-    Authenticate a user and return access token.
+    result = await user_service.login_user(login_data, supabase, request)
 
-    Args:
-        login_data (LoginRequest): Email and password.
+    # is_prod = settings.ENVIRONMENT == "production"
 
-    Returns:
-        TokenResponse: Access token and user profile information.
-    """
-    logger.info("login_endpoint_called", email=login_data.email)
-    return await user_service.login_user(login_data, supabase, request)
+    response.set_cookie(
+        key="access_token",
+        value=result["access_token"],
+        httponly=True,                           
+        secure=True,                         
+        samesite="strict",                       
+        max_age=result["expires_in"],
+        path="/",
+    )
+    response.set_cookie(
+        key="refresh_token",
+        value=result["refresh_token"],
+        httponly=True,
+        secure=True,
+        samesite="strict",
+        max_age=60 * 60 * 24 * 12,              
+        path="/auth/refresh",                    
+    )
 
+    return result["user"]
+
+
+# @router.post("/login", response_model=TokenResponse)
+# async def login(
+#     login_data: LoginRequest, request: Request, supabase=Depends(get_supabase_client)
+# ):
+#     """
+#     Authenticate a user and return access token.
+
+#     Args:
+#         login_data (LoginRequest): Email and password.
+
+#     Returns:
+#         TokenResponse: Access token and user profile information.
+#     """
+#     logger.info("login_endpoint_called", email=login_data.email)
+#     return await user_service.login_user(login_data, supabase, request)
+
+
+@router.post("/logout")
+async def logout(response: Response, supabase=Depends(get_supabase_client)):
+    await supabase.auth.sign_out()
+    response.delete_cookie("access_token", path="/")
+    response.delete_cookie("refresh_token", path="/auth/refresh")
+    return {"message": "Logged out successfully"}
+
+
+@router.post("/refresh", response_model=UserProfileResponse)
+async def refresh(
+    request: Request,
+    response: Response,
+    supabase=Depends(get_supabase_client),
+):
+    refresh_token = request.cookies.get("refresh_token")
+    if not refresh_token:
+        raise HTTPException(status_code=401, detail="No refresh token provided.")
+
+    try:
+        session = await supabase.auth.refresh_session(refresh_token)
+    except Exception:
+        response.delete_cookie("access_token")
+        response.delete_cookie("refresh_token")
+        raise HTTPException(status_code=401, detail="Invalid or expired refresh token.")
+
+    # is_prod = settings.ENVIRONMENT == "production"
+
+    response.set_cookie(
+        key="access_token",
+        value=session.session.access_token,
+        httponly=True,
+        secure=True,
+        samesite="strict",
+        max_age=session.session.expires_in,
+        path="/",
+    )
+
+    return session.user
 
 @router.post("/token", response_model=TokenResponse, include_in_schema=False)
 async def login_for_access_token(

@@ -20,7 +20,7 @@ async def list_delivery_orders(
     page: int = 1,
     page_size: int = 20,
 ) -> DeliveryOrderListResponse:
-    result = supabase.rpc(
+    result = await supabase.rpc(
         "admin_list_delivery_orders",
         {
             "p_delivery_status": filters.delivery_status,
@@ -57,7 +57,7 @@ async def list_delivery_orders(
 async def get_delivery_order(
     supabase: AsyncClient, order_id: UUID
 ) -> DeliveryOrderDetail:
-    result = supabase.rpc(
+    result = await supabase.rpc(
         "admin_get_delivery_order_detail",
         {"p_order_id": str(order_id)},
     ).execute()
