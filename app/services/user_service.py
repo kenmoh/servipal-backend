@@ -119,13 +119,29 @@ async def login_user(
 ) -> TokenResponse:
     logger.info("login_attempt", email=data.email)
 
+    ALLOWED_USER_TYPES = {"ADMIN", "MODERATOR", "SUPER_USER"}
+
     # Check for too many failed attempts
     await check_login_attempts(data.email, redis_client)
 
     try:
-        # Try phone first, then email
         credentials = {"password": data.password, "email": data.email}
         session = await supabase.auth.sign_in_with_password(credentials)
+
+        # Check user_type before proceeding
+        user_type = (session.user.user_metadata or {}).get("user_type")
+        if user_type not in ALLOWED_USER_TYPES:
+            logger.warning(
+                "login_denied_insufficient_role",
+                email=data.email,
+                user_id=session.user.id,
+                user_type=user_type,
+            )
+            # Sign them back out so the session isn't left open
+            await supabase.auth.sign_out()
+            raise HTTPException(
+                status_code=403, detail="Access denied. Insufficient permissions."
+            )
 
         profile_resp = (
             await supabase.table("profiles")
@@ -135,7 +151,6 @@ async def login_user(
             .execute()
         )
 
-        # Audit log
         await log_audit_event(
             supabase,
             entity_type="USER",
@@ -153,7 +168,6 @@ async def login_user(
             logger.error("profile_parsing_error", data=profile_resp.data, error=str(e))
             raise HTTPException(status_code=500, detail="Profile data parsing error")
 
-        # Reset login attempts on successful login
         await reset_login_attempts(data.email, redis_client)
 
         logger.info("login_success", user_id=session.user.id, email=data.email)
@@ -164,13 +178,12 @@ async def login_user(
             user=user_profile,
         )
 
+    except HTTPException:
+        raise  # re-raise HTTPExceptions without recording a failed login attempt
     except Exception as e:
         logger.warning("login_failed", email=data.email, error=str(e))
-        # Record failed attempt
         await record_failed_attempt(data.email, redis_client)
-        raise HTTPException(status_code=401, detail=f"Invalid credentials.")
-
-
+        raise HTTPException(status_code=401, detail="Invalid credentials.")
 # ───────────────────────────────────────────────
 # 3. Create Rider (by Dispatch only)
 # ───────────────────────────────────────────────
