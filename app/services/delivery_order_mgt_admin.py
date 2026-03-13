@@ -25,7 +25,6 @@ async def list_delivery_orders(
         {
             "p_delivery_status": filters.delivery_status,
             "p_payment_status": filters.payment_status,
-            "p_escrow_status": filters.escrow_status,
             "p_delivery_type": filters.delivery_type,
             "p_rider_id": str(filters.rider_id) if filters.rider_id else None,
             "p_dispatch_id": str(filters.dispatch_id) if filters.dispatch_id else None,
