@@ -3,7 +3,7 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, Query
 from supabase import AsyncClient
 from app.database.supabase import get_supabase_client
-from app.dependencies.auth import require_admin
+from app.dependencies.auth import require_admin, get_current_user
 from app.schemas.delivery_order_mgt_admin_schema import (
     DeliveryOrderListResponse,
     DeliveryOrderDetail,
@@ -39,6 +39,7 @@ async def list_orders(
     ),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
+    current_user = Depends(get_current_user),
     supabase: AsyncClient = Depends(get_supabase_client),
     _actor: dict = Depends(require_admin),
 ):

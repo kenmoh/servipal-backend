@@ -127,7 +127,7 @@ async def list_wallets(
 
 
 @router.get(
-    "/{user_id}/wallet",
+    "/{user_id}",
     response_model=WalletWithTransactions,
     summary="Get a specific user wallet with transactions (any admin role)",
 )
