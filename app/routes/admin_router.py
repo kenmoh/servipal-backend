@@ -19,12 +19,12 @@ from app.schemas.admin_schemas import (
 from app.schemas.user_schemas import UserType
 from app.services import admin_service
 
-router = APIRouter(prefix="/users", tags=["Users"])
+router = APIRouter(prefix="/api/v1/admin", tags=["Admin"])
 
 
 # ── List all users (any admin role) ──────────────────────────────────────────
 @router.get(
-    "",
+    "/users",
     response_model=ProfileListResponse,
     summary="List users with optional filters",
 )
@@ -52,7 +52,7 @@ async def list_users(
 
 # ── View user detail (any admin role) ────────────────────────────────────────
 @router.get(
-    "/{user_id}",
+    "/users/{user_id}",
     response_model=ProfileDetail,
     summary="Get full profile detail for any user",
 )
@@ -66,7 +66,7 @@ async def get_user(
 
 # ── Block user (ADMIN or SUPER_ADMIN) ────────────────────────────────────────
 @router.patch(
-    "/{user_id}/block",
+    "/users/{user_id}/block",
     response_model=ProfileDetail,
     summary="Block a user (ADMIN or SUPER_ADMIN)",
 )
@@ -127,7 +127,7 @@ async def list_wallets(
 
 
 @router.get(
-    "/{user_id}",
+    "/wallets/{user_id}",
     response_model=WalletWithTransactions,
     summary="Get a specific user wallet with transactions (any admin role)",
 )
