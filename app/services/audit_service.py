@@ -40,7 +40,7 @@ async def create_audit_log(
         if key in data and data[key] is not None:
             data[key] = str(data[key])
 
-    result = supabase.table(AUDIT_TABLE).insert(data).execute()
+    result = await supabase.table(AUDIT_TABLE).insert(data).execute()
     return AuditLogEntry(**result.data[0])
 
 
@@ -96,7 +96,7 @@ async def list_audit_logs(
         query = query.lte("created_at", filters.date_to.isoformat())
 
     offset = (page - 1) * page_size
-    result = (
+    result = await (
         query.order("created_at", desc=True)
         .range(offset, offset + page_size - 1)
         .execute()

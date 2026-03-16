@@ -28,7 +28,7 @@ class ChargesCreate(ChargesBase):
 
 
 class ChargesUpdate(ChargesBase):
-    pass  # all fields optional — patch only what's sent
+    pass  
 
 
 class ChargesResponse(ChargesBase):

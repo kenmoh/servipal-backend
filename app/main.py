@@ -12,6 +12,7 @@ from app.routes import (
     laundry_route,
     auth_router,
     wallet_route,
+    analytics_route,
     admin_router,
     product_route,
     dispute_route,
@@ -225,7 +226,7 @@ app.include_router(food_router.router)
 app.include_router(laundry_route.router)
 app.include_router(product_route.router)
 # app.include_router(dispute_route.router)
-# app.include_router(escrow_route.router)
+app.include_router(analyttics_route.router)
 app.include_router(charge_mgr_routes.router, include_in_schema=False)
 app.include_router(admin_router.router, include_in_schema=False)
 app.include_router(order_create.router, include_in_schema=False)
