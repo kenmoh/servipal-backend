@@ -13,7 +13,7 @@ async def list_charges(supabase: AsyncClient) -> list[ChargesResponse]:
 
 
 async def get_charges(supabase: AsyncClient, charges_id: UUID) -> ChargesResponse:
-    result = (
+    result = await (
         supabase.table(TABLE)
         .select("*")
         .eq("id", str(charges_id))
@@ -31,7 +31,7 @@ async def create_charges(
     actor_id: UUID,
 ) -> ChargesResponse:
     data = payload.model_dump(mode="json", exclude_none=True)
-    result = supabase.table(TABLE).insert(data).execute()
+    result = await supabase.table(TABLE).insert(data).execute()
     new_row = result.data[0]
 
     await log_admin_action(
@@ -57,7 +57,7 @@ async def update_charges(
     if not data:
         return old  # nothing to update
 
-    result = (
+    result = await (
         supabase.table(TABLE)
         .update(data)
         .eq("id", str(charges_id))

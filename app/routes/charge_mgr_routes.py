@@ -24,18 +24,6 @@ async def get_all_charges(
     return await list_charges(supabase)
 
 
-@router.get(
-    "/{charges_id}",
-    response_model=ChargesResponse,
-    summary="Get a specific charges config (SUPER_ADMIN only)",
-)
-async def get_one_charges(
-    charges_id: UUID,
-    supabase: AsyncClient = Depends(get_supabase_admin_client),
-    actor: dict = Depends(require_super_admin),
-):
-    return await get_charges(supabase, charges_id)
-
 
 @router.post(
     "",
@@ -65,14 +53,3 @@ async def update_existing_charges(
     return await update_charges(supabase, charges_id, body, UUID(actor["sub"]))
 
 
-@router.delete(
-    "/{charges_id}",
-    status_code=status.HTTP_204_NO_CONTENT,
-    summary="Delete charges config (SUPER_ADMIN only)",
-)
-async def delete_existing_charges(
-    charges_id: UUID,
-    supabase: AsyncClient = Depends(get_supabase_admin_client),
-    actor: dict = Depends(require_super_admin),
-):
-    await delete_charges(supabase, charges_id, UUID(actor["sub"]))
