@@ -62,9 +62,9 @@ class DeliveryOrderDetail(DeliveryOrderSummary):
     additional_info: str | None = None
     package_image_url: str | None = None
     image_url: str | None = None
-    pickup_coordinates: dict[str, Any] | None = None
-    dropoff_coordinates: dict[str, Any] | None = None
-    last_known_rider_coordinates: dict[str, Any] | None = None
+    pickup_coordinates: List = []
+    dropoff_coordinates: List = []
+    last_known_rider_coordinates: List = []
     order_type: Any | None = None
     flw_ref: str | None = None
     cancel_reason: str | None = None
