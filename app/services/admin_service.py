@@ -33,7 +33,7 @@ def _row_to_detail(row: dict) -> ProfileDetail:
 
 async def _fetch_profile_or_404(supabase: AsyncClient, user_id: UUID) -> dict:
     result = (
-        supabase.table(PROFILES_TABLE)
+        await supabase.table(PROFILES_TABLE)
         .select("*")
         .eq("id", str(user_id))
         .single()
@@ -59,7 +59,7 @@ async def list_users(
     page: int = 1,
     page_size: int = 25,
 ) -> ProfileListResponse:
-    query = supabase.table(PROFILES_TABLE).select("*", count="exact")
+    query = await supabase.table(PROFILES_TABLE).select("*", count="exact")
 
     if user_type:
         query = query.eq("user_type", user_type.value)
@@ -167,7 +167,7 @@ async def create_management_user(
         )
 
     # 1. Create auth user via Supabase Admin API
-    auth_response = supabase.auth.admin.create_user(
+    auth_response = await supabase.auth.admin.create_user(
         {
             "email": payload.email,
             "password": payload.password,
