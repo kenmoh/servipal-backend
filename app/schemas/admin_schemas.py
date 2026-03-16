@@ -98,8 +98,8 @@ class ProfileDetail(ProfileSummary):
     last_delivery_date: date | None = None
     profile_image_url: str | None = None
     backdrop_image_url: str | None = None
-    opening_hour: dict[str, Any] | None = None
-    closing_hour: dict[str, Any] | None = None
+    opening_hour: str | None = None
+    closing_hour: str| None = None
     metadata: dict[str, Any] | None = None
     updated_at: datetime | None = None
 
