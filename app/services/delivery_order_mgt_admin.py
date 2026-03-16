@@ -67,6 +67,7 @@ async def get_delivery_order(
         )
 
     row = result.data[0]
+   
     sender = SenderSnippet(**row["sender"]) if row.get("sender") else None
     rider = RiderSnippet(**row["rider"]) if row.get("rider") else None
 

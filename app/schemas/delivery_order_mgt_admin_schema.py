@@ -65,7 +65,7 @@ class DeliveryOrderDetail(DeliveryOrderSummary):
     image_url: str | None = None
     pickup_coordinates: List = []
     dropoff_coordinates: List = []
-    last_known_rider_coordinates: List = []
+    last_known_rider_coordinates: List | None = []
     order_type: Any | None = None
     flw_ref: str | None = None
     cancel_reason: str | None = None
