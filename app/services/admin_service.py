@@ -75,7 +75,7 @@ async def list_users(
         )
 
     offset = (page - 1) * page_size
-    result = (
+    result = await (
         query.order("created_at", desc=True)
         .range(offset, offset + page_size - 1)
         .execute()
