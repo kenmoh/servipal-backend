@@ -219,7 +219,7 @@ async def admin_login(supabase: AsyncClient, email: str, password: str) -> dict:
     Authenticates the user against Supabase, then verifies they hold
     a management role before issuing the internal JWT.
     """
-    auth_resp = supabase.auth.sign_in_with_password(
+    auth_resp = await supabase.auth.sign_in_with_password(
         {"email": email, "password": password}
     )
     if not auth_resp.user:
@@ -263,7 +263,7 @@ async def get_wallet_with_transactions(
     Fetch a single wallet + its transactions via RPC.
     Uses admin_get_wallet_with_transactions(p_user_id).
     """
-    result = supabase.rpc(
+    result = await supabase.rpc(
         "admin_get_wallet_with_transactions",
         {"p_user_id": str(user_id)},
     ).execute()
@@ -297,7 +297,7 @@ async def list_wallets_with_transactions(
     Paginated list of wallets + their transactions via RPC.
     Uses admin_list_wallets_with_transactions(p_page, p_page_size).
     """
-    result = supabase.rpc(
+    result = await supabase.rpc(
         "admin_list_wallets_with_transactions",
         {"p_page": page, "p_page_size": page_size},
     ).execute()
