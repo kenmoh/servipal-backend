@@ -257,7 +257,7 @@ async def admin_login(supabase: AsyncClient, email: str, password: str) -> dict:
 
 
 async def get_wallet_with_transactions(
-    supabase: AsyncClient, user_id: UUID
+    supabase: AsyncClient, wallet_id : UUID
 ) -> WalletWithTransactions:
     """
     Fetch a single wallet + its transactions via RPC.
@@ -265,13 +265,13 @@ async def get_wallet_with_transactions(
     """
     result = await supabase.rpc(
         "admin_get_wallet_with_transactions",
-        {"p_user_id": str(user_id)},
+        {"p_wallet_id ": str(wallet_id)},
     ).execute()
 
     if not result.data:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Wallet not found for user {user_id}",
+            detail=f"Wallet not found",
         )
 
     row = result.data[0]
