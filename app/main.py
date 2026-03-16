@@ -215,7 +215,7 @@ async def resolve_bank(data: AccountDetails,)-> AccountDetailResponse:
 
 
 # Include Routers
-app.include_router(auth_router.router, include_in_schema=False)
+app.include_router(auth_router.router, include_in_schema=True)
 app.include_router(user_routes.router)
 app.include_router(wallet_route.router, include_in_schema=False)
 app.include_router(payment_route.router)

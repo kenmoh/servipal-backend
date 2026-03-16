@@ -21,6 +21,30 @@ from app.services import user_service
 router = APIRouter(prefix="/api/v1/users", tags=["Users"])
 
 
+@router.post("/admin", response_model=UserProfileResponse)
+async def create_admin(
+  
+    request: Request,
+    supabase: AsyncClient = Depends(get_supabase_admin_client),
+):
+    """
+    Dispatch owner creates a new admin account.
+
+    Args:
+        data (RiderCreateByDispatch): Rider details (phone, name, etc.).
+
+    Returns:
+        UserProfileResponse: The created rider's profile.
+    """
+    # logger.info(
+    #     "create_rider_requested", dispatch_id=current_user.id, rider_phone=data.phone
+    # )
+    result = await user_service.create_admin_user(
+        supabase_admin=supabase, request=request
+    )
+    # logger.info("rider_created", dispatch_id=current_user.id, rider_id=result.id)
+    return result
+
 @router.post("/riders", response_model=UserProfileResponse)
 async def create_rider(
     data: RiderCreateByDispatch,
@@ -46,6 +70,7 @@ async def create_rider(
     )
     logger.info("rider_created", dispatch_id=current_user.id, rider_id=result.id)
     return result
+
 
 
 @router.get("/me", response_model=UserProfileResponse)
