@@ -2,6 +2,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Any
 from uuid import UUID
+from typing import List
 from pydantic import BaseModel
 from app.schemas.admin_schemas import PaginationMeta
 
