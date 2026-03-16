@@ -9,7 +9,7 @@ from app.schemas.delivery_order_mgt_admin_schema import (
     DeliveryOrderFilters,
     SenderSnippet,
     RiderSnippet,
-    DispatchSnippet,
+    
 )
 from app.schemas.admin_schemas import PaginationMeta
 
