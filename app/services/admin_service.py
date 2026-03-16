@@ -59,7 +59,7 @@ async def list_users(
     page: int = 1,
     page_size: int = 25,
 ) -> ProfileListResponse:
-    query = await supabase.table(PROFILES_TABLE).select("*", count="exact")
+    query = supabase.table(PROFILES_TABLE).select("*", count="exact")
 
     if user_type:
         query = query.eq("user_type", user_type.value)
