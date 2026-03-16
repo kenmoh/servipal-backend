@@ -69,11 +69,9 @@ async def get_delivery_order(
     row = result.data[0]
     sender = SenderSnippet(**row["sender"]) if row.get("sender") else None
     rider = RiderSnippet(**row["rider"]) if row.get("rider") else None
-    dispatch = DispatchSnippet(**row["dispatch"]) if row.get("dispatch") else None
 
     return DeliveryOrderDetail(
         **{k: v for k, v in row.items() if k not in ("sender", "rider", "dispatch")},
         sender=sender,
         rider=rider,
-        dispatch=dispatch,
     )
