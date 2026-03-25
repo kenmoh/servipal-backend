@@ -47,7 +47,7 @@ class LaundryOrderSummary(BaseModel):
 class LaundryOrderDetail(LaundryOrderSummary):
     pickup_location: str | None = None
     destination: str | None = None
-    distance: Decimal = Decimal("0.00")
+    distance: str | None = None
     vendor_pickup_dropoff_charge: Decimal = Decimal("0.00")
     cancel_reason: str | None = None
     additional_info: str | None = None

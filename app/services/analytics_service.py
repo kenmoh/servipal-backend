@@ -1,4 +1,4 @@
-from app.schemas.analytic_schemas import (
+from app.schemas.analytics_schemas import (
     DashboardOverviewResponse,OrderTrendPoint, UserGrowthPoint,
     StatusBreakdownResponse, TopRider, TopVendor, ReviewAnalyticsResponse,
     TransactionAnalyticsResponse

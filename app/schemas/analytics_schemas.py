@@ -1,8 +1,11 @@
 from decimal import Decimal
 from uuid import UUID
 from pydantic import BaseModel
+from typing import Literal
 
 
+VendorOrderType = Literal['FOOD', 'LAUNDRY', 'PRODUCT']
+AnalyticsInterval = Literal['day', 'week', 'month']
 
 # ──────────────────────────────────────────────────────────────
 # 1. Dashboard Overview

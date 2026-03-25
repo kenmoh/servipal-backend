@@ -35,6 +35,7 @@ from rq import Worker
 import multiprocessing
 import sentry_sdk
 import os
+from prometheus_fastapi_instrumentator import Instrumentator
 
 if settings.SENTRY_DSN:
     sentry_sdk.init(dsn=settings.SENTRY_DSN, send_default_pii=True, enable_logs=True)
@@ -107,6 +108,8 @@ if settings.LOGFIRE_TOKEN:
     logfire.instrument_fastapi(app)
 else:
     logger.info("Logfire token not found, logfire disabled")
+
+Instrumentator().instrument(app).expose(app)
 
 FAVICON_URL = "https://mohdelivery.s3.us-east-1.amazonaws.com/favion/favicon.ico"
 
@@ -226,7 +229,7 @@ app.include_router(food_router.router)
 app.include_router(laundry_route.router)
 app.include_router(product_route.router)
 # app.include_router(dispute_route.router)
-app.include_router(analyttics_route.router)
+app.include_router(analytics_route.router)
 app.include_router(charge_mgr_routes.router, include_in_schema=False)
 app.include_router(admin_router.router, include_in_schema=False)
 app.include_router(order_create.router, include_in_schema=False)
