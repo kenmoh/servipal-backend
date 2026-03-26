@@ -148,7 +148,28 @@ async def login_for_access_token(
     """OAuth2 compatible token endpoint for Swagger UI authentication."""
     logger.info("token_endpoint_called", username=form_data.username)
     login_data = LoginRequest(email=form_data.username, password=form_data.password)
-    return await user_service.login_user(login_data, supabase, request)
+
+    result = await user_service.login_user(login_data, supabase, request)
+    
+    response.set_cookie(
+        key="access_token",
+        value=result["access_token"],
+        httponly=True,                           
+        secure=True,                         
+        samesite="strict",                       
+        max_age=result["expires_in"],
+        path="/",
+    )
+    response.set_cookie(
+        key="refresh_token",
+        value=result["refresh_token"],
+        httponly=True,
+        secure=True,
+        samesite="strict",
+        max_age=60 * 60 * 24 * 12,              
+        path="/auth/refresh",                    
+    )
+    return result["user"]
 
 
 @router.post(

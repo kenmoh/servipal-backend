@@ -253,7 +253,7 @@ class TxByType(BaseModel):
 
 
 class TxByOrderType(BaseModel):
-    order_type: Literal["FOOD", "LAUNDRY", "PACKAGE"]
+    order_type: Literal["FOOD", "LAUNDRY", "PACKAGE", "DELIVERY"]
     count: int
     volume: Decimal
 
