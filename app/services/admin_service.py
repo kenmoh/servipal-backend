@@ -339,7 +339,7 @@ async def get_wallet_with_transactions(
     """
     result = await supabase.rpc(
         "admin_get_wallet_with_transactions",
-        {"p_wallet_id ": str(wallet_id)},
+        {"p_wallet_id": str(wallet_id)},
     ).execute()
 
     if not result.data:
