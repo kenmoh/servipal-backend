@@ -141,6 +141,7 @@ async def refresh(
 
 @router.post("/token", response_model=TokenResponse, include_in_schema=False)
 async def login_for_access_token(
+    response: Response,
     form_data: OAuth2PasswordRequestForm = Depends(),
     request: Request = None,
     supabase=Depends(get_supabase_client),
