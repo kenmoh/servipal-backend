@@ -150,7 +150,7 @@ async def login_for_access_token(
     logger.info("token_endpoint_called", username=form_data.username)
     login_data = LoginRequest(email=form_data.username, password=form_data.password)
 
-    return await user_service.login_user(login_data, supabase, request)
+    result = await user_service.login_user(login_data, supabase, request)
     
     response.set_cookie(
         key="access_token",
