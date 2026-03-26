@@ -247,13 +247,13 @@ class ReviewAnalyticsResponse(BaseModel):
 # 8. Transaction Analytics
 # ──────────────────────────────────────────────────────────────
 class TxByType(BaseModel):
-    type: str
+    type: Literal["DEPOSIT", "WITHDRAWAL", "TRANSFER", "ESCROW_HOLD", "ESCROW_RELEASE", "REFUNDED", "DEBIT"]
     count: int
     volume: Decimal
 
 
 class TxByOrderType(BaseModel):
-    order_type: str
+    order_type: Literal["FOOD", "LAUNDRY", "PACKAGE"]
     count: int
     volume: Decimal
 

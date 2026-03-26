@@ -155,8 +155,8 @@ class AuditLogListResponse(AuditLogCreate):
 
 class AuditLogEntry(AuditLogCreate):
     id: UUID
-    ip_address: str
-    user_agent: str
+    ip_address: str | None = None
+    user_agent: str | None = None
     created_at: str
 
 
