@@ -114,7 +114,7 @@ async def create_user_account(
 # ───────────────────────────────────────────────
 # 2. Login
 # ───────────────────────────────────────────────
-ALLOWED_USER_TYPES = {"ADMIN", "MODERATOR", "SUPER_USER"}
+ALLOWED_USER_TYPES = {"ADMIN", "MODERATOR", "SUPER_ADMIN"}
 
 async def login_user(
     data: LoginRequest, supabase: AsyncClient, request: Optional[Request] = None
