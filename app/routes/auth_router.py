@@ -150,7 +150,7 @@ async def login_for_access_token(
     logger.info("token_endpoint_called", username=form_data.username)
     login_data = LoginRequest(email=form_data.username, password=form_data.password)
 
-    result = await user_service.login_user(login_data, supabase, request)
+    return await user_service.login_user(login_data, supabase, request)
     
     response.set_cookie(
         key="access_token",
@@ -170,7 +170,13 @@ async def login_for_access_token(
         max_age=60 * 60 * 24 * 12,              
         path="/auth/refresh",                    
     )
-    return result["user"]
+    return TokenResponse(
+        access_token=result["access_token"],
+        refresh_token=result["refresh_token"],
+        token_type="bearer",
+        user=result["user"],
+        expires_in=result["expires_in"],
+    )
 
 
 @router.post(
