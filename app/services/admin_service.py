@@ -1,8 +1,9 @@
 import math
+from typing import Optional
 from uuid import UUID
 from supabase import AsyncClient
 from fastapi import Request, HTTPException, status
-from app.schemas.user_schemas import UserType
+from app.schemas.user_schemas import LoginRequest, TokenResponse, UserProfileResponse, UserType
 from app.schemas.admin_schemas import (
     ProfileDetail,
     ProfileSummary,
@@ -14,7 +15,12 @@ from app.schemas.admin_schemas import (
     TransactionItem,
 )
 from app.schemas.admin_schemas import AccountStatus
+from app.config.config import redis_client
+from app.config.logging import logger
 from app.services.audit_service import log_admin_action
+from app.services.user_service import ALLOWED_USER_TYPES
+from app.utils.audit import log_audit_event
+from app.utils.utils import check_login_attempts, record_failed_attempt, reset_login_attempts
 
 PROFILES_TABLE = "profiles"
 MANAGEMENT_ROLES = {UserType.ADMIN, UserType.MODERATOR}
@@ -213,44 +219,111 @@ async def create_management_user(
 
 # ── Auth: admin login (via Supabase) ─────────────────────────────────────────
 
+async def admin_login(
+    data: LoginRequest, supabase: AsyncClient, request: Optional[Request] = None
+) -> TokenResponse:
+    logger.info("login_attempt", email=data.email)
 
-async def admin_login(supabase: AsyncClient, email: str, password: str) -> dict:
-    """
-    Authenticates the user against Supabase, then verifies they hold
-    a management role before issuing the internal JWT.
-    """
-    auth_resp = await supabase.auth.sign_in_with_password(
-        {"email": email, "password": password}
-    )
-    if not auth_resp.user:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid credentials"
+    await check_login_attempts(data.email, redis_client)
+
+    try:
+        credentials = {"password": data.password, "email": data.email}
+        session = await supabase.auth.sign_in_with_password(credentials)
+
+        # Check user_type
+        user_type = (session.user.user_metadata or {}).get("user_type")
+        if user_type not in ALLOWED_USER_TYPES:
+            logger.warning(
+                "login_denied_insufficient_role",
+                email=data.email,
+                user_id=session.user.id,
+                user_type=user_type,
+            )
+            await supabase.auth.sign_out()
+            raise HTTPException(status_code=403, detail="Access denied. Insufficient permissions.")
+
+        profile_resp = (
+            await supabase.table("profiles")
+            .select("*")
+            .eq("id", session.user.id)
+            .single()
+            .execute()
         )
 
-    uid = auth_resp.user.id
-    profile_result = (
-        supabase.table(PROFILES_TABLE).select("*").eq("id", str(uid)).single().execute()
-    )
-    if not profile_result.data:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Profile not found"
+        await log_audit_event(
+            supabase,
+            entity_type="USER",
+            entity_id=session.user.id,
+            action="LOGIN",
+            actor_id=session.user.id,
+            actor_type="USER",
+            notes="User logged in successfully",
+            request=request,
         )
 
-    profile = profile_result.data
-    if profile["user_type"] not in [
-        r.value for r in [UserType.ADMIN, UserType.MODERATOR, UserType.SUPER_ADMIN]
-    ]:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied: insufficient role",
-        )
+        try:
+            user_profile = UserProfileResponse(**profile_resp.data)
+        except Exception as e:
+            logger.error("profile_parsing_error", data=profile_resp.data, error=str(e))
+            raise HTTPException(status_code=500, detail="Profile data parsing error")
 
-    if profile.get("is_blocked"):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Account is blocked"
-        )
+        await reset_login_attempts(data.email, redis_client)
 
-    return profile
+        logger.info("login_success", user_id=session.user.id, email=data.email)
+
+        # Return tokens separately so the router can set cookies
+        return {
+            "access_token": session.session.access_token,
+            "refresh_token": session.session.refresh_token,
+            "expires_in": session.session.expires_in,
+            "user": user_profile,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.warning("login_failed", email=data.email, error=str(e))
+        await record_failed_attempt(data.email, redis_client)
+        raise HTTPException(status_code=401, detail="Invalid credentials.")
+
+
+# async def admin_login(supabase: AsyncClient, email: str, password: str) -> dict:
+#     """
+#     Authenticates the user against Supabase, then verifies they hold
+#     a management role before issuing the internal JWT.
+#     """
+#     auth_resp = await supabase.auth.sign_in_with_password(
+#         {"email": email, "password": password}
+#     )
+#     if not auth_resp.user:
+#         raise HTTPException(
+#             status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid credentials"
+#         )
+
+#     uid = auth_resp.user.id
+#     profile_result = (
+#         supabase.table(PROFILES_TABLE).select("*").eq("id", str(uid)).single().execute()
+#     )
+#     if not profile_result.data:
+#         raise HTTPException(
+#             status_code=status.HTTP_404_NOT_FOUND, detail="Profile not found"
+#         )
+
+#     profile = profile_result.data
+#     if profile["user_type"] not in [
+#         r.value for r in [UserType.ADMIN, UserType.MODERATOR, UserType.SUPER_ADMIN]
+#     ]:
+#         raise HTTPException(
+#             status_code=status.HTTP_403_FORBIDDEN,
+#             detail="Access denied: insufficient role",
+#         )
+
+#     if profile.get("is_blocked"):
+#         raise HTTPException(
+#             status_code=status.HTTP_403_FORBIDDEN, detail="Account is blocked"
+#         )
+
+#     return profile
 
 
 # ---------------------------- WALLET MANAGEMENT (via rpc) ----------------------------

@@ -12,7 +12,23 @@ services:
     build:
       context: .
     ports:
-      - 8000:8000
+      - 8000:8080
+
+  # prometheus:
+  #   image: prom/prometheus:latest
+  #   volumes:
+  #     - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+  #   ports:
+  #     - 9090:9090
+
+  # grafana:
+  #   image: grafana/grafana:latest
+  #   volumes:
+  #     - ./grafana/provisioning:/etc/grafana/provisioning
+  #   ports:
+  #     - 3001:3000
+  #   depends_on:
+  #     - prometheus
 
 # The commented out section below is an example of how to define a PostgreSQL
 # database that your application can use. `depends_on` tells Docker Compose to

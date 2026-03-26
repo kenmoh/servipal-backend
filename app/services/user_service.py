@@ -8,7 +8,6 @@ from app.config.logging import logger
 from app.utils.audit import log_audit_event
 from decimal import Decimal
 from app.config.config import redis_client
-from app.schemas.user_schemas import AdminUserCreate, RiderCreateByDispatch
 from app.utils.utils import (
     check_login_attempts,
     record_failed_attempt,
@@ -115,14 +114,14 @@ async def create_user_account(
 # ───────────────────────────────────────────────
 # 2. Login
 # ───────────────────────────────────────────────
-ALLOWED_USER_TYPES = {"ADMIN", "MODERATOR", "SUPER_ADMIN"}
+ALLOWED_USER_TYPES = {"ADMIN", "MODERATOR", "SUPER_USER"}
 
 async def login_user(
     data: LoginRequest, supabase: AsyncClient, request: Optional[Request] = None
 ) -> TokenResponse:
     logger.info("login_attempt", email=data.email)
 
-    # await check_login_attempts(data.email, redis_client)
+    await check_login_attempts(data.email, redis_client)
 
     try:
         credentials = {"password": data.password, "email": data.email}
@@ -165,7 +164,7 @@ async def login_user(
             logger.error("profile_parsing_error", data=profile_resp.data, error=str(e))
             raise HTTPException(status_code=500, detail="Profile data parsing error")
 
-        # await reset_login_attempts(data.email, redis_client)
+        await reset_login_attempts(data.email, redis_client)
 
         logger.info("login_success", user_id=session.user.id, email=data.email)
 
@@ -181,7 +180,7 @@ async def login_user(
         raise
     except Exception as e:
         logger.warning("login_failed", email=data.email, error=str(e))
-        # await record_failed_attempt(data.email, redis_client)
+        await record_failed_attempt(data.email, redis_client)
         raise HTTPException(status_code=401, detail="Invalid credentials.")
 # ───────────────────────────────────────────────
 # 3. Create Rider (by Dispatch only)
@@ -345,160 +344,162 @@ async def create_rider_by_dispatch(
 # ───────────────────────────────────────────────
 # 3. Create Admin (by Admin, Super Admin only)
 # ───────────────────────────────────────────────
-async def create_admin_user(
-    # data: AdminUserCreate,
-    # current_profile: dict,
-    supabase_admin: AsyncClient,
-    request: Optional[Request] = None,
-) -> UserProfileResponse:
-    logger.info(
-        event="create_rider_attempt",
-        # dispatch_id=current_profile.id,
-        admin_phone='+23490776658',
-    )
+# async def create_admin_user(
+#     data: AdminUserCreate,
+#     current_profile: dict,
+#     supabase_admin: AsyncClient,
+#     request: Optional[Request] = None,
+# ) -> UserProfileResponse:
+#     logger.info(
+#         event="create_rider_attempt",
+#         dispatch_id=current_profile.id,
+#         rider_phone=data.phone,
+#     )
 
-    # Define dispatcher_id for later use
-    # dispatcher_id = current_profile.id
+#     # Define dispatcher_id for later use
+#     # admin_id = current_profile.id
 
-    # Fetch the dispatcher profile with required fields
-    # dispatch_profile_resp = (
-    #     await supabase_admin.table("profiles")
-    #     .select(
-    #         "user_type, business_name, business_address, state, business_registration_number"
-    #     )
-    #     .eq("id", current_profile.id)
-    #     .single()
-    #     .execute()
-    # )
+#     # # Fetch the dispatcher profile with required fields
+#     # dispatch_profile_resp = (
+#     #     await supabase_admin.table("profiles")
+#     #     .select(
+#     #         "user_type, business_name, business_address, state, business_registration_number"
+#     #     )
+#     #     .eq("id", current_profile.id)
+#     #     .single()
+#     #     .execute()
+#     # )
 
-    # dispatch_profile = dispatch_profile_resp.data
+#     # dispatch_profile = dispatch_profile_resp.data
 
-    # Security: Only DISPATCH can create riders
-    # if dispatch_profile["user_type"] != UserType.DISPATCH.value:
-    #     raise HTTPException(
-    #         status_code=status.HTTP_403_FORBIDDEN,
-    #         detail="Only dispatch users can create riders",
-    #     )
+#     # Security: Only DISPATCH can create riders
+#     if dispatch_profile["user_type"] != UserType.DISPATCH.value:
+#         raise HTTPException(
+#             status_code=status.HTTP_403_FORBIDDEN,
+#             detail="Only dispatch users can create riders",
+#         )
 
-    # riders = await get_my_riders(
-    #     dispatch_user_id=current_profile.id, supabase=supabase_admin
-    # )
-    # Validation: Limit riders if no business registration number
-    # if dispatch_profile["business_registration_number"] is None and len(riders) >= 1:
-    #     raise HTTPException(
-    #         status_code=status.HTTP_403_FORBIDDEN,
-    #         detail="Rider limit reached. Add a valid business registration number.",
-    #     )
+#     riders = await get_my_riders(
+#         dispatch_user_id=current_profile.id, supabase=supabase_admin
+#     )
+#     # Validation: Limit riders if no business registration number
+#     if dispatch_profile["business_registration_number"] is None and len(riders) >= 1:
+#         raise HTTPException(
+#             status_code=status.HTTP_403_FORBIDDEN,
+#             detail="Rider limit reached. Add a valid business registration number.",
+#         )
 
-    # Validation: Dispatch must have completed business details
-    # missing_fields = []
-    # if not dispatch_profile.get("business_name"):
-    #     missing_fields.append("business_name")
-    # if not dispatch_profile.get("business_address"):
-    #     missing_fields.append("business_address")
-    # if not dispatch_profile.get("state"):
-    #     missing_fields.append("state")
+#     # Validation: Dispatch must have completed business details
+#     missing_fields = []
+#     if not dispatch_profile.get("business_name"):
+#         missing_fields.append("business_name")
+#     if not dispatch_profile.get("business_address"):
+#         missing_fields.append("business_address")
+#     if not dispatch_profile.get("state"):
+#         missing_fields.append("state")
 
-    # if missing_fields:
-    #     raise HTTPException(
-    #         status_code=400,
-    #         detail=f"Please complete your profile first: {', '.join(missing_fields)} required to create riders.",
-    #     )
+#     if missing_fields:
+#         raise HTTPException(
+#             status_code=400,
+#             detail=f"Please complete your profile first: {', '.join(missing_fields)} required to create riders.",
+#         )
 
-    try:
-        # Create a user in Supabase Auth using an admin client
-        admin_resp = await supabase_admin.auth.admin.create_user(
-            {
-                "email": 'frankmoh2000@yahoo.com',
-                "phone": '+23490776658',
-                "password": 'stringst',
-                "phone_confirm": True,
-                "user_metadata": {
-                    # "created_by": current_profile.id,
-                    "user_type": 'SUPER_ADMIN',
-                    "phone_number":'+23490776658',
-                    "full_name": 'SERVIPAL LIMITED',
-                    # "dispatcher_id": str(dispatcher_id),
-                },
-                "email_confirm": True,
-            }
-        )
+#     try:
+#         # Create a user in Supabase Auth using an admin client
+#         admin_resp = await supabase_admin.auth.admin.create_user(
+#             {
+#                 "email": data.email,
+#                 "phone": data.phone,
+#                 "password": data.password,
+#                 "phone_confirm": True,
+#                 "user_metadata": {
+#                     "created_by": current_profile.id,
+#                     "user_type": UserType.RIDER.value,
+#                     "phone_number": data.phone,
+#                     "bike_number": data.bike_number,
+#                     "full_name": data.full_name,
+#                     "dispatcher_id": str(dispatcher_id),
+#                 },
+#                 "email_confirm": True,
+#             }
+#         )
 
-        user_id = admin_resp.user.id
+#         user_id = admin_resp.user.id
 
-        # admin_supabase.auth.admin.update_user_by_id(
-        #     user_id,
-        #     {"email_confirm": True}
-        # )
+#         # Upsert rider profile with inherited dispatch business details
+#         rider_profile_data = {
+#             "id": str(user_id),
+#             "user_type": UserType.RIDER.value,
+#             "phone_number": data.phone,
+#             "full_name": data.full_name,
+#             "bike_number": data.bike_number,
+#             "dispatcher_id": str(dispatcher_id),
+#             # Inherited from dispatch
+#             "business_name": dispatch_profile["business_name"],
+#             "business_address": dispatch_profile["business_address"],
+#             "state": dispatch_profile["state"],
+#             # Rider-specific defaults
+#             "is_verified": False,
+#             "account_status": "PENDING",
+#             "has_delivery": False,
+#             "is_online": False,
+#         }
 
-        # Upsert rider profile with inherited dispatch business details
-        admin_profile_data = {
-            "id": str(user_id),
-            "user_type": 'SUPER_ADMIN',
-            "phone_number": '+23490776658',
-            "full_name": 'SERVIPAL LIMITED',
-            "business_name": "SERVIPAL LIMITED",
-            # "dispatcher_id": str(dispatcher_id),
-            # Rider-specific defaults
-         
-            "account_status": "ACTIVE",
-        }
+#         await supabase_admin.table("profiles").upsert(rider_profile_data).execute()
 
-        await supabase_admin.table("profiles").upsert(admin_profile_data).execute()
+#         # Fetch final profile
+#         profile_resp = (
+#             await supabase_admin.table("profiles")
+#             .select("*")
+#             .eq("id", user_id)
+#             .single()
+#             .execute()
+#         )
 
-        # Fetch final profile
-        profile_resp = (
-            await supabase_admin.table("profiles")
-            .select("*")
-            .eq("id", user_id)
-            .single()
-            .execute()
-        )
+#         result = UserProfileResponse(**profile_resp.data)
 
-        result = UserProfileResponse(**profile_resp.data)
+#         # Audit log
+#         await log_audit_event(
+#             supabase_admin,
+#             entity_type="USER",
+#             entity_id=str(user_id),
+#             action="CREATE_RIDER",
+#             new_value={
+#                 "rider_phone": data.phone,
+#                 "rider_name": data.full_name,
+#                 "bike_number": data.bike_number,
+#             },
+#             actor_id=str(dispatcher_id),
+#             actor_type="DISPATCH",
+#             notes=f"Rider created by dispatch: {data.full_name}",
+#             request=request,
+#         )
 
-        # Audit log
-        await log_audit_event(
-            supabase_admin,
-            entity_type="USER",
-            entity_id=str(user_id),
-            action="CREATE_ADMIN",
-            new_value={
-                "admin_phone":'+23490776658',
-                "admin_name": 'SERVIPAL LIMITED',
-                
-            },
-            actor_id=str(user_id),
-            actor_type="SUPER_ADMIN",
-            notes=f"Rider created by admin: {data.full_name}",
-            request=request,
-        )
+#         logger.info(
+#             "rider_created_success",
+#             dispatch_id=str(dispatcher_id),
+#             rider_id=str(user_id),
+#             rider_phone=data.phone,
+#         )
+#         return result
 
-        logger.info(
-            "rider_created_success",
-            dispatch_id=str(dispatcher_id),
-            rider_id=str(user_id),
-            rider_phone='+23490776658',
-        )
-        return result
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        error_msg = str(e).lower()
-        logger.error(
-            "create_rider_error",
-            # dispatch_id=str(dispatcher_id),
-            error=str(e),
-            exc_info=True,
-        )
-        if "duplicate" in error_msg or "already registered" in error_msg:
-            raise HTTPException(
-                status_code=409, detail="Phone number already registered"
-            )
-        raise HTTPException(
-            status_code=500, detail=f"Failed to create rider account: {str(e)}"
-        )
+#     except HTTPException:
+#         raise
+#     except Exception as e:
+#         error_msg = str(e).lower()
+#         logger.error(
+#             "create_rider_error",
+#             dispatch_id=str(dispatcher_id),
+#             error=str(e),
+#             exc_info=True,
+#         )
+#         if "duplicate" in error_msg or "already registered" in error_msg:
+#             raise HTTPException(
+#                 status_code=409, detail="Phone number already registered"
+#             )
+#         raise HTTPException(
+#             status_code=500, detail=f"Failed to create rider account: {str(e)}"
+#         )
 
 
 # ───────────────────────────────────────────────
