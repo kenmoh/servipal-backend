@@ -77,7 +77,7 @@ async def login(
         secure=True,
         samesite="strict",
         max_age=60 * 60 * 24 * 12,              
-        path="/auth/refresh",                    
+        path="/",                    
     )
 
     return result["user"]
@@ -104,7 +104,7 @@ async def login(
 async def logout(response: Response, supabase=Depends(get_supabase_client)):
     await supabase.auth.sign_out()
     response.delete_cookie("access_token", path="/")
-    response.delete_cookie("refresh_token", path="/auth/refresh")
+    response.delete_cookie("refresh_token", path="/")
     return {"message": "Logged out successfully"}
 
 
@@ -134,6 +134,15 @@ async def refresh(
         secure=True,
         samesite="strict",
         max_age=session.session.expires_in,
+        path="/",
+    )
+    response.set_cookie(
+        key="refresh_token",
+        value=session.session.refresh_token,
+        httponly=True,
+        secure=True,
+        samesite="strict",
+        max_age=60 * 60 * 24 * 12,
         path="/",
     )
 
@@ -168,7 +177,7 @@ async def login_for_access_token(
         secure=True,
         samesite="strict",
         max_age=60 * 60 * 24 * 12,              
-        path="/auth/refresh",                    
+        path="/",                    
     )
     return TokenResponse(
         access_token=result["access_token"],
