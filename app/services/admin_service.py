@@ -389,7 +389,7 @@ async def list_wallets_with_transactions(
         transactions = [TransactionItem(**tx) for tx in (row.get("transactions") or [])]
         wallets.append(
             WalletWithTransactions(
-                id=row["wallet_id"],
+                id=row["user_id"],
                 user_id=row["user_id"],
                 balance=row["balance"],
                 escrow_balance=row["escrow_balance"],
