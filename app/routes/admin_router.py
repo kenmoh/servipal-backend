@@ -118,7 +118,7 @@ async def create_management_user(
 async def list_wallets(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
-    db: AsyncClient = Depends(get_supabase_client),
+    db: AsyncClient = Depends(get_supabase_admin_client),
     _actor: dict = Depends(require_admin),
 ):
     return await admin_service.list_wallets_with_transactions(
@@ -133,7 +133,7 @@ async def list_wallets(
 )
 async def get_wallet(
     user_id: UUID,
-    db: AsyncClient = Depends(get_supabase_client),
+    db: AsyncClient = Depends(get_supabase_admin_client),
     _actor: dict = Depends(require_admin),
 ):
     return await admin_service.get_wallet_with_transactions(db, user_id)
