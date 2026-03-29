@@ -24,7 +24,8 @@ from app.routes import (
     laundry_order_mgt_admin_routes,
     product_order_mgt_admin_routes,
     restaurant_order_mgt_admin_routes,
-    charge_mgr_routes
+    charge_mgr_routes,
+    admin_contacts_router
 )
 from app.config.logging import logger
 from app.utils.payment import get_all_banks, resolve_account_details, verify_transaction_tx_ref
@@ -240,4 +241,5 @@ app.include_router(dispute_mgt_admin_routes.router, include_in_schema=False)
 app.include_router(laundry_order_mgt_admin_routes.router, include_in_schema=False)
 app.include_router(product_order_mgt_admin_routes.router, include_in_schema=False)
 app.include_router(restaurant_order_mgt_admin_routes.router, include_in_schema=False)
+app.include_router(admin_contacts_router.router, include_in_schema=False)
 

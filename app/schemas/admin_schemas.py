@@ -145,19 +145,16 @@ class AuditLogCreate(BaseModel):
     actor_type: str = "SYSTEM"
     notes: str | None = None
 
-class AuditLogListResponse(AuditLogCreate):
-    id: UUID
-    created_at: datetime
-    ip_address: str
-    user_agent: str
-    
-
-
 class AuditLogEntry(AuditLogCreate):
     id: UUID
     ip_address: str | None = None
     user_agent: str | None = None
-    created_at: str
+    created_at: datetime
+
+
+class AuditLogListResponse(BaseModel):
+    data: list[AuditLogEntry]
+    meta: PaginationMeta
 
 
 class TransactionItem(BaseModel):
@@ -195,6 +192,25 @@ class WalletWithTransactions(WalletSummary):
     transactions: list[TransactionItem] = []
 
 
+
 class WalletListResponse(BaseModel):
     data: list[WalletWithTransactions]
+    meta: PaginationMeta
+
+
+# ── Contacts ─────────────────────────────────────────────────────────────────
+class Contact(BaseModel):
+    id: UUID
+    full_name: str
+    email: str
+    category: str
+    subject: str
+    message: str
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class ContactListResponse(BaseModel):
+    data: list[Contact]
     meta: PaginationMeta

@@ -4,7 +4,7 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, Query
 from supabase import AsyncClient
 from app.database.supabase import get_supabase_client
-from app.dependencies.auth import require_super_admin
+from app.dependencies.auth import require_admin
 from app.schemas.admin_schemas import AuditLogListResponse, AuditLogFilters
 from app.services.audit_service import list_audit_logs
 
@@ -28,7 +28,7 @@ async def get_audit_logs(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     supabase: AsyncClient = Depends(get_supabase_client),
-    _actor: dict = Depends(require_super_admin),
+    _actor: dict = Depends(require_admin),
 ):
     filters = AuditLogFilters(
         entity_type=entity_type,
@@ -51,7 +51,7 @@ async def get_user_audit_logs(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     supabase: AsyncClient = Depends(get_supabase_client),
-    _actor: dict = Depends(require_super_admin),
+    _actor: dict = Depends(require_admin),
 ):
     filters = AuditLogFilters(entity_type="profiles", entity_id=user_id)
     return await list_audit_logs(supabase, filters, page=page, page_size=page_size)

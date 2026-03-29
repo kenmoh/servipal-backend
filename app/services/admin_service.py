@@ -334,7 +334,7 @@ async def get_wallet_with_transactions(
 ) -> WalletWithTransactions:
     """
     Fetch a single wallet + its transactions via RPC.
-    Uses admin_get_wallet_with_transactions(p_user_id).
+    Uses get_wallet_with_trx_details_by_user(p_user_id).
     
     """
     result = await supabase.rpc(

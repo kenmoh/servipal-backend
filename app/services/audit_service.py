@@ -9,6 +9,7 @@ from app.schemas.admin_schemas import (
     AuditLogFilters,
     AuditLogCreate,
     AuditLogEntry,
+    AuditLogListResponse,
 )
 
 AUDIT_TABLE = "audit_logs"
@@ -104,7 +105,7 @@ async def list_audit_logs(
 
     total = result.count or 0
     entries = [AuditLogEntry(**row) for row in result.data]
-    return AuditLogEntry(
+    return AuditLogListResponse(
         data=entries,
         meta=PaginationMeta(
             total=total,
