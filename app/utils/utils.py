@@ -10,8 +10,11 @@ from typing import Optional
 from app.config.config import settings
 
 
-async def check_login_attempts(email: str, redis_client: Redis) -> None:
+async def check_login_attempts(email: str, redis_client: Optional[Redis]) -> None:
     """Check and handle failed login attempts"""
+    if redis_client is None:
+        return
+        
     key = f"login_attempts:{email}"
     attempts = await redis_client.get(key)
 
@@ -25,15 +28,21 @@ async def check_login_attempts(email: str, redis_client: Redis) -> None:
         )
 
 
-async def record_failed_attempt(email: str, redis_client: Redis) -> None:
+async def record_failed_attempt(email: str, redis_client: Optional[Redis]) -> None:
     """Record failed login attempt"""
+    if redis_client is None:
+        return
+        
     key = f"login_attempts:{email}"
     await redis_client.incr(key)
     await redis_client.expire(key, 900)  # Reset after 15 minutes
 
 
-async def reset_login_attempts(email: str, redis_client: Redis) -> None:
+async def reset_login_attempts(email: str, redis_client: Optional[Redis]) -> None:
     """Reset login attempts after successful login"""
+    if redis_client is None:
+        return
+        
     key = f"login_attempts:{email}"
     locked_key = f"account_locked:{email}"
     await redis_client.delete(key)

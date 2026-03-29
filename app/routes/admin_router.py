@@ -127,13 +127,13 @@ async def list_wallets(
 
 
 @router.get(
-    "/wallets/{wallet_id}",
+    "/wallets/{user_id}",
     response_model=WalletWithTransactions,
     summary="Get a specific user wallet with transactions (any admin role)",
 )
 async def get_wallet(
-    wallet_id: UUID,
+    user_id: UUID,
     db: AsyncClient = Depends(get_supabase_client),
     _actor: dict = Depends(require_admin),
 ):
-    return await admin_service.get_wallet_with_transactions(db, wallet_id)
+    return await admin_service.get_wallet_with_transactions(db, user_id)

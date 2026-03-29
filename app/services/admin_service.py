@@ -330,16 +330,16 @@ async def admin_login(
 
 
 async def get_wallet_with_transactions(
-    supabase: AsyncClient, wallet_id : UUID
+    supabase: AsyncClient, user_id : UUID
 ) -> WalletWithTransactions:
     """
     Fetch a single wallet + its transactions via RPC.
-    Uses admin_get_wallet_with_transactions(p_wallet_id).
+    Uses admin_get_wallet_with_transactions(p_user_id).
     
     """
     result = await supabase.rpc(
-        "admin_get_wallet_with_transactions",
-        {"p_wallet_id": str(wallet_id)},
+        "get_wallet_with_trx_details_by_user",
+        {"p_user_id": str(user_id)},
     ).execute()
 
     if not result.data:
@@ -352,7 +352,7 @@ async def get_wallet_with_transactions(
     transactions = [TransactionItem(**tx) for tx in (row.get("transactions") or [])]
 
     return WalletWithTransactions(
-        id=row["wallet_id"],
+        id=row["user_id"],
         user_id=row["user_id"],
         balance=row["balance"],
         escrow_balance=row["escrow_balance"],

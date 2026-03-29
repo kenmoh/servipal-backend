@@ -320,7 +320,7 @@ async def process_successful_delivery_payment_non_rpc(
             .insert(
                 {
                     "tx_ref": tx_ref,
-                    "amount": float(delivery_fee),
+                    "amount": str(delivery_fee),
                     "from_user_id": sender_id,
                     "to_user_id": sender_id,
                     "order_id": order_id,
