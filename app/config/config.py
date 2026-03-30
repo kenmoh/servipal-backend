@@ -13,7 +13,7 @@ class Settings(BaseSettings):
 
     # Application settings
     APP_NAME: str = "ServiPal"
-    DEBUG: bool = False
+    DEBUG: bool = os.getenv("DEBUG", "false").lower() == "true"
     ENVIRONMENT: str = "development"
 
     # Frontend URL (used for redirects after payment processing)

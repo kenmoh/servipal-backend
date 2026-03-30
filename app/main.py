@@ -31,6 +31,8 @@ from app.config.logging import logger
 from app.utils.payment import get_all_banks, resolve_account_details, verify_transaction_tx_ref
 from app.schemas.bank_schema import AccountDetailResponse, AccountDetails, BankSchema
 from app.config.config import settings, sync_redis_client
+from app.middleware.rate_limiter import RateLimiterMiddleware
+from app.middleware.cors import CORS_CONFIG
 import logfire
 from rq import Worker
 import multiprocessing
@@ -114,13 +116,13 @@ Instrumentator().instrument(app).expose(app)
 
 FAVICON_URL = "https://mohdelivery.s3.us-east-1.amazonaws.com/favion/favicon.ico"
 
-# CORS middleware
+# Rate limiter middleware (applied first, before other middleware)
+app.add_middleware(RateLimiterMiddleware)
+
+# CORS middleware with security-conscious configuration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    **CORS_CONFIG
 )
 
 
