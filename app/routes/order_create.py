@@ -6,6 +6,7 @@ from typing import Optional, Any
 from pydantic import BaseModel, Field
 from supabase import AsyncClient
 from app.database.supabase import get_supabase_admin_client
+from app.utils.api_key_auth import APIKeyManager
 
 from app.config.config import settings
 from app.services.payment_service import (
@@ -58,18 +59,12 @@ HANDLER_MAP = {
 @router.post("/process-payment", status_code=status.HTTP_200_OK)
 async def process_payment(
     payload: InsertPayload,
-    x_internal_key: str = Header(...),
+    api_key: str = Depends(APIKeyManager.check_internal_api_key),
     supabase: AsyncClient = Depends(get_supabase_admin_client),
 ):
-    # 1. Verify internal key
-    if x_internal_key != settings.INTERNAL_API_KEY:
-        logger.warning("internal_endpoint_unauthorized")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Unauthorized",
-        )
-
-     # 2. Only process INSERT events
+    # 1. API key already validated by dependency
+    
+    # 2. Only process INSERT events
     if payload.type != "INSERT":
         logger('*'*100)
         logger.info('Payload', payload)
@@ -142,14 +137,12 @@ async def process_payment(
 
 @router.post("/retry-payments", status_code=status.HTTP_200_OK)
 async def retry_payments(
-    x_internal_key: str = Header(...),
+    api_key: str = Depends(APIKeyManager.check_internal_api_key),
     supabase: AsyncClient = Depends(get_supabase_admin_client),
 ):
-    if x_internal_key != settings.INTERNAL_API_KEY:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized"
-        )
-
+    # 1. API key already validated by dependency
+    
+    # 2. Read payment_queue messages
     result = (
         await supabase.schema("pgmq_public")
         .rpc(

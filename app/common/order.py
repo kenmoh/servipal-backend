@@ -60,17 +60,12 @@ class OrderStatusUpdate(BaseModel):
 
 async def process_payment(
     data: ProcessPaymentRequest,
-    x_internal_key: str,
     supabase: AsyncClient,
 ):
-    # 1. Verify internal key — only Edge Function can call this
-    if x_internal_key != settings.INTERNAL_API_KEY:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Unauthorized",
-        )
-
-    # 2. Find handler from tx_ref prefix
+    # API key validation is performed at the route level (payment_route.py)
+    # This function processes the validated payment request
+    
+    # 1. Find handler from tx_ref prefix
     handler = next(
         (h for prefix, h in HANDLER_MAP.items() if data.tx_ref.startswith(prefix)), None
     )

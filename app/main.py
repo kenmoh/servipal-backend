@@ -1,8 +1,12 @@
 from contextlib import asynccontextmanager
+from dotenv import load_dotenv
 from fastapi import FastAPI, Request
 from fastapi.responses import RedirectResponse
 from fastapi.openapi.docs import get_redoc_html
 from fastapi.middleware.cors import CORSMiddleware
+
+# Load environment variables from .env file before importing anything else
+load_dotenv()
 from app.routes import (
     user_routes,
     payment_route,
@@ -25,19 +29,22 @@ from app.routes import (
     product_order_mgt_admin_routes,
     restaurant_order_mgt_admin_routes,
     charge_mgr_routes,
-    admin_contacts_router
+    admin_contacts_router,
+    cache_admin
 )
 from app.config.logging import logger
 from app.utils.payment import get_all_banks, resolve_account_details, verify_transaction_tx_ref
 from app.schemas.bank_schema import AccountDetailResponse, AccountDetails, BankSchema
-from app.config.config import settings, sync_redis_client
+from app.config.config import settings
 from app.middleware.rate_limiter import RateLimiterMiddleware
 from app.middleware.cors import CORS_CONFIG
+from app.middleware.security_headers import SecurityHeadersMiddleware
+from app.middleware.csrf import CSRFProtectionMiddleware
+from app.middleware.input_size_limit import InputSizeLimitMiddleware
+from app.utils.security import LogSanitizer
 import logfire
-from rq import Worker
-import multiprocessing
+
 import sentry_sdk
-import os
 from prometheus_fastapi_instrumentator import Instrumentator
 
 if settings.SENTRY_DSN:
@@ -96,9 +103,9 @@ app = FastAPI(
     description="Backend API for ServiPal - Food, Laundry, Delivery Services, and Product Marketplace",
     version="1.0.0",
     lifespan=lifespan,
-    # docs_url=None,
-    # redoc_url=None,
-    debug=True,
+    docs_url="/docs" if settings.ENVIRONMENT == "development" else None,
+    redoc_url="/redoc" if settings.ENVIRONMENT == "development" else None,
+    debug=settings.DEBUG,
     contact={
         "name": "ServiPal",
         "url": "https://servi-pal.com",
@@ -116,7 +123,16 @@ Instrumentator().instrument(app).expose(app)
 
 FAVICON_URL = "https://mohdelivery.s3.us-east-1.amazonaws.com/favion/favicon.ico"
 
-# Rate limiter middleware (applied first, before other middleware)
+# Security headers middleware (applied first)
+app.add_middleware(SecurityHeadersMiddleware)
+
+# Input size limit middleware (prevent DoS via large payloads)
+app.add_middleware(InputSizeLimitMiddleware)
+
+# CSRF protection middleware
+app.add_middleware(CSRFProtectionMiddleware)
+
+# Rate limiter middleware
 app.add_middleware(RateLimiterMiddleware)
 
 # CORS middleware with security-conscious configuration
@@ -126,20 +142,24 @@ app.add_middleware(
 )
 
 
-# Request logging middleware
+# Request logging middleware with sensitive data sanitization
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
-    """Log all incoming requests"""
+    """Log all incoming requests with sanitized sensitive data"""
     import time
 
     start_time = time.time()
 
+    # Sanitize user-agent and other headers
+    user_agent = request.headers.get("user-agent")
+    
     logger.info(
         "request_started",
         method=request.method,
         path=request.url.path,
         client_ip=request.client.host if request.client else None,
-        user_agent=request.headers.get("user-agent"),
+        user_agent=user_agent,
+        content_type=request.headers.get("content-type", "unknown"),
     )
 
     try:
@@ -157,11 +177,16 @@ async def log_requests(request: Request, call_next):
         return response
     except Exception as e:
         process_time = time.time() - start_time
+        
+        # Sanitize error message before logging
+        error_msg = str(e)
+        sanitized_error = LogSanitizer.sanitize_string(error_msg)
+        
         logger.error(
             "request_failed",
             method=request.method,
             path=request.url.path,
-            error=str(e),
+            error=sanitized_error,
             process_time=round(process_time, 3),
             exc_info=True,
         )
@@ -177,7 +202,7 @@ async def root():
         dict: A welcome message, link to docs, and status.
     """
     logger.debug("root_endpoint_accessed")
-    return {"message": "Welcome to ServiPal API", "docs": "/docs", "status": "active"}
+    return {"message": "Welcome to ServiPal API", "docs": "/docs" if settings.ENVIRONMENT == "development" else None, "status": "active"}
 
 
 @app.get("/api/v1/health", tags=["Root"])
@@ -244,4 +269,5 @@ app.include_router(laundry_order_mgt_admin_routes.router, include_in_schema=Fals
 app.include_router(product_order_mgt_admin_routes.router, include_in_schema=False)
 app.include_router(restaurant_order_mgt_admin_routes.router, include_in_schema=False)
 app.include_router(admin_contacts_router.router, include_in_schema=False)
+app.include_router(cache_admin.router, include_in_schema=False)
 

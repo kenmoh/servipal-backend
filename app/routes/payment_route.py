@@ -1,21 +1,23 @@
 from fastapi import APIRouter, Request, HTTPException, Depends, status, Header
 from supabase import AsyncClient
 from app.dependencies.auth import get_current_user
-from app.services.payment_service import (
-    process_successful_delivery_payment,
-    process_successful_food_payment,
-    process_successful_topup_payment,
-    process_successful_laundry_payment,
-    process_successful_product_payment,
-)
+from app.utils.api_key_auth import APIKeyManager
+# from app.services.payment_service import (
+#     process_successful_delivery_payment,
+#     process_successful_food_payment,
+#     process_successful_topup_payment,
+#     process_successful_laundry_payment,
+#     process_successful_product_payment,
+# )
 from app.config.config import settings
 from app.config.logging import logger
 from app.database.supabase import get_supabase_client, get_supabase_admin_client
 from app.utils.payment import generate_virtual_account_for_bank_transfer_payment
-from app.worker import enqueue_job
-from rq import Retry
+from app.utils.webhook_validation import WebhookValidator
+# from app.worker import enqueue_job
+# from rq import Retry
 from pydantic import BaseModel
-import hmac
+# import hmac  # COMMENTED OUT - Using WebhookValidator instead for secure signature validation
 from app.common import order
 
 
@@ -36,23 +38,53 @@ async def flutterwave_webhook(
     """
     ** Handle Flutterwave payment webhooks. **
 
-    - Verifies signature, checks idempotency, and queues processing in the background.
+    - Verifies signature using WebhookValidator, checks idempotency, and queues processing in the background.
 
     - Args:
         - request (Request): The raw request.
-        - verif_hash (str): The verification hash header.
 
     - Returns:
         - PaymentWebhookResponse: Processing status.
-        - :param verif_hash:
-        - :param request:
-        - :param supabase:
     """
-    # 1. Verify webhook signature (Flutterwave sends verif-hash header)
+    # 1. Get raw body for signature verification
+     # 1. Verify webhook signature (Flutterwave sends verif-hash header)
 
+    # secret_hash = settings.FLW_SECRET_HASH
+    # signature = request.headers.get("verif-hash")
+    # if not hmac.compare_digest(signature, secret_hash):
+    #     logger.warning(
+    #         event="webhook_signature_invalid",
+    #         level="warning",
+    #         client_ip=request.client.host if request.client else None,
+    #     )
+    #     raise HTTPException(
+    #         status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid webhook signature"
+    #     )
+
+    try:
+        body_bytes = await request.body()
+    except Exception as e:
+        logger.error(
+            event="flutterwave_webhook_body_read_error",
+            error=str(e),
+            client_ip=request.client.host if request.client else None,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Could not read request body"
+        )
+
+    # 2. Verify webhook signature using WebhookValidator (secure HMAC validation)
     secret_hash = settings.FLW_SECRET_HASH
     signature = request.headers.get("verif-hash")
-    if not hmac.compare_digest(signature, secret_hash):
+    
+    is_valid = WebhookValidator.validate_flutterwave_signature(
+        signature_header=signature or "",
+        payload_body=body_bytes,
+        secret_hash=secret_hash or "",
+    )
+    
+    if not is_valid:
         logger.warning(
             event="webhook_signature_invalid",
             level="warning",
@@ -62,7 +94,7 @@ async def flutterwave_webhook(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid webhook signature"
         )
 
-    # 2. Parse payload
+    # 3. Parse payload
     try:
         payload = await request.json()
     except Exception as e:
@@ -196,10 +228,11 @@ async def flutterwave_webhook(
 @router.post("/process-successful-order", status_code=status.HTTP_200_OK)
 async def process_successful_order_payment(
     data: order.ProcessPaymentRequest,
-    x_internal_key: str = Header(...),
+    api_key: str = Depends(APIKeyManager.check_internal_api_key),
     supabase: AsyncClient = Depends(get_supabase_client),
 ):
-    return await order.process_payment(data, x_internal_key, supabase)
+    # API key already validated by dependency
+    return await order.process_payment(data, supabase)
 
 
 @router.post("/init-bank-transfer", status_code=status.HTTP_200_OK)
