@@ -2,6 +2,13 @@
 workspace:
   id: d8d1a460-e240-4638-89ce-d00a00438345
 
+# Each entry here maps a local resource to one or more corresponding objects in Postman Cloud
+cloudResources:
+  collections:
+    ..\postman\collections\ServiPal API: 53608772-d2078ca1-bb46-46ae-b3fa-a6b44a584143
+  environments:
+    ..\postman\environments\ServiPal Development.yaml: 0022baba-a90a-5846-b6eb-6d2600c1c93d
+
 # All resources in the `postman/` folder are automatically registered in Local View.
 # Point to additional files outside the `postman/` folder to register them individually. Example:
 #localResources:

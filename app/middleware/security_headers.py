@@ -61,7 +61,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         is_docs_path = request.url.path in ["/docs", "/redoc"]
         
         if is_docs_path:
-            # For docs endpoints, allow CDN resources for Swagger UI and ReDoc
+            # For docs endpoints, allow CDN resources for Swagger UI, ReDoc, and JSON viewer
             response.headers["Content-Security-Policy"] = (
                 "default-src 'self'; "
                 "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdn.redoc.ly; "

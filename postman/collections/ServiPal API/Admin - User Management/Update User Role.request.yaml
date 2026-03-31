@@ -1,0 +1,13 @@
+$kind: http-request
+method: PUT
+url: '{{baseUrl}}/api/v1/admin/users/{{userId}}/role'
+order: 4000
+headers:
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "role": "MODERATOR"
+    }

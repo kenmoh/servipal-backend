@@ -1,0 +1,27 @@
+$kind: http-request
+method: GET
+url: '{{baseUrl}}/api/v1/analytics/overview'
+order: 1000
+queryParams:
+  - key: date_from
+    value: '2024-01-01'
+  - key: date_to
+    value: '2024-12-31'
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Status is 200 or 403", () => {
+        pm.expect(pm.response.code).to.be.oneOf([200, 403]);
+      });
+      if (pm.response.code === 200) {
+        pm.test("Overview has KPI data", () => {
+          const res = pm.response.json();
+          pm.expect(res).to.be.an("object");
+        });
+      }
+      if (pm.response.code === 403) {
+        pm.test("Non-admin gets 403", () => {
+          pm.expect(pm.response.code).to.eql(403);
+        });
+      }

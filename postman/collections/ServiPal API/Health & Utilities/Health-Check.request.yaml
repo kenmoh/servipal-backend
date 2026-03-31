@@ -1,0 +1,17 @@
+$kind: http-request
+name: Health Check
+method: GET
+url: '{{baseUrl}}/api/v1/health'
+order: 2000
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Status is 200", () => pm.response.to.have.status(200));
+      pm.test("Response time < 500ms", () => pm.expect(pm.response.responseTime).to.be.below(500));
+      pm.test("Health response has status field", () => {
+        const res = pm.response.json();
+        pm.expect(res).to.be.an("object");
+        const status = res.status || res.health || res.message;
+        pm.expect(status).to.exist;
+      });

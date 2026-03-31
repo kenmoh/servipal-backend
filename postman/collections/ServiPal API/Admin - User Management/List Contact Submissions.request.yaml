@@ -1,0 +1,9 @@
+$kind: http-request
+method: GET
+url: '{{baseUrl}}/api/v1/admin/contacts'
+order: 6000
+queryParams:
+  - key: page
+    value: '1'
+  - key: page_size
+    value: '20'

@@ -4,6 +4,8 @@ from fastapi import FastAPI, Request
 from fastapi.responses import RedirectResponse
 from fastapi.openapi.docs import get_redoc_html
 from fastapi.middleware.cors import CORSMiddleware
+import json
+import os
 
 # Load environment variables from .env file before importing anything else
 load_dotenv()
@@ -42,10 +44,19 @@ from app.middleware.security_headers import SecurityHeadersMiddleware
 from app.middleware.csrf import CSRFProtectionMiddleware
 from app.middleware.input_size_limit import InputSizeLimitMiddleware
 from app.utils.security import LogSanitizer
-import logfire
+import warnings
+
+# Suppress logfire warnings globally before importing
+warnings.filterwarnings("ignore", category=UserWarning, module="logfire._internal.*")
+
+try:
+    import logfire
+except Exception as e:
+    logger.warning(f"Failed to import logfire: {e}")
+    logfire = None
 
 import sentry_sdk
-from prometheus_fastapi_instrumentator import Instrumentator
+# from prometheus_fastapi_instrumentator import Instrumentator
 
 if settings.SENTRY_DSN:
     sentry_sdk.init(dsn=settings.SENTRY_DSN, send_default_pii=True, enable_logs=True)
@@ -113,13 +124,18 @@ app = FastAPI(
     },
 )
 
-if settings.LOGFIRE_TOKEN:
-    logfire.configure()
-    logfire.instrument_fastapi(app)
+if logfire and settings.LOGFIRE_TOKEN:
+    try:
+        logfire.configure(token=settings.LOGFIRE_TOKEN)
+        logfire.instrument_fastapi(app)
+        logger.info("Logfire configured successfully")
+    except Exception as e:
+        logger.debug(f"Failed to configure logfire: {e}")
 else:
-    logger.info("Logfire token not found, logfire disabled")
+    if not settings.LOGFIRE_TOKEN:
+        logger.debug("Logfire disabled (token not configured)")
 
-Instrumentator().instrument(app).expose(app)
+# Instrumentator().instrument(app).expose(app)
 
 FAVICON_URL = "https://mohdelivery.s3.us-east-1.amazonaws.com/favion/favicon.ico"
 

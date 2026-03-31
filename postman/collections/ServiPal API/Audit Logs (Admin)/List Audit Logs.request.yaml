@@ -1,0 +1,27 @@
+$kind: http-request
+method: GET
+url: '{{baseUrl}}/api/v1/audit-logs'
+order: 1000
+queryParams:
+  - key: page
+    value: '1'
+  - key: page_size
+    value: '20'
+  - key: action
+    value: ''
+  - key: actor_id
+    value: ''
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Status is 200 or 403", () => {
+        pm.expect(pm.response.code).to.be.oneOf([200, 403]);
+      });
+      if (pm.response.code === 200) {
+        pm.test("Returns audit log entries", () => {
+          const res = pm.response.json();
+          const items = res.items || res.data || res.logs || (Array.isArray(res) ? res : []);
+          pm.expect(items).to.be.an("array");
+        });
+      }

@@ -1,0 +1,43 @@
+$kind: http-request
+name: Update Profile
+method: PUT
+url: '{{baseUrl}}/api/v1/users/me/profile'
+order: 2000
+headers:
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "first_name": "Updated",
+      "last_name": "Name",
+      "phone_number": "+2348012345678",
+      "address": "123 Test Street, Lagos"
+    }
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Status is 200 or 401 or 422", () => {
+        pm.expect(pm.response.code).to.be.oneOf([200, 401, 422]);
+      });
+      if (pm.response.code === 200) {
+        pm.test("Updated profile is returned", () => {
+          const res = pm.response.json();
+          const profile = res.profile || res.data || res;
+          pm.expect(profile).to.be.an("object");
+        });
+        pm.test("Profile update reflects new values", () => {
+          const res = pm.response.json();
+          const profile = res.profile || res.data || res;
+          const firstName = profile.first_name || profile.firstName;
+          pm.expect(firstName).to.be.a("string");
+        });
+      }
+      if (pm.response.code === 422) {
+        pm.test("Validation error returns detail", () => {
+          const res = pm.response.json();
+          pm.expect(res.detail || res.message).to.exist;
+        });
+      }

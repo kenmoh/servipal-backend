@@ -1,0 +1,7 @@
+$kind: http-request
+method: GET
+url: '{{baseUrl}}/api/v1/analytics/payments'
+order: 7000
+queryParams:
+  - key: period
+    value: monthly

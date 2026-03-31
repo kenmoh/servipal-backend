@@ -1,0 +1,34 @@
+$kind: http-request
+name: List Laundry Vendors
+method: GET
+url: '{{baseUrl}}/api/v1/laundry/vendors'
+order: 1000
+queryParams:
+  - key: page
+    value: '1'
+  - key: page_size
+    value: '20'
+  - key: search
+    value: ''
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Status is 200 or 401", () => {
+        pm.expect(pm.response.code).to.be.oneOf([200, 401]);
+      });
+      if (pm.response.code === 200) {
+        pm.test("Returns laundry vendors list", () => {
+          const res = pm.response.json();
+          const items = res.items || res.data || res.vendors || (Array.isArray(res) ? res : []);
+          pm.expect(items).to.be.an("array");
+        });
+        pm.test("Each vendor has id and name", () => {
+          const res = pm.response.json();
+          const items = res.items || res.data || res.vendors || (Array.isArray(res) ? res : []);
+          items.forEach(vendor => {
+            pm.expect(vendor).to.have.property("id");
+            pm.expect(vendor).to.have.property("name");
+          });
+        });
+      }

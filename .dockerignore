@@ -1,36 +1,79 @@
-# Include any files or directories that you don't want to be copied to your
-# container here (e.g., local build artifacts, temporary files, etc.).
-#
-# For more help, visit the .dockerignore file reference guide at
-# https://docs.docker.com/go/build-context-dockerignore/
+# Development and testing files/folders
+tests/
+test*.py
+test*.http
+test_*.txt
+conftest.py
+pytest.ini
 
-**/.DS_Store
-**/__pycache__
-**/.venv
-**/.classpath
-**/.dockerignore
-# **/.env
-**/.git
-**/.gitignore
-**/.project
-**/.settings
-**/.toolstarget
-**/.vs
-**/.vscode
-**/*.*proj.user
+# Version control
+.git
+.gitignore
+.github/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.code-workspace
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.Python
+.venv
+venv/
+env/
+build/
+dist/
+
+# Documentation and guides
+*.md
+LICENSE
+README.md
+docs/
+deploy.md
+SECURITY_IMPLEMENTATION_GUIDE.md
+CACHE_QUICK_START.md
+ADMIN_CACHE_DOCUMENTATION.md
+
+# Postman and testing tools
+postman/
+*.postman_collection.json
+*.postman_environment.json
+
+# Environment and secrets
+.env
+.env.local
+.env.*.local
+.env.example
+.env.prod
+*.env
+
+# Build artifacts
+.dockerignore
+Dockerfile*
+docker-compose*
+compose.y*ml
+cloudbuild.yaml
+
+# Misc
+.classpath
+.project
+.settings
+.toolstarget
+.vs
 **/*.dbmdl
 **/*.jfm
 **/bin
+**/obj
 **/charts
-**/docker-compose*
-**/compose.y*ml
-**/Dockerfile*
 **/node_modules
 **/npm-debug.log
-**/obj
-**/secrets.dev.yaml
-**/values.dev.yaml
-LICENSE
-README.md
-# .env
-deploy.md
+**/*.user
+**/*.dbmdl

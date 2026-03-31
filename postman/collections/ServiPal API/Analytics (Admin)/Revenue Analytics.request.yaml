@@ -1,0 +1,9 @@
+$kind: http-request
+method: GET
+url: '{{baseUrl}}/api/v1/analytics/revenue'
+order: 2000
+queryParams:
+  - key: period
+    value: monthly
+  - key: year
+    value: '2024'

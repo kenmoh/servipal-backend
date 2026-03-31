@@ -1,0 +1,37 @@
+$kind: http-request
+name: Top Up Wallet
+method: POST
+url: '{{baseUrl}}/api/v1/wallet/topup'
+order: 1000
+headers:
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "amount": 5000.00,
+      "payment_method": "card",
+      "callback_url": "https://example.com/payment/callback"
+    }
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Status is 200 or 201 or 400 or 401", () => {
+        pm.expect(pm.response.code).to.be.oneOf([200, 201, 400, 401]);
+      });
+      if (pm.response.code === 200 || pm.response.code === 201) {
+        pm.test("Top-up response has payment link or reference", () => {
+          const res = pm.response.json();
+          const paymentLink = res.payment_link || res.link || (res.data && res.data.link);
+          const txRef = res.tx_ref || res.reference || (res.data && res.data.tx_ref);
+          pm.expect(paymentLink || txRef).to.exist;
+        });
+      }
+      if (pm.response.code === 400) {
+        pm.test("Invalid top-up amount returns error", () => {
+          const res = pm.response.json();
+          pm.expect(res.detail || res.message).to.exist;
+        });
+      }

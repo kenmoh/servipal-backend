@@ -1,0 +1,70 @@
+$kind: collection
+name: ServiPal API
+description: |-
+  ServiPal API — Multi-service marketplace platform for Nigeria. Covers food ordering, laundry services, package delivery, product marketplace, escrow payments, and wallet management. Built with FastAPI (Python 3.12+), Supabase, Redis, and Flutterwave payments. Deployed on Google Cloud Run.
+
+  ## Authentication
+  Most endpoints require a JWT Bearer token. Use the Login request to obtain a token — it is automatically saved to the `authToken` collection variable.
+
+  ## Roles
+  - CUSTOMER, DISPATCH, RESTAURANT_VENDOR, LAUNDRY_VENDOR, RIDER, ADMIN, MODERATOR, SUPER_ADMIN
+
+  ## Base URL
+  Set the `baseUrl` variable in your active environment.
+auth:
+  type: bearer
+  credentials:
+    - key: token
+      value: '{{authToken}}'
+variables:
+  - key: baseUrl
+    value: 'http://localhost:8000'
+    type: default
+  - key: authToken
+    value: ''
+    type: secret
+  - key: refreshToken
+    value: ''
+    type: secret
+  - key: vendorId
+    value: ''
+    type: default
+  - key: orderId
+    value: ''
+    type: default
+  - key: menuItemId
+    value: ''
+    type: default
+  - key: serviceId
+    value: ''
+    type: default
+  - key: productId
+    value: ''
+    type: default
+  - key: escrowId
+    value: ''
+    type: default
+  - key: disputeId
+    value: ''
+    type: default
+  - key: riderId
+    value: ''
+    type: default
+  - key: dispatchId
+    value: ''
+    type: default
+  - key: userId
+    value: ''
+    type: default
+  - key: chargeId
+    value: ''
+    type: default
+  - key: logId
+    value: ''
+    type: default
+  - key: txRef
+    value: ''
+    type: default
+  - key: internalApiKey
+    value: ''
+    type: secret

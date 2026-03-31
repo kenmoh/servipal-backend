@@ -1,0 +1,7 @@
+$kind: http-request
+method: GET
+url: '{{baseUrl}}/api/v1/analytics/orders'
+order: 3000
+queryParams:
+  - key: period
+    value: weekly

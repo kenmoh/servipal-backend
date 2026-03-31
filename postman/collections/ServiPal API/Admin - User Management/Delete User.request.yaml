@@ -1,0 +1,4 @@
+$kind: http-request
+method: DELETE
+url: '{{baseUrl}}/api/v1/admin/users/{{userId}}'
+order: 5000

@@ -24,7 +24,7 @@ class Settings(BaseSettings):
     API_URL: str = "https://servipal-backend.onrender.com/api/v1"
 
     # LOGFIRE
-    LOGFIRE_TOKEN: Optional[str] = None
+    LOGFIRE_TOKEN: Optional[str] = os.getenv("LOGFIRE_TOKEN")
 
     # Internal API keys (for secure communication between services)
     INTERNAL_API_KEY: Optional[str] = os.getenv("INTERNAL_API_KEY")
@@ -44,7 +44,8 @@ class Settings(BaseSettings):
     SUPABASE_STORAGE_BUCKET_URL: str = os.getenv("SUPABASE_STORAGE_BUCKET_URL")
 
     # REDIS
-    REDIS_URL: str = os.getenv("REDIS_URL", "redis://localhost:6379")
+    UPSTASH_REDIS_REST_URL: str = os.getenv("UPSTASH_REDIS_REST_URL", "redis://localhost:6379")
+    UPSTASH_REDIS_REST_TOKEN: str = os.getenv("UPSTASH_REDIS_REST_TOKEN")
 
     # SENTRY
     SENTRY_DSN: str = os.getenv("SENTRY_DSN")
@@ -81,11 +82,12 @@ if settings.ENVIRONMENT == "production":
 redis_client = None
 sync_redis_client = None
 
-if settings.REDIS_URL:
+if settings.UPSTASH_REDIS_REST_URL:
     try:
-        redis_client = AsyncRedis.from_url(settings.REDIS_URL, decode_responses=True)
+        url = f"rediss://default:{settings.UPSTASH_REDIS_REST_TOKEN}@{settings.UPSTASH_REDIS_REST_URL.lstrip('https://')}"
+        redis_client = AsyncRedis.from_url(url, decode_responses=True)
         sync_redis_client = SyncRedis.from_url(
-            settings.REDIS_URL, decode_responses=True
+            url, decode_responses=True
         )
     except Exception as e:
         print(f"Warning: Failed to initialize Redis clients: {e}")

@@ -167,4 +167,6 @@ project.toml
 
 # LSP config files
 pyrightconfig.json
-
+.env.example
+.env
+deploy.md

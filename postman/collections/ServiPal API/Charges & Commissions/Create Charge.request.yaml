@@ -1,0 +1,17 @@
+$kind: http-request
+method: POST
+url: '{{baseUrl}}/api/v1/charges'
+order: 2000
+headers:
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "service_type": "FOOD",
+      "charge_type": "COMMISSION",
+      "value": 10.0,
+      "is_percentage": true,
+      "description": "10% commission on food orders"
+    }

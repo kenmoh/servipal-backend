@@ -1,0 +1,37 @@
+$kind: http-request
+name: Get Current User
+method: GET
+url: '{{baseUrl}}/api/v1/auth/me'
+order: 3000
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Status is 200 or 401", () => {
+        pm.expect(pm.response.code).to.be.oneOf([200, 401]);
+      });
+      if (pm.response.code === 200) {
+        pm.test("Returns current user object", () => {
+          const res = pm.response.json();
+          const user = res.user || res.data || res;
+          pm.expect(user).to.be.an("object");
+          pm.expect(user).to.have.property("email");
+        });
+        pm.test("User has id field", () => {
+          const res = pm.response.json();
+          const user = res.user || res.data || res;
+          const id = user.id || user.user_id || user._id;
+          pm.expect(id).to.exist;
+        });
+        const res = pm.response.json();
+        const user = res.user || res.data || res;
+        const userId = user.id || user.user_id;
+        if (userId) {
+          pm.environment.set("userId", userId);
+        }
+      }
+      if (pm.response.code === 401) {
+        pm.test("Unauthenticated request returns 401", () => {
+          pm.expect(pm.response.code).to.eql(401);
+        });
+      }

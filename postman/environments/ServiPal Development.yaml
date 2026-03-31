@@ -1,0 +1,78 @@
+name: 'ServiPal — Development'
+values:
+  - key: baseUrl
+    value: 'http://localhost:8000'
+    enabled: true
+    type: default
+  - key: authToken
+    value: ''
+    enabled: true
+    type: secret
+  - key: refreshToken
+    value: ''
+    enabled: true
+    type: secret
+  - key: internalApiKey
+    value: 'your-internal-api-key-here'
+    enabled: true
+    type: secret
+  - key: flutterwavePublicKey
+    value: 'FLWPUBK_TEST-xxxxxxxxxxxx-X'
+    enabled: true
+    type: default
+  - key: supabaseUrl
+    value: 'https://your-project.supabase.co'
+    enabled: true
+    type: default
+  - key: vendorId
+    value: ''
+    enabled: true
+    type: default
+  - key: orderId
+    value: ''
+    enabled: true
+    type: default
+  - key: menuItemId
+    value: ''
+    enabled: true
+    type: default
+  - key: serviceId
+    value: ''
+    enabled: true
+    type: default
+  - key: productId
+    value: ''
+    enabled: true
+    type: default
+  - key: escrowId
+    value: ''
+    enabled: true
+    type: default
+  - key: disputeId
+    value: ''
+    enabled: true
+    type: default
+  - key: riderId
+    value: ''
+    enabled: true
+    type: default
+  - key: dispatchId
+    value: ''
+    enabled: true
+    type: default
+  - key: userId
+    value: ''
+    enabled: true
+    type: default
+  - key: chargeId
+    value: ''
+    enabled: true
+    type: default
+  - key: logId
+    value: ''
+    enabled: true
+    type: default
+  - key: txRef
+    value: ''
+    enabled: true
+    type: default

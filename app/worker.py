@@ -10,7 +10,7 @@
 # )
 
 
-# redis_conn = Redis.from_url(settings.REDIS_URL)
+# redis_conn = Redis.from_url(settings.UPSTASH_REDIS_REST_URL)
 # queue = Queue(connection=redis_conn)
 
 

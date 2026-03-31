@@ -1,0 +1,38 @@
+$kind: http-request
+name: Refresh Token
+method: POST
+url: '{{baseUrl}}/api/v1/auth/refresh'
+order: 5000
+headers:
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "refresh_token": "{{refreshToken}}"
+    }
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Status is 200 or 401", () => {
+        pm.expect(pm.response.code).to.be.oneOf([200, 401]);
+      });
+      if (pm.response.code === 200) {
+        pm.test("Returns new access token", () => {
+          const res = pm.response.json();
+          const token = res.access_token || (res.data && res.data.access_token);
+          pm.expect(token).to.be.a("string");
+        });
+        const res = pm.response.json();
+        const token = res.access_token || (res.data && res.data.access_token);
+        if (token) {
+          pm.environment.set("accessToken", token);
+        }
+      }
+      if (pm.response.code === 401) {
+        pm.test("Expired or invalid refresh token returns 401", () => {
+          pm.expect(pm.response.code).to.eql(401);
+        });
+      }

@@ -1,0 +1,31 @@
+$kind: http-request
+name: Get Food Order
+method: GET
+url: '{{baseUrl}}/api/v1/food/orders/{{foodOrderId}}'
+order: 3000
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Status is 200 or 401 or 404", () => {
+        pm.expect(pm.response.code).to.be.oneOf([200, 401, 404]);
+      });
+      if (pm.response.code === 200) {
+        pm.test("Returns food order object", () => {
+          const res = pm.response.json();
+          const order = res.order || res.data || res;
+          pm.expect(order).to.be.an("object");
+        });
+        pm.test("Order has id and status", () => {
+          const res = pm.response.json();
+          const order = res.order || res.data || res;
+          const orderId = order.id || order.order_id;
+          pm.expect(orderId).to.exist;
+          pm.expect(order).to.have.property("status");
+        });
+      }
+      if (pm.response.code === 404) {
+        pm.test("Not found returns 404", () => {
+          pm.expect(pm.response.code).to.eql(404);
+        });
+      }

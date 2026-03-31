@@ -1,0 +1,32 @@
+$kind: http-request
+name: Resolve Bank Account
+method: GET
+url: '{{baseUrl}}/api/v1/utilities/resolve-bank-account'
+order: 4000
+queryParams:
+  - key: account_number
+    value: '0123456789'
+  - key: bank_code
+    value: '044'
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Status is 200 or 400 or 422", () => {
+        pm.expect(pm.response.code).to.be.oneOf([200, 400, 422]);
+      });
+      if (pm.response.code === 200) {
+        pm.test("Returns resolved account data", () => {
+          const res = pm.response.json();
+          pm.expect(res).to.be.an("object");
+          const accountName = res.account_name || (res.data && res.data.account_name);
+          pm.expect(accountName).to.be.a("string");
+        });
+      }
+      if (pm.response.code === 400 || pm.response.code === 422) {
+        pm.test("Error response has detail or message", () => {
+          const res = pm.response.json();
+          const msg = res.detail || res.message || res.error;
+          pm.expect(msg).to.exist;
+        });
+      }

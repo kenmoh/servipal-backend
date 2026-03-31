@@ -1,0 +1,18 @@
+$kind: http-request
+method: GET
+url: '{{baseUrl}}/api/v1/charges'
+order: 1000
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Status is 200 or 403", () => {
+        pm.expect(pm.response.code).to.be.oneOf([200, 403]);
+      });
+      if (pm.response.code === 200) {
+        pm.test("Returns charges array", () => {
+          const res = pm.response.json();
+          const items = res.items || res.data || (Array.isArray(res) ? res : []);
+          pm.expect(items).to.be.an("array");
+        });
+      }

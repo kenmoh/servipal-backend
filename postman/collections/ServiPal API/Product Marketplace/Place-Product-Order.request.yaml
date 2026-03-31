@@ -1,0 +1,43 @@
+$kind: http-request
+name: Place Product Order
+method: POST
+url: '{{baseUrl}}/api/v1/marketplace/orders'
+order: 3000
+headers:
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "product_id": "{{productId}}",
+      "quantity": 1,
+      "delivery_address": "123 Test Street, Lagos",
+      "payment_method": "wallet"
+    }
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Status is 201 or 400 or 401 or 422", () => {
+        pm.expect(pm.response.code).to.be.oneOf([201, 200, 400, 401, 422]);
+      });
+      if (pm.response.code === 201 || pm.response.code === 200) {
+        pm.test("Product order created with id", () => {
+          const res = pm.response.json();
+          const order = res.order || res.data || res;
+          const orderId = order.id || order.order_id;
+          pm.expect(orderId).to.exist;
+        });
+        pm.test("Order has status field", () => {
+          const res = pm.response.json();
+          const order = res.order || res.data || res;
+          pm.expect(order).to.have.property("status");
+        });
+        const res = pm.response.json();
+        const order = res.order || res.data || res;
+        const orderId = order.id || order.order_id;
+        if (orderId) {
+          pm.environment.set("productOrderId", orderId);
+        }
+      }

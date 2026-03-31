@@ -1,0 +1,26 @@
+$kind: http-request
+name: Get Wallet Balance
+method: GET
+url: '{{baseUrl}}/api/v1/users/me/wallet'
+order: 3000
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Status is 200 or 401", () => {
+        pm.expect(pm.response.code).to.be.oneOf([200, 401]);
+      });
+      if (pm.response.code === 200) {
+        pm.test("Wallet response has balance field", () => {
+          const res = pm.response.json();
+          const wallet = res.wallet || res.data || res;
+          const balance = wallet.balance !== undefined ? wallet.balance : wallet.available_balance;
+          pm.expect(balance).to.not.be.undefined;
+        });
+        pm.test("Balance is a number", () => {
+          const res = pm.response.json();
+          const wallet = res.wallet || res.data || res;
+          const balance = wallet.balance !== undefined ? wallet.balance : wallet.available_balance;
+          pm.expect(balance).to.be.a("number");
+        });
+      }

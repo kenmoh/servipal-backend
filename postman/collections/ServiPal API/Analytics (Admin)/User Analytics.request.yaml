@@ -1,0 +1,7 @@
+$kind: http-request
+method: GET
+url: '{{baseUrl}}/api/v1/analytics/users'
+order: 4000
+queryParams:
+  - key: period
+    value: monthly

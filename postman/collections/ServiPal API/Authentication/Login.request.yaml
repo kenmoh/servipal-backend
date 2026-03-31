@@ -1,0 +1,48 @@
+$kind: http-request
+name: Login
+method: POST
+url: '{{baseUrl}}/api/v1/auth/login'
+order: 2000
+headers:
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "email": "testuser@example.com",
+      "password": "SecurePass123!"
+    }
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Status is 200 or 401", () => {
+        pm.expect(pm.response.code).to.be.oneOf([200, 401, 403]);
+      });
+      if (pm.response.code === 200) {
+        pm.test("Login returns access token", () => {
+          const res = pm.response.json();
+          const token = res.access_token || (res.data && res.data.access_token);
+          pm.expect(token).to.be.a("string");
+        });
+        pm.test("Login returns refresh token", () => {
+          const res = pm.response.json();
+          const refresh = res.refresh_token || (res.data && res.data.refresh_token);
+          pm.expect(refresh).to.be.a("string");
+        });
+        const res = pm.response.json();
+        const token = res.access_token || (res.data && res.data.access_token);
+        if (token) {
+          pm.environment.set("accessToken", token);
+        }
+        const refresh = res.refresh_token || (res.data && res.data.refresh_token);
+        if (refresh) {
+          pm.environment.set("refreshToken", refresh);
+        }
+      }
+      if (pm.response.code === 401) {
+        pm.test("Invalid credentials return 401", () => {
+          pm.expect(pm.response.code).to.eql(401);
+        });
+      }

@@ -1,0 +1,42 @@
+$kind: http-request
+name: Withdraw from Wallet
+method: POST
+url: '{{baseUrl}}/api/v1/wallet/withdraw'
+order: 2000
+headers:
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "amount": 2000.00,
+      "bank_code": "044",
+      "account_number": "0123456789",
+      "account_name": "Test User"
+    }
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Status is 200 or 201 or 400 or 401 or 422", () => {
+        pm.expect(pm.response.code).to.be.oneOf([200, 201, 400, 401, 422]);
+      });
+      if (pm.response.code === 200 || pm.response.code === 201) {
+        pm.test("Withdrawal response has transaction reference", () => {
+          const res = pm.response.json();
+          const txRef = res.tx_ref || res.reference || res.transaction_id || (res.data && res.data.reference);
+          pm.expect(txRef).to.exist;
+        });
+        pm.test("Withdrawal response has status", () => {
+          const res = pm.response.json();
+          const status = res.status || (res.data && res.data.status);
+          pm.expect(status).to.exist;
+        });
+      }
+      if (pm.response.code === 400 || pm.response.code === 422) {
+        pm.test("Insufficient funds or invalid data returns error", () => {
+          const res = pm.response.json();
+          pm.expect(res.detail || res.message).to.exist;
+        });
+      }
