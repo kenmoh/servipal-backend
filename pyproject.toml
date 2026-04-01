@@ -2,7 +2,7 @@
 name = "servipal-backend"
 version = "0.1.0"
 description = "ServiPal: Multi-vendor lifestyle application backend"
-requires-python = "3.12"
+requires-python = "=3.12"
 dependencies = [
     "exponent-server-sdk==2.2.0",
     "fastapi[standard]==0.128.0",
