@@ -156,7 +156,6 @@ async def login_for_access_token(
     supabase=Depends(get_supabase_client),
 ):
     """OAuth2 compatible token endpoint for Swagger UI authentication."""
-    logger.info("token_endpoint_called", username=form_data.username)
     login_data = LoginRequest(email=form_data.username, password=form_data.password)
 
     result = await user_service.login_user(login_data, supabase, request)

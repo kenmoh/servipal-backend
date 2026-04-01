@@ -79,6 +79,7 @@ async def get_all_banks() -> list[BankSchema]:
     cached_banks = await get_cached_data(cache_key)
 
     if cached_banks:
+       
         return json.loads(cached_banks)
     try:
         headers = {"Authorization": f"Bearer {settings.FLW_SECRET_KEY}"}

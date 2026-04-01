@@ -21,8 +21,8 @@ steps:
       - '--platform'
       - 'managed'
       - '--allow-unauthenticated'
-      - '--set-env-vars=ENABLE_WORKER=false,SUPABASE_URL=${_SUPABASE_URL},SUPABASE_PUBLISHABLE_KEY=${_SUPABASE_PUBLISHABLE_KEY},FLUTTERWAVE_PUBLIC_KEY=${_FLUTTERWAVE_PUBLIC_KEY},FLUTTERWAVE_BASE_URL=${_FLUTTERWAVE_BASE_URL},ENVIRONMENT=production'
-      - '--set-secrets=SUPABASE_SECRET_KEY=SUPABASE_SECRET_KEY:latest,FLW_SECRET_KEY=FLW_SECRET_KEY:latest,FLW_SECRET_HASH=FLW_SECRET_HASH:latest,FLW_PROD_SECRET_KEY=FLW_PROD_SECRET_KEY:latest,UPSTASH_REDIS_REST_URL=UPSTASH_REDIS_REST_URL:latest,UPSTASH_REDIS_REST_TOKEN=UPSTASH_REDIS_REST_TOKEN:latest,LOGFIRE_TOKEN=LOGFIRE_TOKEN:latest,SENTRY_DSN=SENTRY_DSN:latest,INTERNAL_API_KEY=INTERNAL_API_KEY:latest'
+      - '--set-env-vars=ENVIRONMENT=production'
+      - '--set-secrets=/app/.env=Servi-pal-secret:latest'
       - '--memory=1Gi'
       - '--timeout=300'
 

@@ -1,7 +1,7 @@
 name: 'ServiPal — Production'
 values:
   - key: baseUrl
-    value: 'https://api.servipal.ng'
+    value: 'https://servipal-backend-334769928993.us-central1.run.app'
     enabled: true
     type: default
   - key: authToken
