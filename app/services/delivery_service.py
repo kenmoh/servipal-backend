@@ -1379,22 +1379,53 @@ async def _send_delivery_notifications(
                 supabase=supabase,
             )
 
+# def extract_rpc_data(e: APIError) -> dict | None:
+#     """Extract actual RPC response from APIError details when postgrest
+#     fails to parse a valid JSONB response."""
+#     try:
+#         details = e.details
+#         if not details:
+#             return None
+
+#         if isinstance(details, (bytes, bytearray)):
+#             return json.loads(details.decode("utf-8"))
+
+#         if isinstance(details, str):
+#             clean = details.strip()
+#             # Strip b'...' wrapper if present
+#             if clean.startswith("b'") or clean.startswith('b"'):
+#                 clean = clean[2:-1]
+#             return json.loads(clean)
+
+#     except Exception:
+#         return None
+
 def extract_rpc_data(e: APIError) -> dict | None:
-    """Extract actual RPC response from APIError details when postgrest
-    fails to parse a valid JSONB response."""
+    """
+    PostgREST sometimes raises 'JSON could not be generated' even when the
+    underlying PG function succeeded. The actual JSONB result is buried in
+    e.details as a bytes-repr string: b'{"status": "success", ...}'
+    """
     try:
         details = e.details
         if not details:
             return None
 
+        # Already bytes
         if isinstance(details, (bytes, bytearray)):
             return json.loads(details.decode("utf-8"))
 
         if isinstance(details, str):
             clean = details.strip()
-            # Strip b'...' wrapper if present
-            if clean.startswith("b'") or clean.startswith('b"'):
-                clean = clean[2:-1]
+
+            # Strip bytes-repr wrapper using regex — handles b'...', b"...",
+            # and escaped variants like b\'{...}\' from logging serialization
+            match = re.match(r'^b[\'"](.+)[\'"]$', clean, re.DOTALL)
+            if match:
+                clean = match.group(1)
+                # Unescape \" and \' introduced by the bytes repr
+                clean = clean.replace('\\"', '"').replace("\\'", "'")
+
             return json.loads(clean)
 
     except Exception:

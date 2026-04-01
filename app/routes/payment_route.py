@@ -61,23 +61,7 @@ async def flutterwave_webhook(
     #         status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid webhook signature"
     #     )
 
-    try:
-        print("="*100)
-        print('REQUEST BODY', await request.body())
-        print('REQUEST HEADERS',request.headers)
-        print("="*100)
-        body_bytes = await request.body()
-    except Exception as e:
-        logger.error(
-            event="flutterwave_webhook_body_read_error",
-            error=str(e),
-            client_ip=request.client.host if request.client else None,
-        )
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Could not read request body"
-        )
-
+    
     # 2. Verify webhook signature using WebhookValidator (secure HMAC validation)
     secret_hash = settings.FLW_SECRET_HASH
     signature = request.headers.get("verif-hash")

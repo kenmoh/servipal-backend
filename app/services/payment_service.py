@@ -109,9 +109,6 @@ async def process_successful_delivery_payment(
             result_data = result.data
 
         except APIError as e:
-            print('*'*100)
-            logger.error("rpc_api_error", error=str(e), message=e.message if hasattr(e, 'message') else None)
-            print('*'*100)
             result_data = extract_rpc_data(e)
             if not result_data:
                 raise
