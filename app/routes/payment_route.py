@@ -62,6 +62,10 @@ async def flutterwave_webhook(
     #     )
 
     try:
+        print("="*100)
+        print('REQUEST BODY', await request.body())
+        print('REQUEST HEADERS',request.headers)
+        print("="*100)
         body_bytes = await request.body()
     except Exception as e:
         logger.error(
@@ -80,7 +84,6 @@ async def flutterwave_webhook(
     
     is_valid = WebhookValidator.validate_flutterwave_signature(
         signature_header=signature or "",
-        payload_body=body_bytes,
         secret_hash=secret_hash or "",
     )
     

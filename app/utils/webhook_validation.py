@@ -16,20 +16,17 @@ class WebhookValidator:
     @staticmethod
     def validate_flutterwave_signature(
         signature_header: str,
-        payload_body: bytes,
         secret_hash: str,
     ) -> bool:
         """
         Validate Flutterwave webhook signature.
         
         Flutterwave sends:
-        - Request body as raw bytes
         - Signature in 'verif-hash' header
         - Secret hash from dashboard
         
         Args:
             signature_header: Value of 'verif-hash' header from Flutterwave
-            payload_body: Raw request body as bytes
             secret_hash: FLW_SECRET_HASH from config
         
         Returns:
@@ -40,13 +37,9 @@ class WebhookValidator:
             return False
 
         try:
-            # Flutterwave uses SHA256 HMAC
-            expected_signature = hashlib.sha256(
-                secret_hash.encode() + payload_body
-            ).hexdigest()
-
+           
             # Constant-time comparison to prevent timing attacks
-            return hmac.compare_digest(signature_header, expected_signature)
+            return hmac.compare_digest(signature_header, secret_hash)
 
         except Exception as e:
             logger.error(

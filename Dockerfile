@@ -65,6 +65,5 @@ ENV PYTHONDONTWRITEBYTECODE=1
 EXPOSE 8080
 
 # Run the application
-# CMD fastapi run --port $PORT
-# CMD /app/.venv/bin/fastapi run --port $PORT
-CMD ["/usr/local/bin/uv", "run", "fastapi", "run", "--host", "0.0.0.0", "--port", $PORT]
+CMD fastapi run --port $PORT
+
