@@ -118,6 +118,16 @@ async def process_payment(
             msg_id=payload.record.msg_id,
         )
 
+        # 6. Archive message from queue (CRITICAL: prevents "at interval" re-processing)
+        await (
+            supabase.schema("pgmq_public")
+            .rpc(
+                "archive",
+                {"queue_name": "payment_queue", "message_id": payload.record.msg_id},
+            )
+            .execute()
+        )
+
         return {"status": "success", "tx_ref": tx_ref}
 
     except Exception as e:

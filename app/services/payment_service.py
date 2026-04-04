@@ -150,6 +150,14 @@ async def process_successful_delivery_payment(
 
         return result_data
 
+    except APIError as e:  
+        result_data = extract_rpc_data(e)
+        if not result_data:
+            logger.error(
+                "delivery_payment_processing_error", tx_ref=tx_ref, error=str(result_data), exc_info=True
+            )
+            raise
+
     except Exception as e:
         logger.error(
             "delivery_payment_processing_error",
@@ -508,11 +516,19 @@ async def process_successful_food_payment(
 
         return result_data
 
-    except Exception as e:
-        logger.error(
-            "food_payment_processing_error", tx_ref=tx_ref, error=str(e), exc_info=True
-        )
-        raise
+    except APIError as e:  
+        result_data = extract_rpc_data(e)
+        if not result_data:
+            logger.error(
+                "food_payment_processing_error", tx_ref=tx_ref, error=str(result_data), exc_info=True
+            )
+            raise
+
+    # except Exception as e:
+    #     logger.error(
+    #         "food_payment_processing_error", tx_ref=tx_ref, error=str(e), exc_info=True
+    #     )
+    #     raise
 
 
 # ───────────────────────────────────────────────
