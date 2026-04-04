@@ -131,6 +131,27 @@ async def process_payment(
         return {"status": "success", "tx_ref": tx_ref}
 
     except Exception as e:
+        # 1. Handle "already processed" via unique constraint
+        error_msg = str(e).lower()
+        if "duplicate key" in error_msg or "unique constraint" in error_msg:
+            logger.info(
+                "process_payment_already_done_by_constraint",
+                tx_ref=tx_ref,
+                msg_id=payload.record.msg_id,
+                error=str(e)
+            )
+            # Archive anyway to stop retry loop
+            await (
+                supabase.schema("pgmq_public")
+                .rpc(
+                    "archive",
+                    {"queue_name": "payment_queue", "message_id": payload.record.msg_id},
+                )
+                .execute()
+            )
+            return {"status": "success", "tx_ref": tx_ref, "message": "Already processed (constraint)"}
+
+        # 2. Regular error logging and 500 return
         logger.error(
             "process_payment_failed",
             tx_ref=tx_ref,
@@ -238,9 +259,26 @@ async def retry_payments(
             logger.info("payment_retry_success", tx_ref=tx_ref, msg_id=msg_id)
 
         except Exception as e:
+            # Handle "already processed" via unique constraint in retry logic
+            error_msg = str(e).lower()
+            if "duplicate key" in error_msg or "unique constraint" in error_msg:
+                logger.info(
+                    "payment_retry_already_done_by_constraint",
+                    tx_ref=tx_ref,
+                    message_id=msg_id,
+                    error=str(e)
+                )
+                # Archive anyway to stop retry loop
+                await (
+                    supabase.schema("pgmq_public")
+                    .rpc("archive", {"queue_name": "payment_queue", "message_id": msg_id})
+                    .execute()
+                )
+                continue  # Move to next message
+
             logger.error(
                 "payment_retry_failed", tx_ref=tx_ref, message_id=msg_id, error=str(e)
             )
-            # Don't archive — stays in queue for next retry
+            # Don't archive — stays in queue for next retry if it was a real failure
 
     return {"status": "done", "processed": len(messages)}
