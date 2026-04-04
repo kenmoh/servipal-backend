@@ -4,6 +4,7 @@ from fastapi import HTTPException, status, Request
 from typing import Optional
 import json
 import uuid
+import re
 import datetime
 from uuid import UUID
 from decimal import Decimal
@@ -336,8 +337,6 @@ async def assign_rider(
 
         logger.info(
             "rider_assigned",
-            tx_ref=tx_ref,
-            dispatch_id=result_data.get("dispatch_id"),
             rider_id=rider_id,
         )
 
@@ -366,7 +365,7 @@ async def assign_rider(
         logger.error("assign_rider_api_error", error=str(e), exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Something went wrong!",
+            detail=f"Database error: {e.message or 'Something went wrong!'}",
         )
 
 async def assign_rider_to_order(
