@@ -8,7 +8,7 @@ TABLE = "charges_and_commissions"
 
 
 async def list_charges(supabase: AsyncClient) -> list[ChargesResponse]:
-    result = supabase.table(TABLE).select("*").order("created_at", desc=True).execute()
+    result = await supabase.table(TABLE).select("*").order("created_at", desc=True).execute()
     return [ChargesResponse(**r) for r in result.data]
 
 

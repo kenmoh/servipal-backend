@@ -15,7 +15,7 @@ router = APIRouter(prefix="/api/v1/charges", tags=["Charges & Commissions"])
 @router.get(
     "",
     response_model=list[ChargesResponse],
-    summary="List all charges configs (SUPER_ADMIN only)",
+    summary="List charge configs (SUPER_ADMIN only)",
 )
 async def get_all_charges(
     supabase: AsyncClient = Depends(get_supabase_admin_client),

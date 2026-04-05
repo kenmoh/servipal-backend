@@ -13,13 +13,12 @@ ENV UV_COMPILE_BYTECODE=1
 
 # Copy only dependency files (leverage docker layer caching)
 COPY pyproject.toml uv.lock ./
-COPY app/ app/
 
 # Install production dependencies only
 # --no-dev: Excludes dev dependencies
 # --frozen: Uses exactly what's in uv.lock
-# --link-mode=copy: Ensures dependencies are copied, not symlinked, since we copy the .venv across stages
-RUN uv sync --frozen --no-dev --link-mode=copy
+# --no-install-project: Only install dependencies for better caching
+RUN uv sync --frozen --no-dev --link-mode=copy --no-install-project
 
 # ============================================================
 # Production stage - minimal final image

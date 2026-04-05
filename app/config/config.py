@@ -1,60 +1,60 @@
 import os
+import sys
 from typing import Optional
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from redis.asyncio import Redis as AsyncRedis
 from redis import Redis as SyncRedis
-
 from dotenv import load_dotenv
 
+# Use load_dotenv if we want to ensure os.environ is populated as well, 
+# though Pydantic SettingsConfigDict handles file loading natively.
 load_dotenv()
-
 
 class Settings(BaseSettings):
     """
     Application settings loaded from environment variables.
-    Pydantic automatically loads these from env vars - no need for os.getenv()!
     """
+    model_config = SettingsConfigDict(
+        env_file=("/secrets/.env", ".env", ".env.local"),
+        env_file_encoding="utf-8",
+        case_sensitive=True,
+        extra="ignore"
+    )
 
     # Application settings
     APP_NAME: str = "ServiPal"
-    DEBUG: bool = os.getenv("DEBUG", "false").lower() == "true"
-    ENVIRONMENT: str = os.getenv("ENVIRONMENT", "production")
+    DEBUG: bool = False
+    ENVIRONMENT: str = "production"
 
     # Frontend URL (used for redirects after payment processing)
     API_URL: str = "https://servipal-backend.onrender.com/api/v1"
 
     # LOGFIRE
-    LOGFIRE_TOKEN: Optional[str] = os.getenv("LOGFIRE_TOKEN")
+    LOGFIRE_TOKEN: Optional[str] = None
 
     # Internal API keys (for secure communication between services)
-    INTERNAL_API_KEY: Optional[str] = os.getenv("INTERNAL_API_KEY")
+    INTERNAL_API_KEY: Optional[str] = None
 
     # FLUTTERWAVE
-    FLW_PUBLIC_KEY: Optional[str] = os.getenv("FLW_PUBLIC_KEY")
-    FLW_SECRET_KEY: Optional[str] = os.getenv("FLW_SECRET_KEY")
-    FLW_SECRET_HASH: Optional[str] = os.getenv("FLW_SECRET_HASH")
-    FLUTTERWAVE_PUBLIC_KEY: Optional[str] = os.getenv("FLUTTERWAVE_PUBLIC_KEY")
-    FLUTTERWAVE_BASE_URL: str = os.getenv("FLUTTERWAVE_BASE_URL", "https://api.flutterwave.com/v3")
-    FLW_PROD_SECRET_KEY: Optional[str] = os.getenv("FLW_PROD_SECRET_KEY")
+    FLW_PUBLIC_KEY: Optional[str] = None
+    FLW_SECRET_KEY: Optional[str] = None
+    FLW_SECRET_HASH: Optional[str] = None
+    FLUTTERWAVE_PUBLIC_KEY: Optional[str] = None
+    FLUTTERWAVE_BASE_URL: str = "https://api.flutterwave.com/v3"
+    FLW_PROD_SECRET_KEY: Optional[str] = None
 
     # SUPABASE
-    SUPABASE_URL: str = os.getenv("SUPABASE_URL")
-    SUPABASE_PUBLISHABLE_KEY: str = os.getenv("SUPABASE_PUBLISHABLE_KEY")
-    SUPABASE_SECRET_KEY: str = os.getenv("SUPABASE_SECRET_KEY")
-    SUPABASE_STORAGE_BUCKET_URL: str = os.getenv("SUPABASE_STORAGE_BUCKET_URL")
+    SUPABASE_URL: Optional[str] = None
+    SUPABASE_PUBLISHABLE_KEY: Optional[str] = None
+    SUPABASE_SECRET_KEY: Optional[str] = None
+    SUPABASE_STORAGE_BUCKET_URL: Optional[str] = None
 
     # REDIS
-    UPSTASH_REDIS_REST_URL: str = os.getenv("UPSTASH_REDIS_REST_URL", "redis://localhost:6379")
-    UPSTASH_REDIS_REST_TOKEN: str = os.getenv("UPSTASH_REDIS_REST_TOKEN")
+    UPSTASH_REDIS_REST_URL: str = "redis://localhost:6379"
+    UPSTASH_REDIS_REST_TOKEN: Optional[str] = None
 
     # SENTRY
-    SENTRY_DSN: str = os.getenv("SENTRY_DSN")
-
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
-        case_sensitive = True
-        extra = "ignore"
+    SENTRY_DSN: Optional[str] = None
 
 
 settings = Settings()
@@ -69,11 +69,10 @@ if settings.ENVIRONMENT == "production":
             "FLW_SECRET_HASH",
             "INTERNAL_API_KEY",
         ]
-        missing_vars = [var for var in required_vars if not os.getenv(var)]
+        missing_vars = [var for var in required_vars if not getattr(settings, var)]
         if missing_vars:
             raise ValueError(f"Missing required env vars: {', '.join(missing_vars)}")
     except ValueError as e:
-        import sys
         print(f"ERROR: {e}", file=sys.stderr)
         sys.exit(1)
 
