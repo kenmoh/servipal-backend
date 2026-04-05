@@ -41,6 +41,7 @@ class DisputeResponse(BaseModel):
     respondent_id: UUID
     reason: str
     status: str
+    status: str
     resolution_notes: Optional[str]
     resolved_by_id: Optional[UUID]
     resolved_at: Optional[datetime]

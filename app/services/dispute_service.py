@@ -10,6 +10,8 @@ from app.schemas.dispute_schema import (
     DisputeResolve,
     DisputeResponse,
     DisputeMessageResponse,
+    DisputeListResponse,
+    DisputePaginationMeta,
 )
 from app.utils.audit import log_audit_event
 from app.utils.dispute_helpers import (
@@ -58,12 +60,26 @@ async def create_dispute(
         "status": "OPEN",
     }
 
-    resp = await supabase.table("disputes").insert(dispute_data).execute()
+    resp = await supabase.rpc("create_dispute", {
+      'p_order_id': data.order_id,
+      'p_order_type': data.order_type,
+      'p_initiator_id': initiator_id,
+      'p_respondent_id': respondent_id,
+      'p_reason': data.reason,
+    }).execute();
 
     # Update order with dispute_id
     await update_order_status(
         data.order_id, data.order_type, resp.data[0]["id"], supabase
     )
+
+    await notify_user(
+                respondent_id,
+                "Dispute Opened",
+                "Dispute opened for your order,please respond as soon as possible",
+                data={"DISPUTE": "Dispute opened for your order"},
+                supabase=supabase,
+            )
 
     # Log audit
     await log_audit_event(
@@ -75,8 +91,6 @@ async def create_dispute(
         actor_type="BUYER",
         supabase=supabase,
     )
-
-    # Send a notification to respondent + admin (later)
 
     return resp.data[0]
 
@@ -271,44 +285,52 @@ async def resolve_dispute(
 # ───────────────────────────────────────────────
 # Get My Disputes
 # ───────────────────────────────────────────────
-async def get_my_disputes(
-    current_user_id: UUID, supabase: AsyncClient
-) -> List[DisputeResponse]:
+import math
+
+async def get_disputes(
+    current_user_id: UUID, page: int, page_size: int, supabase: AsyncClient
+) -> DisputeListResponse:
     """
     Fetch all disputes where the current user is either the initiator (buyer) or respondent (seller/vendor).
-    Ordered by most recent update.
+    Ordered by most recent update. Pagination applied.
     """
     try:
-        # Explicit filter: user is initiator OR respondent
-        disputes_resp = (
-            await supabase.table("disputes")
+        offset = (page - 1) * page_size
+        
+        query = (
+            supabase.table("disputes")
             .select("""
                 id,
                 order_id,
                 order_type,
                 initiator_id,
                 respondent_id,
+                dispatch_id,
                 reason,
                 status,
                 resolution_notes,
                 resolved_by_id,
                 resolved_at,
+                last_message_text,
+                last_message_at,
                 created_at,
                 updated_at
-            """)
-            .or_(
-                f"initiator_id.eq.{current_user_id},respondent_id.eq.{current_user_id}"
-            )
-            .order("updated_at", desc=True)
+            """, count="exact")
+            .neq("status", "RESOLVED")
+            .neq("status", "CLOSED")
+        )
+        
+        disputes_resp = await (
+            query.order("created_at", desc=True)
+            .range(offset, offset + page_size - 1)
             .execute()
         )
 
+        total = disputes_resp.count or 0
         disputes = disputes_resp.data or []
 
-        # Build responses (lightweight - no full messages here)
         result = []
         for d in disputes:
-            # Optional: get message count for preview
             count_resp = (
                 await supabase.table("dispute_messages")
                 .select("count", count="exact")
@@ -322,11 +344,14 @@ async def get_my_disputes(
                 order_type=d["order_type"],
                 initiator_id=d["initiator_id"],
                 respondent_id=d["respondent_id"],
+                dispatch_id=d.get("dispatch_id"),
                 reason=d["reason"],
                 status=d["status"],
-                resolution_notes=d["resolution_notes"],
-                resolved_by_id=d["resolved_by_id"],
-                resolved_at=d["resolved_at"],
+                resolution_notes=d.get("resolution_notes"),
+                resolved_by_id=d.get("resolved_by_id"),
+                resolved_at=d.get("resolved_at"),
+                last_message_text=d.get("last_message_text"),
+                last_message_at=d.get("last_message_at"),
                 created_at=d["created_at"],
                 updated_at=d["updated_at"],
                 messages=[],
@@ -335,7 +360,14 @@ async def get_my_disputes(
 
             result.append(dispute_data)
 
-        return result
+        meta = DisputePaginationMeta(
+            total=total,
+            page=page,
+            page_size=page_size,
+            total_pages=math.ceil(total / page_size) if total else 0,
+        )
+
+        return DisputeListResponse(data=result, meta=meta)
 
     except Exception as e:
         raise HTTPException(
@@ -364,11 +396,14 @@ async def get_dispute_detail(
                 order_type,
                 initiator_id,
                 respondent_id,
+                dispatch_id,
                 reason,
                 status,
                 resolution_notes,
                 resolved_by_id,
                 resolved_at,
+                last_message_text,
+                last_message_at,
                 created_at,
                 updated_at
             """)
@@ -405,11 +440,14 @@ async def get_dispute_detail(
             order_type=dispute["order_type"],
             initiator_id=dispute["initiator_id"],
             respondent_id=dispute["respondent_id"],
+            dispatch_id=dispute.get("dispatch_id"),
             reason=dispute["reason"],
             status=dispute["status"],
-            resolution_notes=dispute["resolution_notes"],
-            resolved_by_id=dispute["resolved_by_id"],
-            resolved_at=dispute["resolved_at"],
+            resolution_notes=dispute.get("resolution_notes"),
+            resolved_by_id=dispute.get("resolved_by_id"),
+            resolved_at=dispute.get("resolved_at"),
+            last_message_text=dispute.get("last_message_text"),
+            last_message_at=dispute.get("last_message_at"),
             created_at=dispute["created_at"],
             updated_at=dispute["updated_at"],
             messages=messages,
