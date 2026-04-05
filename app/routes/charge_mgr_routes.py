@@ -50,6 +50,6 @@ async def update_existing_charges(
     supabase: AsyncClient = Depends(get_supabase_admin_client),
     actor: dict = Depends(require_super_admin),
 ):
-    return await update_charges(supabase, charges_id, body, actor["sub"])
+    return await update_charges(supabase, charges_id, body, actor["id"])
 
 
