@@ -41,7 +41,6 @@ class DisputeResponse(BaseModel):
     respondent_id: UUID
     reason: str
     status: str
-    status: str
     resolution_notes: Optional[str]
     resolved_by_id: Optional[UUID]
     resolved_at: Optional[datetime]
@@ -54,3 +53,8 @@ class DisputeResponse(BaseModel):
 class DisputeResolve(BaseModel):
     resolution: Literal["BUYER_FAVOR", "SELLER_FAVOR", "COMPROMISE"]
     notes: str = Field(..., min_length=10, description="How the dispute was resolved")
+
+
+class UpdateDisputeStatusRequest(BaseModel):
+    status: str = Literal["OPEN", "CLOSED", "RESOLVED", "CANCELLED", "UNDER_REVIEW", "ESCALATED"]
+    resolution_notes: Optional[str] = Field(None, min_length=10, max_length=500)

@@ -7,7 +7,7 @@ from app.schemas.dispute_schema import (
     DisputeMessageCreate,
     DisputeResolve,
     DisputeResponse,
-    DisputeListResponse
+   
 )
 from app.dependencies.auth import get_current_profile, require_user_type
 from app.schemas.user_schemas import UserType
@@ -36,63 +36,63 @@ async def create_dispute(
 
 
 
-@router.get("", response_model=DisputeListResponse)
-async def get_disputes(
-    page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=100),
-    current_profile: dict = Depends(get_current_profile),
-    supabase: AsyncClient = Depends(get_supabase_admin_client),
-):
-    """
-    Get disputes involved with the current user.
+# @router.get("", response_model=DisputeResponse)
+# async def get_disputes(
+#     page: int = Query(1, ge=1),
+#     page_size: int = Query(20, ge=1, le=100),
+#     current_profile: dict = Depends(get_current_profile),
+#     supabase: AsyncClient = Depends(get_supabase_admin_client),
+# ):
+#     """
+#     Get disputes involved with the current user.
 
-    Returns:
-        List[DisputeResponse]: List of disputes.
-    """
-    return await dispute_service.get_disputes(
-        current_profile["id"], page, page_size, supabase
-    )
-
-
-@router.get("/{dispute_id}", response_model=DisputeResponse)
-async def get_dispute_detail(
-    dispute_id: UUID,
-    supabase: AsyncClient = Depends(get_supabase_admin_client),
-    current_user: dict = Depends(get_current_profile),
-):
-    """
-    Get details of a specific dispute.
-
-    Args:
-        dispute_id (UUID): The dispute ID.
-
-    Returns:
-        DisputeResponse: Dispute details with messages.
-    """
-    # Fetch dispute + messages
-    return await dispute_service.get_dispute_detail(dispute_id, supabase)
+#     Returns:
+#         List[DisputeResponse]: List of disputes.
+#     """
+#     return await dispute_service.get_disputes(
+#         current_profile["id"], page, page_size, supabase
+#     )
 
 
-@router.post("/{dispute_id}/messages")
-async def post_dispute_message(
-    dispute_id: UUID,
-    data: DisputeMessageCreate,
-    current_profile: dict = Depends(get_current_profile),
-    supabase: AsyncClient = Depends(get_supabase_admin_client),
-):
-    """
-    Post a message to a dispute.
+# @router.get("/{dispute_id}", response_model=DisputeResponse)
+# async def get_dispute_detail(
+#     dispute_id: UUID,
+#     supabase: AsyncClient = Depends(get_supabase_admin_client),
+#     current_user: dict = Depends(get_current_profile),
+# ):
+#     """
+#     Get details of a specific dispute.
 
-    Args:
-        dispute_id (UUID): The dispute ID.
-        data (DisputeMessageCreate): Message content.
+#     Args:
+#         dispute_id (UUID): The dispute ID.
 
-    Returns:
-        dict: Created message.
-    """
-    return await dispute_service.post_dispute_message(
-        dispute_id, data, current_profile["id"], supabase
-    )
+#     Returns:
+#         DisputeResponse: Dispute details with messages.
+#     """
+#     # Fetch dispute + messages
+#     return await dispute_service.get_dispute_detail(dispute_id, supabase)
+
+
+# @router.post("/{dispute_id}/messages")
+# async def post_dispute_message(
+#     dispute_id: UUID,
+#     data: DisputeMessageCreate,
+#     current_profile: dict = Depends(get_current_profile),
+#     supabase: AsyncClient = Depends(get_supabase_admin_client),
+# ):
+#     """
+#     Post a message to a dispute.
+
+#     Args:
+#         dispute_id (UUID): The dispute ID.
+#         data (DisputeMessageCreate): Message content.
+
+#     Returns:
+#         dict: Created message.
+#     """
+#     return await dispute_service.post_dispute_message(
+#         dispute_id, data, current_profile["id"], supabase
+#     )
 
 
 @router.post("/{dispute_id}/resolve")

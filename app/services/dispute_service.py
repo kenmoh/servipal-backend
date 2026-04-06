@@ -10,8 +10,7 @@ from app.schemas.dispute_schema import (
     DisputeResolve,
     DisputeResponse,
     DisputeMessageResponse,
-    DisputeListResponse,
-    DisputePaginationMeta,
+    # DisputePaginationMeta,
 )
 from app.utils.audit import log_audit_event
 from app.utils.dispute_helpers import (
@@ -287,93 +286,93 @@ async def resolve_dispute(
 # ───────────────────────────────────────────────
 import math
 
-async def get_disputes(
-    current_user_id: UUID, page: int, page_size: int, supabase: AsyncClient
-) -> DisputeListResponse:
-    """
-    Fetch all disputes where the current user is either the initiator (buyer) or respondent (seller/vendor).
-    Ordered by most recent update. Pagination applied.
-    """
-    try:
-        offset = (page - 1) * page_size
+# async def get_disputes(
+#     current_user_id: UUID, page: int, page_size: int, supabase: AsyncClient
+# ) -> DisputeResponse:
+#     """
+#     Fetch all disputes where the current user is either the initiator (buyer) or respondent (seller/vendor).
+#     Ordered by most recent update. Pagination applied.
+#     """
+#     try:
+#         offset = (page - 1) * page_size
         
-        query = (
-            supabase.table("disputes")
-            .select("""
-                id,
-                order_id,
-                order_type,
-                initiator_id,
-                respondent_id,
-                dispatch_id,
-                reason,
-                status,
-                resolution_notes,
-                resolved_by_id,
-                resolved_at,
-                last_message_text,
-                last_message_at,
-                created_at,
-                updated_at
-            """, count="exact")
-            .neq("status", "RESOLVED")
-            .neq("status", "CLOSED")
-        )
+#         query = (
+#             supabase.table("disputes")
+#             .select("""
+#                 id,
+#                 order_id,
+#                 order_type,
+#                 initiator_id,
+#                 respondent_id,
+#                 dispatch_id,
+#                 reason,
+#                 status,
+#                 resolution_notes,
+#                 resolved_by_id,
+#                 resolved_at,
+#                 last_message_text,
+#                 last_message_at,
+#                 created_at,
+#                 updated_at
+#             """, count="exact")
+#             .neq("status", "RESOLVED")
+#             .neq("status", "CLOSED")
+#         )
         
-        disputes_resp = await (
-            query.order("created_at", desc=True)
-            .range(offset, offset + page_size - 1)
-            .execute()
-        )
+#         disputes_resp = await (
+#             query.order("created_at", desc=True)
+#             .range(offset, offset + page_size - 1)
+#             .execute()
+#         )
 
-        total = disputes_resp.count or 0
-        disputes = disputes_resp.data or []
+#         total = disputes_resp.count or 0
+#         disputes = disputes_resp.data or []
 
-        result = []
-        for d in disputes:
-            count_resp = (
-                await supabase.table("dispute_messages")
-                .select("count", count="exact")
-                .eq("dispute_id", d["id"])
-                .execute()
-            )
+#         result = []
+#         for d in disputes:
+#             count_resp = (
+#                 await supabase.table("dispute_messages")
+#                 .select("count", count="exact")
+#                 .eq("dispute_id", d["id"])
+#                 .execute()
+#             )
 
-            dispute_data = DisputeResponse(
-                id=d["id"],
-                order_id=d["order_id"],
-                order_type=d["order_type"],
-                initiator_id=d["initiator_id"],
-                respondent_id=d["respondent_id"],
-                dispatch_id=d.get("dispatch_id"),
-                reason=d["reason"],
-                status=d["status"],
-                resolution_notes=d.get("resolution_notes"),
-                resolved_by_id=d.get("resolved_by_id"),
-                resolved_at=d.get("resolved_at"),
-                last_message_text=d.get("last_message_text"),
-                last_message_at=d.get("last_message_at"),
-                created_at=d["created_at"],
-                updated_at=d["updated_at"],
-                messages=[],
-            )
-            dispute_data.message_count = count_resp.count or 0  # optional field
+#             dispute_data = DisputeResponse(
+#                 id=d["id"],
+#                 order_id=d["order_id"],
+#                 order_type=d["order_type"],
+#                 initiator_id=d["initiator_id"],
+#                 respondent_id=d["respondent_id"],
+#                 dispatch_id=d.get("dispatch_id"),
+#                 reason=d["reason"],
+#                 status=d["status"],
+#                 resolution_notes=d.get("resolution_notes"),
+#                 resolved_by_id=d.get("resolved_by_id"),
+#                 resolved_at=d.get("resolved_at"),
+#                 last_message_text=d.get("last_message_text"),
+#                 last_message_at=d.get("last_message_at"),
+#                 created_at=d["created_at"],
+#                 updated_at=d["updated_at"],
+#                 messages=[],
+#             )
+#             dispute_data.message_count = count_resp.count or 0  # optional field
 
-            result.append(dispute_data)
+#             result.append(dispute_data)
 
-        meta = DisputePaginationMeta(
-            total=total,
-            page=page,
-            page_size=page_size,
-            total_pages=math.ceil(total / page_size) if total else 0,
-        )
+#         meta = DisputePaginationMeta(
+#             total=total,
+#             page=page,
+#             page_size=page_size,
+#             total_pages=math.ceil(total / page_size) if total else 0,
+#         )
 
-        return DisputeListResponse(data=result, meta=meta)
+#         return DisputeResponse(data=result, meta=meta)
 
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to fetch my disputes: {str(e)}",
-        )
+#     except Exception as e:
+#         raise HTTPException(
+#             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+#             detail=f"Failed to fetch my disputes: {str(e)}",
+#         )
 
 
 # ───────────────────────────────────────────────
