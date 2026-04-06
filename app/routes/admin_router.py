@@ -207,8 +207,7 @@ async def verify_user(
     supabase: AsyncClient = Depends(get_supabase_admin_client),
     actor: dict = Depends(require_admin_or_super),
 ):
-    await supabase.auth.admin.update_user_by_id({
-        "id": str(user_id),
+    await supabase.auth.admin.update_user_by_id(str(user_id), {
         "email_confirm": True,
     })
     return {
