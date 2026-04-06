@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Request, HTTPException, Depends, status, Header
 from supabase import AsyncClient
 from app.dependencies.auth import get_current_user
+from app.schemas.payments_schema import CreateRefundRequest, MarkPaymentSuccessRequest
 from app.utils.api_key_auth import APIKeyManager
 # from app.services.payment_service import (
 #     process_successful_delivery_payment,
@@ -19,6 +20,9 @@ from app.utils.webhook_validation import WebhookValidator
 from pydantic import BaseModel
 # import hmac  # COMMENTED OUT - Using WebhookValidator instead for secure signature validation
 from app.common import order
+from app.services.payment_service import PaymentService
+
+
 
 
 class PaymentWebhookResponse(BaseModel):
@@ -229,3 +233,50 @@ async def init_bank_transfer(
     current_user: dict = Depends(get_current_user),
 ):
     return await generate_virtual_account_for_bank_transfer_payment(amount=data.paid_amount, customer=current_user, supabase=supabase)
+
+
+# Payout/Refund processing
+
+@router.post("/success")
+async def mark_payment_success(payload: MarkPaymentSuccessRequest,  supabase: AsyncClient = Depends(get_supabase_client)):
+
+    return await supabase.mark_payment_success(
+        str(payload.order_id),
+        payload.flutterwave_tx_id,
+        payload.scheduled_payout_at.isoformat(),
+    )
+
+@router.get("/due")
+async def get_due_payouts(supabase: AsyncClient = Depends(get_supabase_client)):
+    return await supabase.get_due_payouts()
+
+
+@router.post("/process")
+async def process_payout(
+    order_payment_id: str,
+    flutterwave_transfer_id: str,
+    flutterwave_reference: str,
+    supabase: AsyncClient = Depends(get_supabase_client)
+):
+    payout_service = PaymentService(supabase)
+    return await payout_service.process_payout(
+        order_payment_id,
+        flutterwave_transfer_id,
+        flutterwave_reference,
+    )
+
+
+@router.post("/")
+async def create_refund(payload: CreateRefundRequest, supabase: AsyncClient = Depends(get_supabase_client)):
+    refund_service = PaymentService(supabase)
+    return await refund_service.create_refund(
+        str(payload.order_payment_id),
+        payload.amount,
+        payload.reason,
+    )
+
+
+@router.get("/pending")
+async def get_pending_refunds(supabase: AsyncClient = Depends(get_supabase_client)):
+    refund_service = PaymentService(supabase)
+    return await refund_service.get_pending_refunds()

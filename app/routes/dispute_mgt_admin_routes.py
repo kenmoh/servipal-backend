@@ -39,7 +39,7 @@ async def list_all_disputes(
     )
     return await list_disputes(
         supabase, filters,
-        caller_id=UUID(actor["sub"]),       # ← pass caller
+        caller_id=UUID(actor["id"]),       # ← pass caller
         page=page, page_size=page_size,
     )
 

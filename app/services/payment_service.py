@@ -2,8 +2,7 @@ import json
 from typing import Literal
 from app.utils.redis_utils import get_pending, delete_pending
 from uuid import UUID
-from supabase import AsyncClient
-from app.utils.commission import get_commission_rate
+from supabase import AsyncClient, Client
 from app.config.logging import logger
 from app.utils.audit import log_audit_event
 from typing import Optional
@@ -1103,3 +1102,71 @@ def parse_coordinates(value) -> list:
     return value
 
 
+
+#  Payout
+class PaymentService:
+    """ Payout/Refund ptocessing """
+    def __init__(self, supabase: Client):
+        self.supabase = supabase
+
+    def mark_payout_success(
+        self,
+        order_id: str,
+        flutterwave_tx_id: str,
+        scheduled_payout_at: str,
+    ):
+        return self.supabase.rpc(
+            "mark_payout_success",
+            {
+                "p_order_id": order_id,
+                "p_flutterwave_tx_id": flutterwave_tx_id,
+                "p_scheduled_payout_at": scheduled_payout_at,
+            },
+        ).execute()
+
+    def get_due_payouts(self, limit: int = 20):
+        return self.supabase.rpc(
+            "get_due_payouts_locked",
+            {"p_limit": limit},
+        ).execute()
+
+    def process_payout(
+        self,
+        order_payment_id: str,
+        flutterwave_transfer_id: str,
+        flutterwave_reference: str,
+    ):
+        return self.supabase.rpc(
+            "process_payout",
+            {
+                "p_order_payment_id": order_payment_id,
+                "p_flutterwave_transfer_id": flutterwave_transfer_id,
+                "p_flutterwave_reference": flutterwave_reference,
+            },
+        ).execute()
+
+
+    def create_refund(self, order_payment_id: str, amount: float, reason: str):
+        return self.supabase.rpc(
+            "create_refund",
+            {
+                "p_order_payment_id": order_payment_id,
+                "p_amount": amount,
+                "p_reason": reason,
+            },
+        ).execute()
+
+    def get_pending_refunds(self, limit: int = 20):
+        return self.supabase.rpc(
+            "get_pending_refunds",
+            {"p_limit": limit},
+        ).execute()
+
+    async def mark_refund_success(self, refund_id: str, flutterwave_refund_id: str):
+        return self.supabase.rpc(
+            "mark_refund_success",
+            {
+                "p_refund_id": refund_id,
+                "p_flutterwave_refund_id": flutterwave_refund_id,
+            },
+        ).execute()

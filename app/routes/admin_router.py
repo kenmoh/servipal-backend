@@ -195,3 +195,24 @@ async def get_wallet(
     await cache_manager.set_cached(cache_key, result, ttl=cache_manager.DEFAULT_DETAIL_TTL)
     
     return result
+
+
+# Manual user verification for testing purposes
+@router.patch(
+    "/users/{user_id}/verify",
+    summary="Verify a user (ADMIN or SUPER_ADMIN)",
+)
+async def verify_user(
+    user_id: UUID,
+    supabase: AsyncClient = Depends(get_supabase_admin_client),
+    actor: dict = Depends(require_admin_or_super),
+):
+    await supabase.auth.admin.update_user_by_id({
+        "id": str(user_id),
+        "email_confirm": True,
+    })
+    return {
+        "message": "User verified successfully",
+        "user_id": user_id,
+    }
+

@@ -3,6 +3,7 @@ name = "servipal-backend"
 version = "0.1.0"
 description = "ServiPal: Multi-vendor lifestyle application backend"
 dependencies = [
+    "celery>=5.6.3",
     "exponent-server-sdk==2.2.0",
     "fastapi[standard]==0.128.0",
     "logfire[fastapi]==4.19.0",
