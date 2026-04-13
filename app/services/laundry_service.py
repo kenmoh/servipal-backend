@@ -405,7 +405,7 @@ async def initiate_laundry_payment(
 
         vendor = vendor.data
         can_pickup = vendor["can_pickup_and_dropoff"]
-        express_fee = vendor.get("express_fee", 0)
+        express_fee = Decimal(vendor.get("express_fee", '0'))
 
 
         # Validate items & calculate subtotal
