@@ -445,7 +445,12 @@ async def initiate_laundry_payment(
             "delivery_option": data.delivery_option,
             "additional_info": data.instructions,
             "delivery_address": data.delivery_address,
+            "is_express": data.is_express,
+            "delivery_time": data.delivery_time,
             "tx_ref": tx_ref,
+            "express_fee": data.express_fee,
+            "pickup_at": data.pickup_at,
+            "delivery_at": data.delivery_at
         }
         await save_pending(f"pending_laundry_{tx_ref}", pending_data, expire=1800)
 

@@ -152,6 +152,12 @@ class LaundryOrderCreate(BaseModel):
     delivery_option: Literal["PICKUP", "VENDOR_DELIVERY"] = Field(
         ..., description="Pickup at shop or vendor delivers"
     )
+    is_express: bool
+    express_fee: Decimal | None = None
+    pickup_at: datetime | None = None
+    delivery_at: datetime | None = None
+    delivery_time: datetime | None = None
+    delivery_time: datetime | None = None
     instructions: Optional[str] = Field(
         None, description="Special instructions for washing"
     )

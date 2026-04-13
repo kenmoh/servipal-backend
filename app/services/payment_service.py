@@ -1000,7 +1000,7 @@ async def process_successful_laundry_payment(
         result_data = None
         try:
             result = await supabase.rpc(
-                "process_laundry_payment",
+                "process_laundry_payment_new",
                 {
                     "p_tx_ref": tx_ref,
                     "p_flw_ref": flw_ref,
@@ -1008,13 +1008,18 @@ async def process_successful_laundry_payment(
                     "p_customer_id": pending["customer_id"],
                     "p_vendor_id": pending["vendor_id"],
                     "p_order_data": pending["items"],
+                    "p_is_express": pending.get("is_express", False),
                     "p_subtotal": str(Decimal(pending["subtotal"])),
                     "p_delivery_fee": str(Decimal(pending.get("delivery_fee", 0))),
+                    "p_delivery_time": pending.get("delivery_time"),
                     "p_grand_total": str(Decimal(pending["grand_total"])),
                     "p_delivery_option": pending.get("delivery_option", "PICKUP"),
                     "p_additional_info": pending.get("additional_info"),
                     "p_customer_name": pending.get("name", "Customer"),
+                    "p_pickup_at": pending.get("pickup_at", None),
+                    "p_delivery_at": pending.get("delivery_at", None),
                     "p_destination": pending.get("delivery_address", None),
+                    "p_express_fee": pending.get("express_fee", 0),
                     "p_payment_method": payment_method,
                 },
             ).execute()
