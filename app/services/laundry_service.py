@@ -383,22 +383,30 @@ async def initiate_laundry_payment(
     """
     try:
         # Validate vendor
-        vendor = (
-            await supabase.table("profiles")
-            .select(
-                "id, business_name, can_pickup_and_dropoff, pickup_and_delivery_charge"
-            )
-            .eq("id", str(data.vendor_id))
-            .eq("user_type", "LAUNDRY_VENDOR")
-            .single()
-            .execute()
-        )
+        # vendor = (
+        #     await supabase.table("profiles")
+        #     .select(
+        #         "id, business_name, can_pickup_and_dropoff, pickup_and_delivery_charge"
+        #     )
+        #     .eq("id", str(data.vendor_id))
+        #     .eq("user_type", "LAUNDRY_VENDOR")
+        #     .single()
+        #     .execute()
+        # )
+
+        vendor = await supabase.rpc("get_vendor_with_availability", {
+            "p_vendor_id": data.vendor_id,
+            "p_type": data.delivery_option,
+            "p_date": data.pickup_date
+        }).execute()
 
         if not vendor.data:
             raise HTTPException(404, "Laundry vendor not found")
 
         vendor = vendor.data
         can_pickup = vendor["can_pickup_and_dropoff"]
+        express_fee = vendor.get("express_fee", 0)
+
 
         # Validate items & calculate subtotal
         item_ids = [str(item.item_id) for item in data.items]
@@ -428,8 +436,8 @@ async def initiate_laundry_payment(
                     detail="Vendor does not offer delivery",
                 )
             delivery_fee = Decimal(str(vendor["pickup_and_delivery_charge"] or 0))
-
-        grand_total = subtotal + delivery_fee
+        
+        grand_total = subtotal + delivery_fee + express_fee
 
         # Generate tx_ref
         tx_ref = f"LAUNDRY-{uuid.uuid4().hex[:32].upper()}"
@@ -446,11 +454,12 @@ async def initiate_laundry_payment(
             "additional_info": data.instructions,
             "delivery_address": data.delivery_address,
             "is_express": data.is_express,
-            "delivery_time": data.delivery_time,
             "tx_ref": tx_ref,
             "express_fee": data.express_fee,
-            "pickup_at": data.pickup_at,
-            "delivery_at": data.delivery_at
+            "pickup_date": data.pickup_date,
+            "delivery_date": data.delivery_date,
+            "pickup_time": data.pickup_time,
+            "delivery_time": data.delivery_time,
         }
         await save_pending(f"pending_laundry_{tx_ref}", pending_data, expire=1800)
 
@@ -548,3 +557,7 @@ async def vendor_mark_laundry_order_ready(
         return LaundryVendorMarkReadyResponse(order_id=order_id)
     except Exception as e:
         raise HTTPException(500, f"Failed to mark ready: {str(e)}")
+
+
+
+

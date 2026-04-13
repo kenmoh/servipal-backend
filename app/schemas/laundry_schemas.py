@@ -154,10 +154,10 @@ class LaundryOrderCreate(BaseModel):
     )
     is_express: bool
     express_fee: Decimal | None = None
-    pickup_at: datetime | None = None
-    delivery_at: datetime | None = None
-    delivery_time: datetime | None = None
-    delivery_time: datetime | None = None
+    pickup_date: str | None = None
+    delivery_date: str | None = None
+    pickup_time: str | None = None
+    delivery_time: str | None = None
     instructions: Optional[str] = Field(
         None, description="Special instructions for washing"
     )
