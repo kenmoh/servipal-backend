@@ -395,7 +395,7 @@ async def initiate_laundry_payment(
         # )
 
         vendor = await supabase.rpc("get_vendor_with_availability", {
-            "p_vendor_id": data.vendor_id,
+            "p_vendor_id":str(data.vendor_id),
             "p_type": data.delivery_option,
             "p_date": data.pickup_date
         }).execute()
