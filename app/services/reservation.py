@@ -12,6 +12,7 @@ from app.schemas.common import PaymentCustomerInfo, PaymentCustomization, Paymen
 from app.schemas.reservation import CreateBooking
 from app.utils.redis_utils import save_pending
 from app.config.config import settings
+from app.config.logging import logger
 
 
 async def initiate_reservation_payment(
@@ -61,6 +62,10 @@ async def initiate_reservation_payment(
         }
         await save_pending(f"pending_reservation_{tx_ref}", pending_data, expire=1800)
 
+        print('=====================================================')  
+        logger.info("reservation_payment_initiated", pending_data=pending_data, tx_ref=tx_ref, customer_id=str(customer_id), vendor_id=str(data.vendor_id))
+        print('=====================================================')
+
         # Return SDK-ready data
         return PaymentInitializationResponse(
             tx_ref=tx_ref,
@@ -81,4 +86,7 @@ async def initiate_reservation_payment(
         ).model_dump()
 
     except Exception as e:
+        print('=====================================================')
+        logger.warning("reservation_payment_pending_not_found", error=str(e))
+        print('=====================================================')
         raise HTTPException(500, f"Reservation payment initialization failed: {str(e)}")
