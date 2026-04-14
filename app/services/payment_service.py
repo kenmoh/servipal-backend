@@ -1130,18 +1130,21 @@ async def process_successful_reservation_payment(
         result_data = None
         try:
             result = await supabase.rpc(
-                "create_customer_reservation",
+                "create_customer_reservation_new",
                 {
-                    "p_vendor_id": tx_ref,
-                    "p_table_id": flw_ref,
+                    "p_vendor_id": pending["vendor_id"],
+                    "p_customer_id": pending["customer_id"],
+                    "p_table_id": pending["table_id"],
                     "p_reservation_time": str(paid_amount),
-                    "p_end_time": pending["customer_id"],
-                    "p_party_size": pending["vendor_id"],
-                    "p_number_of_children": pending["items"],
-                    "p_number_of_adult": pending.get("is_express", False),
-                    "p_deposit_required": str(Decimal(pending["subtotal"])),
-                    "p_deosit_paid": str(Decimal(pending.get("delivery_fee", 0))),
-                    "p_notes": pending.get("delivery_time") or None,
+                    "p_end_time": pending["end_time"],
+                    "p_party_size": pending["party_size"],
+                    "p_number_of_children": pending["number_of_children"],
+                    "p_number_of_adult": pending["number_of_adult"],
+                    "p_deposit_required": str(Decimal(pending["deposit_required"])),
+                    "p_deposit_paid": str(Decimal(pending.get("deposit_paid", 0))),
+                    "p_notes": pending.get("notes") or None,
+                    "p_flw_ref": flw_ref,
+                    "p_tx_ref": tx_ref,
                     "p_payment_method": payment_method,
                 },
             ).execute()

@@ -7,7 +7,7 @@ from app.schemas.reservation import CreateBooking
 from app.services import reservation
 
 
-router = APIRouter(prefix="/api/v1/reservation", tags=["Reservations"])
+router = APIRouter(prefix="/api/v1/reservations", tags=["Reservations"])
 
 @router.post("/initiate-payment")
 async def initiate_laundry_payment_endpoint(
