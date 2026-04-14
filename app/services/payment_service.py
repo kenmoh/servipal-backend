@@ -6,7 +6,7 @@ from supabase import AsyncClient, Client
 from app.config.logging import logger
 from app.utils.audit import log_audit_event
 from typing import Optional
-from fastapi import Request
+from fastapi import HTTPException, Request, status
 from decimal import Decimal
 from app.utils.payment import verify_transaction_tx_ref
 from app.services.notification_service import notify_user
@@ -1070,6 +1070,127 @@ async def process_successful_laundry_payment(
 
         logger.info(
             "laundry_payment_processed_success", tx_ref=tx_ref, order_id=str(order_id)
+        )
+
+        return result_data
+
+    except Exception as e:
+        logger.error(
+            "laundry_payment_processing_error",
+            tx_ref=tx_ref,
+            error=str(e),
+            exc_info=True,
+        )
+        raise
+
+
+async def process_successful_reservation_payment(
+    tx_ref: str,
+    paid_amount: float,
+    flw_ref: str,
+    supabase: AsyncClient,
+    payment_method: Literal["CARD", "WALLET", 'BANK_TRANSFER'],
+    pending_data: dict = None,
+    request: Optional[Request] = None,
+):
+    """Process successful laundry order payment using atomic RPC."""
+    logger.info("process_successful_reservation_payment", tx_ref=tx_ref, paid_amount=paid_amount)
+
+
+    if payment_method == "CARD" or payment_method == 'BANK_TRANSFER':
+        verified = await verify_transaction_tx_ref(tx_ref)
+        if not verified or verified.get("status") != "success":
+            logger.error("process_successful_reservation_payment_failed", tx_ref=tx_ref)
+            return {"status": "verification_failed"}
+
+    # 1. Get pending data from Redis
+    pending_key = f"pending_reservation_{tx_ref}"
+    if payment_method == "WALLET" and pending_data:
+        pending = pending_data
+        logger.info("using_embedded_pending_data", tx_ref=tx_ref)
+    else:
+        pending = await get_pending(pending_key)  # CARD reads from Redis
+
+    if not pending:
+        logger.warning("reservation_payment_pending_not_found", tx_ref=tx_ref)
+        return
+
+    if Decimal(str(paid_amount)).quantize(Decimal("0.00")) != Decimal(str(pending["deposit_required"])).quantize(Decimal("0.00")):
+        logger.error(
+            "reservation_payment_amount_mismatch",
+            tx_ref=tx_ref,
+            expected=str(Decimal(str(pending["deposit"])).quantize(Decimal("0.00"))),
+            paid=str(Decimal(str(paid_amount)).quantize(Decimal("0.00"))),
+        )
+        await delete_pending(pending_key)
+        raise HTTPException(status_code=status.HTTP_406_NOT_ACCEPTABLE, detail=f"Amount paid {paid_amount} does not match deposit required {pending['deposit_required']}")
+
+    try:
+        # Call atomic RPC
+        result_data = None
+        try:
+            result = await supabase.rpc(
+                "create_customer_reservation",
+                {
+                    "p_vendor_id": tx_ref,
+                    "p_table_id": flw_ref,
+                    "p_reservation_time": str(paid_amount),
+                    "p_end_time": pending["customer_id"],
+                    "p_party_size": pending["vendor_id"],
+                    "p_number_of_children": pending["items"],
+                    "p_number_of_adult": pending.get("is_express", False),
+                    "p_deposit_required": str(Decimal(pending["subtotal"])),
+                    "p_deosit_paid": str(Decimal(pending.get("delivery_fee", 0))),
+                    "p_notes": pending.get("delivery_time") or None,
+                    "p_payment_method": payment_method,
+                },
+            ).execute()
+
+            result_data = result.data
+
+        except APIError as e:
+            result_data = extract_rpc_data(e)
+            if not result_data:
+                raise
+
+        if not result_data:
+            raise Exception("No data returned from RPC")
+
+        if result_data.get("status") == "already_processed":
+            logger.info("reservation_payment_already_processed", tx_ref=tx_ref)
+            await delete_pending(pending_key)
+            return result_data
+
+        # Success! Cleanup Redis
+        await delete_pending(pending_key)
+
+        reservation_id = result_data["id"]
+
+        # Notify vendor
+        await notify_user(
+            user_id=result_data["vendor_id"],
+            title="New Laundry Order",
+            body="You have a new reservation",
+            data={"reservation_id": str(reservation_id), "type": "RESERVATION_PAYMENT"},
+            supabase=supabase,
+        )
+
+        # Audit log
+        await log_audit_event(
+            supabase,
+            entity_type="LAUNDRY_ORDER",
+            entity_id=str(reservation_id),
+            action="PAYMENT_RECEIVED",
+            new_value={"payment_status": "PAID", "amount": result_data["grand_total"]},
+            actor_id=result_data["customer_id"],
+            actor_type="USER",
+            change_amount=Decimal(str(result_data["grand_total"])),
+            notes=f"Reservation payment received via {payment_method}: {tx_ref}",
+            request=request,
+        )
+
+        logger.info(
+            "reservation_payment_processed_success", tx_ref=tx_ref, reservation_id=str(reservation_id)
         )
 
         return result_data

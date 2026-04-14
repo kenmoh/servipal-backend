@@ -9,8 +9,6 @@ from app.config.config import sync_redis_client
 from app.config.logging import logger
 import hashlib
 import secrets
-import time
-
 
 class CSRFProtectionMiddleware(BaseHTTPMiddleware):
     """

@@ -8,7 +8,6 @@ from app.config.logging import logger
 from app.utils.audit import log_audit_event
 from pydantic import BaseModel
 from app.services.notification_service import notify_user
-from app.config.config import settings
 from postgrest.exceptions import APIError
 from app.services.payment_service import (
     process_successful_delivery_payment,
@@ -16,6 +15,7 @@ from app.services.payment_service import (
     process_successful_topup_payment,
     process_successful_laundry_payment,
     process_successful_product_payment,
+    process_successful_reservation_payment
 )
 
 HANDLER_MAP = {
@@ -24,6 +24,7 @@ HANDLER_MAP = {
     "LAUNDRY-": process_successful_laundry_payment,
     "DELIVERY-": process_successful_delivery_payment,
     "TOPUP-": process_successful_topup_payment,
+    "RESERVATION":process_successful_reservation_payment
 }
 
 
