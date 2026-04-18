@@ -42,7 +42,6 @@ payout_service = TransferService(
 @router.post("", status_code=status.HTTP_201_CREATED)
 async def create_beneficiary(
     data: beneficiary_schema.CreateBenficiary,
-    background_task: BackgroundTasks,
     current_profile: dict = Depends(get_current_profile),
     supabase: AsyncClient = Depends(get_supabase_client),
 ) -> beneficiary_schema.CreateBeneficiaryResponse:
@@ -76,7 +75,7 @@ async def create_beneficiary(
 async def list_beneficiaries(
     page: int = 1,
     supabase: AsyncClient = Depends(get_supabase_admin_client),
-    current_user: dict = Depends(get_current_profile, require_admin),
+    current_user: dict = Depends(require_admin),
 ) -> beneficiary_schema.ListBeneficiary:
     """Return a paginated list of all beneficiaries."""
     return await service.list_beneficiaries(page=page)
@@ -85,7 +84,7 @@ async def list_beneficiaries(
 @router.get("/{beneficiary_id}", status_code=status.HTTP_200_OK)
 async def fetch_beneficiary(
     beneficiary_id: int,
-    current_user: dict = Depends(get_current_profile, require_admin),
+    current_user: dict = Depends(require_admin),
 ) -> beneficiary_schema.FetchBeneficiary:
     """Fetch a single beneficiary by ID."""
     return await service.fetch_beneficiary(
@@ -96,7 +95,7 @@ async def fetch_beneficiary(
 @router.delete("/{beneficiary_id}", status_code=status.HTTP_200_OK)
 async def delete_beneficiary(
     beneficiary_id: int,
-    current_user: dict = Depends(get_current_profile, require_admin),
+    current_user: dict = Depends(require_admin),
     supabase: AsyncClient = Depends(get_supabase_client),
 ) -> beneficiary_schema.DeleteBeneficiaryResponse:
     """Delete a beneficiary by ID."""
@@ -189,7 +188,7 @@ async def create_vendor_payout(
 )
 async def retry_transfer(
     transfer_id: int,
-    current_user: dict = Depends(get_current_profile. require_admin),
+    current_user: dict = Depends(require_admin),
 ):
     """Retry a previously failed Flutterwave transfer."""
     return await payout_service.retry_transfer(transfer_id=transfer_id)
@@ -204,7 +203,7 @@ async def get_transfers(
     page: int | None = None,
     transfer_status: str | None = None,
     account_id: str | None = None,
-    current_user: dict = Depends(get_current_profile. require_admin),
+    current_user: dict = Depends(require_admin),
 ):
     """Fetch all transfers with optional pagination and status filters."""
     return await payout_service.get_transfers(
@@ -221,7 +220,7 @@ async def get_transfers(
 )
 async def get_transfer(
     transfer_id: int,
-    current_user: dict = Depends(get_current_profile, require_admin),
+    current_user: dict = Depends(require_admin),
 ):
     """Fetch details of a single transfer by its Flutterwave ID."""
     return await payout_service.get_transfer(transfer_id=transfer_id)
@@ -234,7 +233,7 @@ async def get_transfer(
 )
 async def get_transfer_retry(
     transfer_id: int,
-    current_user: dict = Depends(get_current_profile. require_admin),
+    current_user: dict = Depends(require_admin),
 ):
     """Fetch all retry attempts that have been made for a given transfer."""
     return await payout_service.get_transfer_retry(transfer_id=transfer_id)

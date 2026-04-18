@@ -7,7 +7,7 @@ class CreateBenficiary(BaseModel):
     account_bank: str
     account_number: str
     beneficiary_name: str
-    currency: str = "NGN"
+    currency: str | None = None
     bank_name: str
 
 

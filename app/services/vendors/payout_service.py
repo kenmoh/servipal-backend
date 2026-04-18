@@ -1,10 +1,23 @@
-from typing import Any
+from typing import Any, Literal
 from decimal import Decimal
+import httpx
+from fastapi import HTTPException, status
 
 from supabase import AsyncClient
 
+# from app.common.order import get_delivery_order_by_id_for_payout
 from app.config.config import settings
 from app.schemas.beneficiary_schema import PayoutCreate, PayoutData
+
+
+async def get_delivery_order_by_id_for_payout(order_id: str, payout_to: Literal['CUSTOMER', 'VENDOR'], supabase: AsyncClient):
+    resp = await supabase.rpc('unified_order_funds', {
+        'p_order_id': order_id,
+        'p_payout_to': payout_to
+
+    }).execute()
+
+    return resp.data[0]
 
 TRANSFER_URL = "https://api.flutterwave.com/v3/transfers"
 
