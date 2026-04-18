@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Optional, List, Dict
 from decimal import Decimal
 from fastapi import HTTPException, status, Request
-from app.utils.redis_utils import save_pending
+from app.utils.redis_utils import save_pending, get_pending
 from app.schemas.common import (
     VendorOrderAction,
     PaymentInitializationResponse,
@@ -27,6 +27,8 @@ from app.config.config import settings
 from app.schemas.common import VendorResponse
 from app.config.logging import logger
 from app.utils.audit import log_audit_event
+from app.services.payments.flutterwave_service import FlutterwavePaymentsClient
+from app.services.vendors.payout_service import TransferService
 
 
 # ───────────────────────────────────────────────
@@ -122,7 +124,7 @@ async def vendor_laundry_order_action(
 
             # Get transaction for refund
             tx_resp = (
-                await supabase.table("transactions")
+                await supabase.table("transfers")
                 .select("id, amount, from_user_id, status")
                 .eq("order_id", str(order_id))
                 .single()
@@ -156,7 +158,7 @@ async def vendor_laundry_order_action(
 
             # Mark transaction as refunded
             await (
-                supabase.table("transactions")
+                supabase.table("transfers")
                 .update({"status": "REFUNDED"})
                 .eq("id", tx["id"])
                 .execute()
@@ -227,7 +229,7 @@ async def customer_confirm_laundry_order(
 
         # 3. Get transaction (for amount & prevent double-release)
         tx_resp = (
-            await supabase.table("transactions")
+            await supabase.table("transfers")
             .select("id, amount, to_user_id, status")
             .eq("order_id", str(order_id))
             .single()
@@ -242,13 +244,13 @@ async def customer_confirm_laundry_order(
         if tx["status"] == "RELEASED":
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Order already confirmed and payment released",
+                detail="Order already confirmed and payments released",
             )
 
         full_amount = tx["amount"]
         vendor_id = order["vendor_id"] or tx["to_user_id"]
 
-        # 4. Atomic payment release (deduct escrow → credit balance)
+        # 4. Atomic payments release (deduct escrow → credit balance)
         await supabase.rpc(
             "release_order_payment",
             {
@@ -260,7 +262,7 @@ async def customer_confirm_laundry_order(
 
         # 5. Update transaction status
         await (
-            supabase.table("transactions")
+            supabase.table("transfers")
             .update({"status": "RELEASED"})
             .eq("id", tx["id"])
             .execute()
@@ -285,9 +287,33 @@ async def customer_confirm_laundry_order(
             change_amount=Decimal(str(full_amount)),
             actor_id=str(customer_id),
             actor_type="USER",
-            notes=f"Customer confirmed laundry order, payment released to vendor",
+            notes=f"Customer confirmed laundry order, payments released to vendor",
             request=request,
         )
+
+        # Trigger payout to vendor via Flutterwave transfer
+        try:
+            transfer_service = TransferService(
+                base_url=settings.FLUTTERWAVE_BASE_URL,
+                secret_key=settings.FLW_SECRET_KEY,
+            )
+            await transfer_service.create_transfer(
+                order_id=str(order_id),
+                payout_to="VENDOR",
+                supabase=supabase,
+            )
+            logger.info(
+                "laundry_transfer_initiated",
+                order_id=str(order_id),
+                vendor_id=str(vendor_id),
+            )
+        except Exception as transfer_err:
+            logger.error(
+                "laundry_transfer_failed",
+                order_id=str(order_id),
+                error=str(transfer_err),
+                exc_info=True,
+            )
 
         logger.info(
             "customer_confirm_laundry_order_success",
@@ -379,34 +405,24 @@ async def initiate_laundry_payment(
 ) -> dict:
     """
     Validate vendor & items, calculate total, save pending in Redis,
-    return Flutterwave RN SDK data (no payment link).
+    return Flutterwave RN SDK data (no payments link).
     """
     try:
-        # Validate vendor
-        # vendor = (
-        #     await supabase.table("profiles")
-        #     .select(
-        #         "id, business_name, can_pickup_and_dropoff, pickup_and_delivery_charge"
-        #     )
-        #     .eq("id", str(data.vendor_id))
-        #     .eq("user_type", "LAUNDRY_VENDOR")
-        #     .single()
-        #     .execute()
-        # )
-
-        vendor = await supabase.rpc("get_vendor_with_availability", {
-            "p_vendor_id":str(data.vendor_id),
-            "p_type": data.delivery_option,
-            "p_date": data.pickup_date
-        }).execute()
+        vendor = await supabase.rpc(
+            "get_vendor_with_availability",
+            {
+                "p_vendor_id": str(data.vendor_id),
+                "p_type": data.delivery_option,
+                "p_date": data.pickup_date,
+            },
+        ).execute()
 
         if not vendor.data:
             raise HTTPException(404, "Laundry vendor not found")
 
         vendor = vendor.data
         can_pickup = vendor["can_pickup_and_dropoff"]
-        express_fee = Decimal(vendor.get("express_fee", '0'))
-
+        express_fee = Decimal(vendor.get("express_fee", "0"))
 
         # Validate items & calculate subtotal
         item_ids = [str(item.item_id) for item in data.items]
@@ -436,7 +452,7 @@ async def initiate_laundry_payment(
                     detail="Vendor does not offer delivery",
                 )
             delivery_fee = Decimal(str(vendor["pickup_and_delivery_charge"] or 0))
-        
+
         grand_total = subtotal + delivery_fee + express_fee
 
         # Generate tx_ref
@@ -479,7 +495,7 @@ async def initiate_laundry_payment(
                 description=f"{vendor['business_name']} - Laundry Order",
                 logo="https://mohdelivery.s3.us-east-1.amazonaws.com/favion/favicon.ico",
             ),
-            message="Ready for payment",
+            message="Ready for payments",
         ).model_dump()
 
     except Exception as e:
@@ -557,7 +573,3 @@ async def vendor_mark_laundry_order_ready(
         return LaundryVendorMarkReadyResponse(order_id=order_id)
     except Exception as e:
         raise HTTPException(500, f"Failed to mark ready: {str(e)}")
-
-
-
-

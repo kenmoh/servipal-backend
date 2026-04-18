@@ -23,7 +23,6 @@ router = APIRouter(prefix="/api/v1/users", tags=["Users"])
 
 @router.post("/admin", response_model=UserProfileResponse)
 async def create_admin(
-  
     request: Request,
     supabase: AsyncClient = Depends(get_supabase_admin_client),
 ):
@@ -44,6 +43,7 @@ async def create_admin(
     )
     # logger.info("rider_created", dispatch_id=current_user.id, rider_id=result.id)
     return result
+
 
 @router.post("/riders", response_model=UserProfileResponse)
 async def create_rider(
@@ -70,7 +70,6 @@ async def create_rider(
     )
     logger.info("rider_created", dispatch_id=current_user.id, rider_id=result.id)
     return result
-
 
 
 @router.get("/me", response_model=UserProfileResponse)

@@ -13,7 +13,7 @@ from fastapi import HTTPException, status
 from supabase import AsyncClient
 from decimal import Decimal
 from typing import List
-from app.utils.redis_utils import save_pending
+from app.utils.redis_utils import save_pending, get_pending
 from app.config.config import settings
 from app.schemas.common import (
     PaymentInitializationResponse,
@@ -23,6 +23,8 @@ from app.schemas.common import (
 from app.services.notification_service import notify_user
 from app.config.logging import logger
 from postgrest.exceptions import APIError
+from app.services.payments.flutterwave_service import FlutterwavePaymentsClient
+from app.services.vendors.payout_service import TransferService
 
 
 # from app.utils.commission import get_commission_rate
@@ -157,7 +159,7 @@ async def delete_product_item(
     return {"success": True, "message": "Product item deleted (archived)"}
 
 
-# Initiate payment (single item + quantity)
+# Initiate payments (single item + quantity)
 async def initiate_product_payment(
     data: ProductOrderCreate, customer_info: dict, supabase: AsyncClient
 ) -> PaymentInitializationResponse:
@@ -233,6 +235,8 @@ async def initiate_product_payment(
             message="Ready for payment",
         ).model_dump()
 
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(500, f"Product payment initiation failed: {str(e)}")
 
@@ -256,7 +260,7 @@ async def customer_confirm_product_order(
             raise HTTPException(400, "Order not ready for confirmation")
 
         tx = (
-            await supabase.table("transactions")
+            await supabase.table("transfers")
             .select("id, amount, to_user_id, status")
             .eq("order_id", str(order_id))
             .single()
@@ -285,7 +289,7 @@ async def customer_confirm_product_order(
 
         # Update transaction
         await (
-            supabase.table("transactions")
+            supabase.table("transfers")
             .update({"status": "RELEASED"})
             .eq("id", tx.data["id"])
             .execute()
@@ -300,6 +304,30 @@ async def customer_confirm_product_order(
         )
 
         # Stock reduction + total_sold increment happens via trigger (see earlier)
+
+        # Trigger payout to vendor via Flutterwave transfer
+        try:
+            transfer_service = TransferService(
+                base_url=settings.FLUTTERWAVE_BASE_URL,
+                secret_key=settings.FLW_SECRET_KEY,
+            )
+            await transfer_service.create_transfer(
+                order_id=str(order_id),
+                payout_to="VENDOR",
+                supabase=supabase,
+            )
+            logger.info(
+                "product_transfer_initiated",
+                order_id=str(order_id),
+                vendor_id=str(vendor_id),
+            )
+        except Exception as transfer_err:
+            logger.error(
+                "product_transfer_failed",
+                order_id=str(order_id),
+                error=str(transfer_err),
+                exc_info=True,
+            )
 
         return {
             "success": True,

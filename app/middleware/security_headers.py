@@ -11,7 +11,7 @@ from app.config.logging import logger
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     """
     Middleware to add security headers to all responses.
-    
+
     Headers added:
     - Strict-Transport-Security: Force HTTPS, prevent downgrade attacks
     - X-Content-Type-Options: Prevent MIME type sniffing
@@ -52,14 +52,14 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         # Permissions-Policy: Disable risky APIs (formerly Feature-Policy)
         # Prevents malicious scripts from accessing sensitive browser features
         response.headers["Permissions-Policy"] = (
-            "geolocation=(), microphone=(), camera=(), payment=(), usb=(), "
+            "geolocation=(), microphone=(), camera=(), payments=(), usb=(), "
             "magnetometer=(), gyroscope=(), accelerometer=()"
         )
 
         # Content-Security-Policy: Restrict resource loading
         # Allow CDN resources for Swagger UI and ReDoc in development
         is_docs_path = request.url.path in ["/docs", "/redoc"]
-        
+
         if is_docs_path:
             # For docs endpoints, allow CDN resources for Swagger UI, ReDoc, and JSON viewer
             response.headers["Content-Security-Policy"] = (

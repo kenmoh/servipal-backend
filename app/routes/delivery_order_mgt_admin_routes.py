@@ -40,7 +40,7 @@ async def list_orders(
     ),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
-    current_user = Depends(get_current_user),
+    current_user=Depends(get_current_user),
     supabase: AsyncClient = Depends(get_supabase_client),
     _actor: dict = Depends(require_admin),
 ):
@@ -58,16 +58,16 @@ async def list_orders(
         "date_to": date_to.isoformat() if date_to else None,
         "search": search,
     }
-    
+
     cache_key = cache_manager.get_delivery_orders_list_key(
         create_filter_hash(filters_dict), page
     )
-    
+
     # Try to get from cache first
     cached = await cache_manager.get_cached(cache_key, DeliveryOrderListResponse)
     if cached:
         return cached
-    
+
     # Build filters object and call service
     filters = DeliveryOrderFilters(
         delivery_status=delivery_status,
@@ -83,11 +83,15 @@ async def list_orders(
         date_to=date_to,
         search=search,
     )
-    result = await list_delivery_orders(supabase, filters, page=page, page_size=page_size)
-    
+    result = await list_delivery_orders(
+        supabase, filters, page=page, page_size=page_size
+    )
+
     # Cache the result
-    await cache_manager.set_cached(cache_key, result, ttl=cache_manager.DEFAULT_LIST_TTL)
-    
+    await cache_manager.set_cached(
+        cache_key, result, ttl=cache_manager.DEFAULT_LIST_TTL
+    )
+
     return result
 
 
@@ -102,16 +106,18 @@ async def get_order(
     _actor: dict = Depends(require_admin),
 ):
     cache_key = cache_manager.get_delivery_order_detail_key(str(order_id))
-    
+
     # Try to get from cache first
     cached = await cache_manager.get_cached(cache_key, DeliveryOrderDetail)
     if cached:
         return cached
-    
+
     # Call service
     result = await get_delivery_order(supabase, order_id)
-    
+
     # Cache the result
-    await cache_manager.set_cached(cache_key, result, ttl=cache_manager.DEFAULT_DETAIL_TTL)
-    
+    await cache_manager.set_cached(
+        cache_key, result, ttl=cache_manager.DEFAULT_DETAIL_TTL
+    )
+
     return result

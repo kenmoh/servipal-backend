@@ -108,13 +108,16 @@ async def create_user_account(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Phone or email already exists",
             )
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Something went wrong')
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Something went wrong"
+        )
 
 
 # ───────────────────────────────────────────────
 # 2. Login
 # ───────────────────────────────────────────────
 ALLOWED_USER_TYPES = {"ADMIN", "MODERATOR", "SUPER_ADMIN"}
+
 
 async def login_user(
     data: LoginRequest, supabase: AsyncClient, request: Optional[Request] = None
@@ -137,7 +140,9 @@ async def login_user(
                 user_type=user_type,
             )
             await supabase.auth.sign_out()
-            raise HTTPException(status_code=403, detail="Access denied. Insufficient permissions.")
+            raise HTTPException(
+                status_code=403, detail="Access denied. Insufficient permissions."
+            )
 
         profile_resp = (
             await supabase.table("profiles")
@@ -182,6 +187,8 @@ async def login_user(
         logger.warning("login_failed", email=data.email, error=str(e))
         await record_failed_attempt(data.email, redis_client)
         raise HTTPException(status_code=401, detail="Invalid credentials.")
+
+
 # ───────────────────────────────────────────────
 # 3. Create Rider (by Dispatch only)
 # ───────────────────────────────────────────────
@@ -341,6 +348,8 @@ async def create_rider_by_dispatch(
         raise HTTPException(
             status_code=500, detail=f"Failed to create rider account: {str(e)}"
         )
+
+
 # ───────────────────────────────────────────────
 # 3. Create Admin (by Admin, Super Admin only)
 # ───────────────────────────────────────────────

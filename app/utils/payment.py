@@ -10,8 +10,8 @@ from app.utils.redis_utils import cache_data, get_cached_data
 from app.schemas.bank_schema import BankSchema, AccountDetails, AccountDetailResponse
 from app.config.logging import logger
 
-class AuthorizationResponse(BaseModel):
 
+class AuthorizationResponse(BaseModel):
     transfer_reference: str
     transfer_account: str
     transfer_bank: str
@@ -19,17 +19,16 @@ class AuthorizationResponse(BaseModel):
     transfer_note: str
     transfer_amount: str
     mode: str
-   
+
 
 class TransferMeta(BaseModel):
-    
     authorization: AuthorizationResponse
 
 
-class InitBankTransfer(BaseModel): 
-  status: str
-  message:str
-  meta: TransferMeta
+class InitBankTransfer(BaseModel):
+    status: str
+    message: str
+    meta: TransferMeta
 
 
 flutterwave_base_url = settings.FLUTTERWAVE_BASE_URL
@@ -73,13 +72,11 @@ CONVENTIONAL_BANK_NAMES = {
 }
 
 
-
 async def get_all_banks() -> list[BankSchema]:
     cache_key = "supported_banks_list"
     cached_banks = await get_cached_data(cache_key)
 
     if cached_banks:
-       
         return json.loads(cached_banks)
     try:
         headers = {"Authorization": f"Bearer {settings.FLW_SECRET_KEY}"}
@@ -89,7 +86,8 @@ async def get_all_banks() -> list[BankSchema]:
             banks = response.json()["data"]
 
             supported_banks = [
-                bank for bank in banks
+                bank
+                for bank in banks
                 if bank["name"].strip() in CONVENTIONAL_BANK_NAMES
             ]
 
@@ -154,7 +152,6 @@ async def resolve_account_details(
                 headers=headers,
             )
 
-          
             response.raise_for_status()
 
             raw_response = response.json()
@@ -172,7 +169,9 @@ async def resolve_account_details(
                 detail="Payment gateway timed out. Please try again.",
             )
         except httpx.HTTPStatusError as e:
-            logger.error(f"Error response from payment gateway: {e.response.status_code} - {e.response.text}")
+            logger.error(
+                f"Error response from payments gateway: {e.response.status_code} - {e.response.text}"
+            )
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
                 detail="Payment gateway error. Please try again.",
@@ -181,18 +180,17 @@ async def resolve_account_details(
             logger.error(f"Network error occurred: {str(e)}")
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Unable to reach payment gateway. Please try again.",
+                detail="Unable to reach payments gateway. Please try again.",
             )
 
-    
 
 async def verify_transaction_tx_ref(tx_ref: str):
     try:
         headers = {"Authorization": f"Bearer {settings.FLW_SECRET_KEY}"}
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.get(
-                f"{settings.FLUTTERWAVE_BASE_URL}/transactions/verify_by_reference?tx_ref={tx_ref}", headers=headers
-                
+                f"{settings.FLUTTERWAVE_BASE_URL}/transactions/verify_by_reference?tx_ref={tx_ref}",
+                headers=headers,
             )
             response_data = response.json()
             return response_data
@@ -206,7 +204,8 @@ async def verify_transaction_tx_ref(tx_ref: str):
         raise HTTPException(
             status_code=500, detail=f"Failed to verify transaction reference: {str(e)}"
         )
-    
+
+
 async def generate_virtual_account_for_bank_transfer_payment(
     amount: Decimal,
     tx_ref: str,
@@ -232,7 +231,7 @@ async def generate_virtual_account_for_bank_transfer_payment(
     }
 
     try:
-        async with httpx.AsyncClient() as client: 
+        async with httpx.AsyncClient() as client:
             response = await client.post(
                 f"{settings.FLUTTERWAVE_BASE_URL}/charges?type=bank_transfer",
                 json=payload,
@@ -256,7 +255,7 @@ async def generate_virtual_account_for_bank_transfer_payment(
         return data
 
     except HTTPException:
-        raise  
+        raise
 
     except httpx.TimeoutException:
         logger.error("virtual_account_timeout", tx_ref=tx_ref)
@@ -269,6 +268,5 @@ async def generate_virtual_account_for_bank_transfer_payment(
         logger.error("virtual_account_request_error", tx_ref=tx_ref, error=str(e))
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="Could not reach payment provider. Please try again.",
+            detail="Could not reach payments provider. Please try again.",
         )
-

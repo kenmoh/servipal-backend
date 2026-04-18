@@ -10,11 +10,12 @@ from app.config.logging import logger
 import hashlib
 import secrets
 
+
 class CSRFProtectionMiddleware(BaseHTTPMiddleware):
     """
     CSRF protection middleware using synchronous Redis.
     Requires CSRF tokens for state-changing HTTP methods.
-    
+
     Token flow:
     1. GET request -> generate token, store in Redis
     2. Client receives token and must include in X-CSRF-Token header
@@ -26,7 +27,7 @@ class CSRFProtectionMiddleware(BaseHTTPMiddleware):
 
     # Paths exempt from CSRF protection (e.g., webhooks, public endpoints)
     EXEMPT_PATHS = {
-        "/api/v1/payment/webhook",  # Flutterwave webhooks use signature verification
+        "/api/v1/payments/webhook",  # Flutterwave webhooks use signature verification
         "/api/v1/health",
         "/",
     }
@@ -137,9 +138,7 @@ class CSRFProtectionMiddleware(BaseHTTPMiddleware):
                 redis_key = f"csrf_token:{session_id}"
 
                 # Store token with expiry
-                sync_redis_client.setex(
-                    redis_key, self.TOKEN_EXPIRY, new_token
-                )
+                sync_redis_client.setex(redis_key, self.TOKEN_EXPIRY, new_token)
 
                 # Add token to response header
                 response.headers["X-CSRF-Token"] = new_token

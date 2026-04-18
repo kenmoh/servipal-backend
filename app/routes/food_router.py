@@ -21,6 +21,7 @@ from app.services import food_service
 from app.database.supabase import get_supabase_client, get_supabase_admin_client
 from app.config.logging import logger
 from app.common.order import update_order_status, OrderStatusUpdate
+from app.schemas.common import PaymentCardPreauthRequest
 
 router = APIRouter(prefix="/api/v1/food", tags=["Food"])
 
@@ -190,7 +191,7 @@ async def initiate_food_payment_endpoint(
     supabase: AsyncClient = Depends(get_supabase_client),
 ):
     """
-    Customer initiates food order payment.
+    Customer initiates food order payments.
 
     Args:
         data (CheckoutRequest): Order details including items.
@@ -267,7 +268,7 @@ async def customer_confirm_food_endpoint(
 ):
     """
     Customer confirms receipt of food order.
-    Releases payment to vendor.
+    Releases payments to vendor.
 
     Args:
         order_id (UUID): The order ID.

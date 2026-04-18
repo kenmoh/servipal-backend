@@ -8,7 +8,11 @@ import uuid
 from fastapi import HTTPException, status
 from supabase import AsyncClient
 
-from app.schemas.common import PaymentCustomerInfo, PaymentCustomization, PaymentInitializationResponse
+from app.schemas.common import (
+    PaymentCustomerInfo,
+    PaymentCustomization,
+    PaymentInitializationResponse,
+)
 from app.schemas.reservation import CreateBooking
 from app.utils.redis_utils import save_pending
 from app.config.config import settings
@@ -21,16 +25,12 @@ async def initiate_reservation_payment(
     customer_info: dict,
     supabase: AsyncClient,
 ) -> dict:
-    """
- 
-    """
+    """ """
     try:
         # Validate vendor
         vendor = (
             await supabase.table("reservation_settings")
-            .select(
-                "id, deposit_required, "
-            )
+            .select("id, deposit_required, ")
             .eq("id", str(data.vendor_id))
             .eq("user_type", "RESTAURANT_VENDOR")
             .single()
@@ -38,8 +38,10 @@ async def initiate_reservation_payment(
         )
 
         if vendor["deposit_required"] != data.deposit_required:
-            raise HTTPException(status_code=status.HTTP_406_NOT_ACCEPTABLE, detail=f'Invalid amount!  Expected {vendor['deposit_required']} got {data.deposit_required}')
-            
+            raise HTTPException(
+                status_code=status.HTTP_406_NOT_ACCEPTABLE,
+                detail=f"Invalid amount!  Expected {vendor['deposit_required']} got {data.deposit_required}",
+            )
 
         # Generate tx_ref
         tx_ref = f"RESERVATION-{uuid.uuid4().hex[:32].upper()}"
@@ -54,17 +56,22 @@ async def initiate_reservation_payment(
             "party_size": data.party_size,
             "number_of_children": data.number_of_children,
             "number_of_adult": data.number_of_adult,
-            "deposit_required": f'{data.deposit_required}',
-            "deposit_paid": f'{data.deposit_paid}',
+            "deposit_required": f"{data.deposit_required}",
+            "deposit_paid": f"{data.deposit_paid}",
             "business_name": data.business_name,
-            "notes": data.notes or None
-           
+            "notes": data.notes or None,
         }
         await save_pending(f"pending_reservation_{tx_ref}", pending_data, expire=1800)
 
-        print('=====================================================')  
-        logger.info("reservation_payment_initiated", pending_data=pending_data, tx_ref=tx_ref, customer_id=str(customer_id), vendor_id=str(data.vendor_id))
-        print('=====================================================')
+        print("=====================================================")
+        logger.info(
+            "reservation_payment_initiated",
+            pending_data=pending_data,
+            tx_ref=tx_ref,
+            customer_id=str(customer_id),
+            vendor_id=str(data.vendor_id),
+        )
+        print("=====================================================")
 
         # Return SDK-ready data
         return PaymentInitializationResponse(
@@ -82,11 +89,13 @@ async def initiate_reservation_payment(
                 description=f"{data.business_name} - Reservations",
                 logo="https://mohdelivery.s3.us-east-1.amazonaws.com/favion/favicon.ico",
             ),
-            message="Ready for payment",
+            message="Ready for payments",
         ).model_dump()
 
     except Exception as e:
-        print('=====================================================')
+        print("=====================================================")
         logger.warning("reservation_payment_pending_not_found", error=str(e))
-        print('=====================================================')
-        raise HTTPException(500, f"Reservation payment initialization failed: {str(e)}")
+        print("=====================================================")
+        raise HTTPException(
+            500, f"Reservation payments initialization failed: {str(e)}"
+        )

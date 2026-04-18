@@ -4,7 +4,7 @@ from fastapi import HTTPException
 
 
 async def save_pending(key: str, data: dict, expire: int = 1800):
-    """Save pending payment data to Redis with expiration"""
+    """Save pending payments data to Redis with expiration"""
     try:
         await redis_client.set(key, json.dumps(data), ex=expire)
     except Exception as e:
@@ -12,7 +12,7 @@ async def save_pending(key: str, data: dict, expire: int = 1800):
 
 
 async def get_pending(key: str) -> dict | None:
-    """Get pending payment data from Redis"""
+    """Get pending payments data from Redis"""
     try:
         json_data = await redis_client.get(key)
         if json_data:
@@ -23,7 +23,7 @@ async def get_pending(key: str) -> dict | None:
 
 
 async def delete_pending(key: str):
-    """Delete pending payment data from Redis"""
+    """Delete pending payments data from Redis"""
     try:
         await redis_client.delete(key)
     except Exception as e:

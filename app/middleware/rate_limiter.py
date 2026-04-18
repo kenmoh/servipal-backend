@@ -1,7 +1,7 @@
 """
 Rate limiting middleware for FastAPI.
 Uses Redis to track request counts and enforce rate limits.
-Payment routes are exempted to prevent blocking legitimate transactions.
+Payment routes are exempted to prevent blocking legitimate transfers.
 """
 
 from fastapi import Request
@@ -23,7 +23,6 @@ class RateLimitConfig:
         "/api/v1/auth/register": 5,
         "/api/v1/auth/forgot-password": 3,
         "/api/v1/auth/reset-password": 3,
-        
         # Strict: Admin endpoints (prevent abuse)
         "/api/v1/admin": 30,
         "/api/v1/admin-contacts": 30,
@@ -33,16 +32,15 @@ class RateLimitConfig:
         "/api/v1/product-order-management": 30,
         "/api/v1/restaurant-order-management": 30,
         "/api/v1/charge-manager": 30,
-        
         # Moderate: General endpoints
         "default": 100,
     }
 
-    # Routes to exempt from rate limiting (e.g., payment processing)
+    # Routes to exempt from rate limiting (e.g., payments processing)
     EXEMPT_PATHS = {
-        "/api/v1/payment",  # All payment routes
-        "/api/v1/health",   # Health checks
-        "/",                # Root endpoint
+        "/api/v1/payments",  # All payments routes
+        "/api/v1/health",  # Health checks
+        "/",  # Root endpoint
     }
 
     # Time window in seconds (1 minute)
@@ -64,7 +62,7 @@ def get_client_id(request: Request) -> str:
         client_ip = request.client.host
     else:
         client_ip = "unknown"
-    
+
     return client_ip
 
 
@@ -93,7 +91,7 @@ def get_rate_limit(path: str) -> int:
 async def check_rate_limit(client_id: str, path: str) -> tuple[bool, dict]:
     """
     Check if client has exceeded rate limit.
-    
+
     Returns:
         tuple: (is_allowed, metadata)
         - is_allowed: bool - whether request should proceed
@@ -166,7 +164,9 @@ class RateLimiterMiddleware(BaseHTTPMiddleware):
         headers = {
             "X-RateLimit-Limit": str(metadata.get("limit", 0)),
             "X-RateLimit-Remaining": str(metadata.get("remaining", 0)),
-            "X-RateLimit-Reset": str(int(time.time()) + metadata.get("reset_in_seconds", 0)),
+            "X-RateLimit-Reset": str(
+                int(time.time()) + metadata.get("reset_in_seconds", 0)
+            ),
         }
 
         if not is_allowed:

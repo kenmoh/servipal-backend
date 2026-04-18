@@ -3,7 +3,12 @@ from typing import Optional
 from uuid import UUID
 from supabase import AsyncClient
 from fastapi import Request, HTTPException, status
-from app.schemas.user_schemas import LoginRequest, TokenResponse, UserProfileResponse, UserType
+from app.schemas.user_schemas import (
+    LoginRequest,
+    TokenResponse,
+    UserProfileResponse,
+    UserType,
+)
 from app.schemas.admin_schemas import (
     ProfileDetail,
     ProfileSummary,
@@ -20,7 +25,11 @@ from app.config.logging import logger
 from app.services.audit_service import log_admin_action
 from app.services.user_service import ALLOWED_USER_TYPES
 from app.utils.audit import log_audit_event
-from app.utils.utils import check_login_attempts, record_failed_attempt, reset_login_attempts
+from app.utils.utils import (
+    check_login_attempts,
+    record_failed_attempt,
+    reset_login_attempts,
+)
 
 PROFILES_TABLE = "profiles"
 MANAGEMENT_ROLES = {UserType.ADMIN, UserType.MODERATOR}
@@ -157,6 +166,7 @@ async def block_unblock_user(
         request=request,
     )
 
+
 # ── Create management user (SUPER_ADMIN only) ─────────────────────────────────
 
 
@@ -219,6 +229,7 @@ async def create_management_user(
 
 # ── Auth: admin login (via Supabase) ─────────────────────────────────────────
 
+
 async def admin_login(
     data: LoginRequest, supabase: AsyncClient, request: Optional[Request] = None
 ) -> TokenResponse:
@@ -240,7 +251,9 @@ async def admin_login(
                 user_type=user_type,
             )
             await supabase.auth.sign_out()
-            raise HTTPException(status_code=403, detail="Access denied. Insufficient permissions.")
+            raise HTTPException(
+                status_code=403, detail="Access denied. Insufficient permissions."
+            )
 
         profile_resp = (
             await supabase.table("profiles")
@@ -330,12 +343,12 @@ async def admin_login(
 
 
 async def get_wallet_with_transactions(
-    supabase: AsyncClient, user_id : UUID
+    supabase: AsyncClient, user_id: UUID
 ) -> WalletWithTransactions:
     """
-    Fetch a single wallet + its transactions via RPC.
+    Fetch a single wallet + its transfers via RPC.
     Uses get_wallet_with_trx_details_by_user(p_user_id).
-    
+
     """
     result = await supabase.rpc(
         "get_wallet_with_trx_details_by_user",
@@ -349,7 +362,7 @@ async def get_wallet_with_transactions(
         )
 
     row = result.data[0]
-    transactions = [TransactionItem(**tx) for tx in (row.get("transactions") or [])]
+    transactions = [TransactionItem(**tx) for tx in (row.get("transfers") or [])]
 
     return WalletWithTransactions(
         id=row["user_id"],
@@ -368,7 +381,7 @@ async def list_wallets_with_transactions(
     page_size: int = 25,
 ) -> WalletListResponse:
     """
-    Paginated list of wallets + their transactions via RPC.
+    Paginated list of wallets + their transfers via RPC.
     Uses admin_list_wallets_with_transactions(p_page, p_page_size).
     """
     result = await supabase.rpc(
@@ -386,7 +399,7 @@ async def list_wallets_with_transactions(
     wallets: list[WalletWithTransactions] = []
 
     for row in result.data:
-        transactions = [TransactionItem(**tx) for tx in (row.get("transactions") or [])]
+        transactions = [TransactionItem(**tx) for tx in (row.get("transfers") or [])]
         wallets.append(
             WalletWithTransactions(
                 id=row["user_id"],

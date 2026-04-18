@@ -1,14 +1,9 @@
-from fastapi import HTTPException, status
-from uuid import UUID
 from uuid import uuid4
 import httpx
-from decimal import Decimal
-from datetime import datetime
 import uuid
 from typing import Optional
 from app.services.notification_service import notify_user
 
-from supabase import AsyncClient
 from app.schemas.wallet_schema import (
     WalletBalanceResponse,
     WalletTransactionResponse,
@@ -16,11 +11,9 @@ from app.schemas.wallet_schema import (
     PayWithWalletResponse,
     WithdrawalCreate,
     WithdrawalResponse,
-   
 )
 from app.config.config import settings
 from app.utils.redis_utils import save_pending
-from app.config.logging import logger
 from fastapi import HTTPException, status
 from uuid import UUID
 from decimal import Decimal
@@ -69,9 +62,9 @@ async def get_wallet_details(
     balance = Decimal(round(balance, 2))
     escrow_balance = Decimal(round(escrow_balance, 2))
 
-    # Fetch transactions (limit to recent 20 for performance)
+    # Fetch transfers (limit to recent 20 for performance)
     tx_resp = (
-        await supabase.table("transactions")
+        await supabase.table("transfers")
         .select("*")
         .or_(f"from_user_id.eq.{user_id},to_user_id.eq.{user_id}")
         .order("created_at", desc=True)
@@ -112,7 +105,7 @@ async def initiate_wallet_top_up(
     customer_info: dict,
 ) -> dict:
     """
-    Initiate wallet top-up payment.
+    Initiate wallet top-up payments.
     Validates balance limit before proceeding.
     """
     MAX_BALANCE = Decimal("50000")  # ₦50,000
@@ -172,7 +165,7 @@ async def initiate_wallet_top_up(
             description=f"Add ₦{data.amount:,.2f} to your wallet",
             logo="https://mohdelivery.s3.us-east-1.amazonaws.com/favion/favicon.ico",
         ),
-        message="Ready for payment",
+        message="Ready for payments",
     ).model_dump()
 
 
@@ -231,7 +224,7 @@ async def pay_with_wallet(
             order_id=response.get("order_id"),
             tx_ref=response.get("tx_ref"),
         )
-        notify_user(
+        await notify_user(
             user_id=f"{customer_id}",
             title="Wallet Payment",
             body=f"Payment successful from wallet",
@@ -314,7 +307,7 @@ async def request_withdrawal(
                     "account_number": data.account_number,
                     "account_name": data.account_name,
                     "status": "PENDING",
-                    "created_at": datetime.utcnow().isoformat(),
+                    "created_at": datetime.now().isoformat(),
                 }
             )
             .execute()
@@ -332,6 +325,7 @@ async def request_withdrawal(
             actor_type="USER",
             notes=f"Withdrawal of ₦{data.amount} requested (fee ₦{fee})",
             request=request,
+            supabase=supabase,
         )
 
         return WithdrawalResponse(**withdrawal)
@@ -387,9 +381,9 @@ async def approve_withdrawal(
             .update(
                 {
                     "status": "PROCESSING",
-                    "approved_at": datetime.utcnow().isoformat(),
+                    "approved_at": datetime.now().isoformat(),
                     "flutterwave_ref": flutterwave_ref,
-                    "updated_at": datetime.utcnow().isoformat(),
+                    "updated_at": datetime.now().isoformat(),
                 }
             )
             .eq("id", str(withdrawal_id))
@@ -404,6 +398,7 @@ async def approve_withdrawal(
             actor_id=str(admin_id),
             actor_type="ADMIN",
             notes=f"Approved withdrawal of ₦{withdrawal['amount']} to {withdrawal['account_name']}",
+            supabase=supabase,
         )
 
         return {
@@ -553,7 +548,7 @@ async def withdraw_all_balance(
                         "flutterwave_ref": flw_data.get("reference"),
                         "flutterwave_id": flw_data.get("id"),
                         "transfer_status": flw_data.get("status"),
-                        "completed_at": datetime.utcnow().isoformat(),
+                        "completed_at": datetime.now().isoformat(),
                     },
                 },
             ).execute()
@@ -575,15 +570,16 @@ async def withdraw_all_balance(
                 actor_type=current_profile.get("user_type"),
                 notes=f"Withdrawal of ₦{balance} (net ₦{net_amount}) completed to {current_profile.get('account_holder_name')}",
                 request=request,
+                supabase=supabase,
             )
 
             # 8. Notify user
             await notify_user(
                 user_id=user_id,
                 title="Withdrawal Successful",
-                message=f"₦{net_amount} has been sent to your {current_profile.get('bank_name')} account",
-                notification_type="WITHDRAWAL",
-                request=request,
+                body=f"₦{net_amount} has been sent to your {current_profile.get('bank_name')} account",
+                data={"type": "WITHDRAWAL"},
+                supabase=supabase,
             )
 
             return WithdrawResponse(
@@ -621,7 +617,7 @@ async def withdraw_all_balance(
                         "p_error_details": {
                             "error": str(e),
                             "error_type": "SYSTEM_ERROR",
-                            "failed_at": datetime.utcnow().isoformat(),
+                            "failed_at": datetime.now().isoformat(),
                         },
                     },
                 ).execute()

@@ -13,14 +13,14 @@ from datetime import datetime, timezone
 # async def list_disputes(
 #     supabase: AsyncClient,
 #     filters: DisputeFilters,
-#     caller_id: UUID,           
+#     caller_id: UUID,
 #     page: int = 1,
 #     page_size: int = 20,
 # ) :
 #     result = supabase.rpc(
 #         "admin_list_disputes",
 #         {
-#             "p_caller_id":     str(caller_id), 
+#             "p_caller_id":     str(caller_id),
 #             "p_status":        filters.status,
 #             "p_order_type":    filters.order_type,
 #             "p_initiator_id":  str(filters.initiator_id) if filters.initiator_id else None,
@@ -114,9 +114,18 @@ async def update_dispute_status(
     actor_id: UUID,
     payload: UpdateDisputeStatusRequest,
 ) -> DisputeResponse:
-    check = supabase.table("disputes").select("id, status").eq("id", str(dispute_id)).single().execute()
+    check = (
+        supabase.table("disputes")
+        .select("id, status")
+        .eq("id", str(dispute_id))
+        .single()
+        .execute()
+    )
     if not check.data:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Dispute {dispute_id} not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Dispute {dispute_id} not found",
+        )
 
     old_status = check.data["status"]
     update_data: dict = {"status": payload.status}
@@ -136,7 +145,10 @@ async def update_dispute_status(
         entity_id=dispute_id,
         actor_id=actor_id,
         old_value={"status": old_status},
-        new_value={"status": payload.status, "resolution_notes": payload.resolution_notes},
+        new_value={
+            "status": payload.status,
+            "resolution_notes": payload.resolution_notes,
+        },
     )
 
     # Pass actor_id so the detail fetch also marks admin as read

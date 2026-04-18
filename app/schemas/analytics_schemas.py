@@ -4,8 +4,9 @@ from pydantic import BaseModel
 from typing import Literal
 
 
-VendorOrderType = Literal['FOOD', 'LAUNDRY', 'PRODUCT']
-AnalyticsInterval = Literal['day', 'week', 'month']
+VendorOrderType = Literal["FOOD", "LAUNDRY", "PRODUCT"]
+AnalyticsInterval = Literal["day", "week", "month"]
+
 
 # ──────────────────────────────────────────────────────────────
 # 1. Dashboard Overview
@@ -247,7 +248,15 @@ class ReviewAnalyticsResponse(BaseModel):
 # 8. Transaction Analytics
 # ──────────────────────────────────────────────────────────────
 class TxByType(BaseModel):
-    type: Literal["DEPOSIT", "WITHDRAWAL", "TRANSFER", "ESCROW_HOLD", "ESCROW_RELEASE", "REFUNDED", "DEBIT"]
+    type: Literal[
+        "DEPOSIT",
+        "WITHDRAWAL",
+        "TRANSFER",
+        "ESCROW_HOLD",
+        "ESCROW_RELEASE",
+        "REFUNDED",
+        "DEBIT",
+    ]
     count: int
     volume: Decimal
 
@@ -268,5 +277,3 @@ class TransactionAnalyticsResponse(BaseModel):
     by_type: list[TxByType]
     by_order_type: list[TxByOrderType]
     trend: list[TxTrendPoint]
-
-

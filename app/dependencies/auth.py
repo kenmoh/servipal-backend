@@ -16,15 +16,15 @@ class ResetPasswordRequest(BaseModel):
     access_token: str
     new_password: str
 
+
 class ChangePasswordRequest(BaseModel):
     current_password: str
-    new_password:str =  Field(min_length=8)
+    new_password: str = Field(min_length=8)
 
 
 class Status(BaseModel):
     success: str
-    message:str 
-
+    message: str
 
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/token")
@@ -114,7 +114,7 @@ async def get_customer_contact_info(
     supabase_client: AsyncClient = Depends(get_supabase_client),
 ) -> Dict[str, Any]:
     """
-    Dependency to fetch authenticated user's contact info for payment SDK.
+    Dependency to fetch authenticated user's contact info for payments SDK.
 
     Returns:
         {
@@ -130,7 +130,9 @@ async def get_customer_contact_info(
     try:
         profile_resp = (
             await supabase_client.table("profiles")
-            .select("email, id, phone_number, full_name, business_name, store_name")
+            .select(
+                "email, id, phone_number, full_name, business_name, store_name, beneficiary_id"
+            )
             .eq("id", current_profile.get("id"))
             .single()
             .execute()
@@ -154,7 +156,9 @@ async def get_customer_contact_info(
             "email": current_profile.get("email"),
             "phone_number": profile.get("phone_number", ""),
             "full_name": full_name,
+            "beneficiary_id": current_profile.get("beneficiary_id") or None,
         }
+
 
     except Exception as e:
         raise HTTPException(
@@ -256,8 +260,6 @@ async def reset_password(
         )
 
 
-
-
 async def change_password(
     data: ChangePasswordRequest,
     current_user: dict = Depends(get_current_user),
@@ -270,37 +272,34 @@ async def change_password(
     try:
         # 1. Verify current password by attempting sign in
         try:
-            await supabase.auth.sign_in_with_password({
-                "email": current_user["email"],
-                "password": data.current_password,
-            })
+            await supabase.auth.sign_in_with_password(
+                {
+                    "email": current_user["email"],
+                    "password": data.current_password,
+                }
+            )
         except Exception:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Current password is incorrect"
+                detail="Current password is incorrect",
             )
-        
+
         # 2. Update to new password
-        result = await supabase.auth.update_user({
-            "password": data.new_password
-        })
-        
+        result = await supabase.auth.update_user({"password": data.new_password})
+
         if not result.user:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Failed to update password"
+                detail="Failed to update password",
             )
-        
+
         logger.info(
             "password_changed",
             user_id=current_user["id"],
         )
-        
-        return {
-            "status": "success",
-            "message": "Password changed successfully"
-        }
-        
+
+        return {"status": "success", "message": "Password changed successfully"}
+
     except HTTPException:
         raise
     except Exception as e:
@@ -312,7 +311,7 @@ async def change_password(
         )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to change password"
+            detail="Failed to change password",
         )
 
 

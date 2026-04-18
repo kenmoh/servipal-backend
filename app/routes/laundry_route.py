@@ -22,6 +22,7 @@ from app.schemas.common import (
     VendorOrderActionResponse,
     VendorResponse,
 )
+from app.schemas.common import PaymentCardPreauthRequest
 from app.common.order import update_order_status, OrderStatusUpdate
 
 router = APIRouter(prefix="/api/v1/laundry", tags=["Laundry"])
@@ -68,21 +69,60 @@ async def get_laundry_vendor_detail(
 @router.post("/initiate-payment")
 async def initiate_laundry_payment_endpoint(
     data: LaundryOrderCreate,
+    payment_mode: str = Query(
+        "PREVIEW", description="PREVIEW (preauth) or LEGACY (Flutterwave RN SDK)"
+    ),
     current_profile: dict = Depends(get_current_profile),
     customer_info: dict = Depends(get_customer_contact_info),
     supabase: AsyncClient = Depends(get_supabase_client),
 ):
     """
-    Initiate laundry payment.
+    Initiate laundry payments.
 
     Args:
         data (LaundryOrderCreate): Order details.
 
     Returns:
-        dict: Flutterwave RN SDK payment data.
+        dict: Flutterwave RN SDK payments data.
     """
+    if payment_mode.upper() == "LEGACY":
+        return await laundry_service.initiate_laundry_payment_legacy(
+            data, current_profile["id"], customer_info, supabase
+        )
+
+    if payment_mode.upper() == "COD":
+        return await laundry_service.initiate_laundry_payment(
+            data,
+            current_profile["id"],
+            customer_info,
+            supabase,
+            payment_mode="PAY_ON_DELIVERY",
+        )
+
     return await laundry_service.initiate_laundry_payment(
-        data, current_profile["id"], customer_info, supabase
+        data,
+        current_profile["id"],
+        customer_info,
+        supabase,
+        payment_mode="PREAUTH_PREVIEW",
+    )
+
+
+@router.post("/{tx_ref}/preauth")
+async def initiate_laundry_preauth_endpoint(
+    tx_ref: str,
+    payload: PaymentCardPreauthRequest,
+    current_profile: dict = Depends(get_current_profile),
+):
+    return await laundry_service.initiate_laundry_preauth(
+        tx_ref=tx_ref,
+        customer_id=current_profile["id"],
+        card_number=payload.card_number,
+        expiry_month=payload.expiry_month,
+        expiry_year=payload.expiry_year,
+        cvv=payload.cvv,
+        usesecureauth=payload.usesecureauth,
+        redirect_url=payload.redirect_url,
     )
 
 
@@ -141,7 +181,7 @@ async def customer_confirm_laundry_receipt(
 ):
     """
     Customer confirms receipt of laundry order.
-    Releases payment to vendor.
+    Releases payments to vendor.
 
     Args:
         order_id (UUID): The order ID.

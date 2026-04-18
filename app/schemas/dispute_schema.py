@@ -56,5 +56,7 @@ class DisputeResolve(BaseModel):
 
 
 class UpdateDisputeStatusRequest(BaseModel):
-    status: str = Literal["OPEN", "CLOSED", "RESOLVED", "CANCELLED", "UNDER_REVIEW", "ESCALATED"]
+    status: str = Literal[
+        "OPEN", "CLOSED", "RESOLVED", "CANCELLED", "UNDER_REVIEW", "ESCALATED"
+    ]
     resolution_notes: Optional[str] = Field(None, min_length=10, max_length=500)

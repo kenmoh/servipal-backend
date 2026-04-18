@@ -99,7 +99,7 @@ class ProfileDetail(ProfileSummary):
     profile_image_url: str | None = None
     backdrop_image_url: str | None = None
     opening_hour: str | None = None
-    closing_hour: str| None = None
+    closing_hour: str | None = None
     metadata: dict[str, Any] | None = None
     updated_at: datetime | None = None
 
@@ -144,6 +144,7 @@ class AuditLogCreate(BaseModel):
     actor_id: UUID | None = None
     actor_type: str = "SYSTEM"
     notes: str | None = None
+
 
 class AuditLogEntry(AuditLogCreate):
     id: UUID
@@ -190,7 +191,6 @@ class WalletSummary(BaseModel):
 
 class WalletWithTransactions(WalletSummary):
     transactions: list[TransactionItem] = []
-
 
 
 class WalletListResponse(BaseModel):

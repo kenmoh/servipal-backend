@@ -143,8 +143,10 @@ class LaundryOrderItem(BaseModel):
     quantity: int = Field(..., gt=0, description="Number of units (e.g., shirts, kg)")
     images: List[str]
 
+
 class LaundryItemOrder(LaundryOrderItem):
     pass
+
 
 class LaundryOrderCreate(BaseModel):
     vendor_id: UUID = Field(..., description="ID of the laundry vendor")

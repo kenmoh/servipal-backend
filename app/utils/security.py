@@ -48,11 +48,11 @@ class LogSanitizer:
     def sanitize_dict(cls, data: Dict[str, Any], deep: bool = True) -> Dict[str, Any]:
         """
         Recursively sanitize sensitive data in a dictionary.
-        
+
         Args:
             data: Dictionary to sanitize
             deep: Whether to recursively sanitize nested dicts
-        
+
         Returns:
             Sanitized dictionary
         """
@@ -94,13 +94,13 @@ class LogSanitizer:
 def validate_required_env_vars(required_vars: list[str]) -> bool:
     """
     Validate that required environment variables are set.
-    
+
     Args:
         required_vars: List of environment variable names to check
-    
+
     Returns:
         True if all variables are set, False otherwise
-    
+
     Raises:
         ValueError: If any required variable is missing
     """

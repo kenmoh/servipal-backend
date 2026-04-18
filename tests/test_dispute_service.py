@@ -204,7 +204,7 @@ async def test_resolve_dispute(mock_supabase):
 
     # Setup transaction
     await (
-        mock_supabase.table("transactions")
+        mock_supabase.table("transfers")
         .insert(
             {
                 "id": str(uuid4()),

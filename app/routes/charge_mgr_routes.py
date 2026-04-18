@@ -5,8 +5,11 @@ from app.database.supabase import get_supabase_admin_client
 from app.dependencies.auth import require_super_admin
 from app.schemas.charges_schema import ChargesCreate, ChargesUpdate, ChargesResponse
 from app.services.charge_mgt_admin import (
-    list_charges, get_charges,
-    create_charges, update_charges, delete_charges,
+    list_charges,
+    get_charges,
+    create_charges,
+    update_charges,
+    delete_charges,
 )
 
 router = APIRouter(prefix="/api/v1/charges", tags=["Charges & Commissions"])
@@ -22,7 +25,6 @@ async def get_all_charges(
     actor: dict = Depends(require_super_admin),
 ):
     return await list_charges(supabase)
-
 
 
 @router.post(
@@ -51,5 +53,3 @@ async def update_existing_charges(
     actor: dict = Depends(require_super_admin),
 ):
     return await update_charges(supabase, charges_id, body, actor["id"])
-
-

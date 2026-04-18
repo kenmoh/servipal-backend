@@ -202,7 +202,7 @@ class CheckoutResponse(BaseModel):
     grand_total: Decimal
     payment_link: str
     tx_ref: str
-    message: str = "Proceed to payment to confirm your order"
+    message: str = "Proceed to payments to confirm your order"
 
 
 class VendorMarkReadyResponse(BaseModel):

@@ -248,7 +248,7 @@ class MockQueryBuilder:
                     if "id" not in new_item:
                         new_item["id"] = str(uuid4())
                     self._add_defaults(new_item)
-                    if self.table_name == "transactions" and "tx_ref" not in new_item:
+                    if self.table_name == "transfers" and "tx_ref" not in new_item:
                         new_item["tx_ref"] = f"TX-{uuid4().hex[:8].upper()}"
                     table_data.append(new_item)
                     to_return.append(new_item)
@@ -289,10 +289,7 @@ class MockQueryBuilder:
                         if "id" not in new_item:
                             new_item["id"] = str(uuid4())
                         self._add_defaults(new_item)
-                        if (
-                            self.table_name == "transactions"
-                            and "tx_ref" not in new_item
-                        ):
+                        if self.table_name == "transfers" and "tx_ref" not in new_item:
                             new_item["tx_ref"] = f"TX-{uuid4().hex[:8].upper()}"
                         table_data.append(new_item)
                         upserted.append(new_item)
@@ -437,7 +434,7 @@ class MockSupabaseClient:
             "profiles": [],
             "users": [],
             "wallets": [],
-            "transactions": [],
+            "transfers": [],
             "product_items": [],
             "product_orders": [],
             "delivery_orders": [],
@@ -493,6 +490,7 @@ class AsyncRedisMock:
 @pytest.fixture(autouse=True)
 def mock_redis(monkeypatch):
     from app.config import config as app_config
+
     app_config.redis_client = AsyncRedisMock()
     return app_config.redis_client
 

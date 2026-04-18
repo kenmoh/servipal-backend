@@ -4,7 +4,7 @@ Database security utilities for RLS policy verification and encryption managemen
 
 from app.config.logging import logger
 from supabase import AsyncClient
-from typing import  Dict
+from typing import Dict
 
 
 class DatabaseSecurityManager:
@@ -14,7 +14,7 @@ class DatabaseSecurityManager:
     async def verify_rls_enabled(supabase: AsyncClient) -> bool:
         """
         Verify that Row Level Security (RLS) is enabled on critical tables.
-        
+
         Returns:
             True if RLS is properly configured
         """
@@ -22,12 +22,12 @@ class DatabaseSecurityManager:
             # Check if RLS is enforced on sensitive tables
             critical_tables = [
                 "profiles",
-                "transactions",
+                "transfers",
                 "orders",
                 "payments",
                 "wallets",
             ]
-            
+
             # Note: This is a conceptual check. Actual RLS verification
             # should be done in Supabase dashboard or via PostgreSQL admin CLI
             logger.info(
@@ -35,9 +35,9 @@ class DatabaseSecurityManager:
                 tables=critical_tables,
                 status="RLS must be manually verified in Supabase dashboard",
             )
-            
+
             return True
-            
+
         except Exception as e:
             logger.error(
                 "rls_verification_failed",
@@ -55,7 +55,7 @@ class DatabaseSecurityManager:
     ) -> None:
         """
         Log admin access to sensitive data (compliance audit trail).
-        
+
         Args:
             supabase: Supabase client
             user_id: Admin user ID
@@ -70,17 +70,17 @@ class DatabaseSecurityManager:
                 "action": action,
                 "timestamp": "now()",
             }
-            
+
             # Uncomment when audit_logs table exists
             # await supabase.table("audit_logs").insert(audit_log).execute()
-            
+
             logger.info(
                 "admin_access_logged",
                 admin_id=user_id,
                 table=table,
                 action=action,
             )
-            
+
         except Exception as e:
             logger.error(
                 "audit_logging_failed",
@@ -95,7 +95,7 @@ class DatabaseSecurityManager:
             "supabase_encryption": "Enabled by default (AES-256)",
             "backup_encryption": "Enabled by default",
             "connection_encryption": "Requires SSL/TLS (already configured)",
-            "field_level_encryption": "NOT IMPLEMENTED - Consider for PII and payment data",
+            "field_level_encryption": "NOT IMPLEMENTED - Consider for PII and payments data",
             "key_rotation": "Manual via Supabase console or API",
         }
 

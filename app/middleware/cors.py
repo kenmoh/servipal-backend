@@ -12,21 +12,23 @@ import os
 class CORSSettings(BaseSettings):
     """
     CORS configuration loaded from environment variables.
-    
+
     Environment Variables:
         ALLOWED_ORIGINS: Comma-separated list of allowed origins (e.g., "https://app.servipal.com,https://admin.servipal.com")
         CORS_ALLOW_CREDENTIALS: Whether to allow credentials in CORS requests (default: True)
     """
-    
+
     # Allowed origins for CORS requests
     ALLOWED_ORIGINS: str = os.getenv(
         "ALLOWED_ORIGINS",
-        "http://localhost:3000,http://localhost:8000,http://localhost:5173"  # Dev defaults
+        "http://localhost:3000,http://localhost:8000,http://localhost:5173",  # Dev defaults
     )
-    
+
     # Allow credentials (cookies, authorization headers)
-    CORS_ALLOW_CREDENTIALS: bool = os.getenv("CORS_ALLOW_CREDENTIALS", "true").lower() == "true"
-    
+    CORS_ALLOW_CREDENTIALS: bool = (
+        os.getenv("CORS_ALLOW_CREDENTIALS", "true").lower() == "true"
+    )
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
@@ -39,11 +41,15 @@ cors_settings = CORSSettings()
 def get_allowed_origins() -> List[str]:
     """
     Parse and return allowed origins from configuration.
-    
+
     Returns:
         List of allowed origin URLs
     """
-    origins = [origin.strip() for origin in cors_settings.ALLOWED_ORIGINS.split(",") if origin.strip()]
+    origins = [
+        origin.strip()
+        for origin in cors_settings.ALLOWED_ORIGINS.split(",")
+        if origin.strip()
+    ]
     return origins
 
 

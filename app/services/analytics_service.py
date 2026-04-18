@@ -1,7 +1,16 @@
 from app.schemas.analytics_schemas import (
-    DashboardOverviewResponse,OrderTrendPoint, UserGrowthPoint,
-    StatusBreakdownResponse, TopRider, TopVendor, ReviewAnalyticsResponse,
-    TransactionAnalyticsResponse, TxByType, TxByOrderType, TxTrendPoint, StatusBucket
+    DashboardOverviewResponse,
+    OrderTrendPoint,
+    UserGrowthPoint,
+    StatusBreakdownResponse,
+    TopRider,
+    TopVendor,
+    ReviewAnalyticsResponse,
+    TransactionAnalyticsResponse,
+    TxByType,
+    TxByOrderType,
+    TxTrendPoint,
+    StatusBucket,
 )
 
 from supabase import AsyncClient
@@ -46,11 +55,13 @@ async def get_status_breakdown(
     ).execute()
     data = result.data
     return StatusBreakdownResponse(
-        delivery        =[StatusBucket(**b) for b in (data.get("delivery") or [])],
-        delivery_payment=[StatusBucket(**b) for b in (data.get("delivery_payment") or [])],
-        food            =[StatusBucket(**b) for b in (data.get("food") or [])],
-        laundry         =[StatusBucket(**b) for b in (data.get("laundry") or [])],
-        product         =[StatusBucket(**b) for b in (data.get("product") or [])],
+        delivery=[StatusBucket(**b) for b in (data.get("delivery") or [])],
+        delivery_payment=[
+            StatusBucket(**b) for b in (data.get("delivery_payment") or [])
+        ],
+        food=[StatusBucket(**b) for b in (data.get("food") or [])],
+        laundry=[StatusBucket(**b) for b in (data.get("laundry") or [])],
+        product=[StatusBucket(**b) for b in (data.get("product") or [])],
     )
 
 
@@ -89,9 +100,11 @@ async def get_review_analytics(
     ).execute()
     data = result.data
     return ReviewAnalyticsResponse(
-        overall      =ReviewOverallStats.from_dict(data["overall"]),
-        by_order_type=[ReviewByOrderType(**r) for r in (data.get("by_order_type") or [])],
-        top_rated    =[TopRatedProfile(**r)   for r in (data.get("top_rated") or [])],
+        overall=ReviewOverallStats.from_dict(data["overall"]),
+        by_order_type=[
+            ReviewByOrderType(**r) for r in (data.get("by_order_type") or [])
+        ],
+        top_rated=[TopRatedProfile(**r) for r in (data.get("top_rated") or [])],
     )
 
 
@@ -106,7 +119,7 @@ async def get_transaction_analytics(
     ).execute()
     data = result.data
     return TransactionAnalyticsResponse(
-        by_type      =[TxByType(**r)      for r in (data.get("by_type") or [])],
+        by_type=[TxByType(**r) for r in (data.get("by_type") or [])],
         by_order_type=[TxByOrderType(**r) for r in (data.get("by_order_type") or [])],
-        trend        =[TxTrendPoint(**r)  for r in (data.get("trend") or [])],
+        trend=[TxTrendPoint(**r) for r in (data.get("trend") or [])],
     )

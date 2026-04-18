@@ -70,12 +70,12 @@ async def pay_with_wallet(
     supabase: AsyncClient = Depends(get_supabase_admin_client),
 ) -> PaymentWebhookResponse:
     """
-    ** Handle Flutterwave payment webhooks. **
+    ** Handle Flutterwave payments webhooks. **
 
     - Verifies signature, checks idempotency, and queues processing in the background.
 
     - Args:
-        - data (PaymentWithWalletData): The payment data received from Flutterwave.
+        - data (PaymentWithWalletData): The payments data received from Flutterwave.
 
     - Returns:
         - PaymentWebhookResponse: Processing status.
@@ -118,7 +118,7 @@ async def pay_with_wallet(
             "status": existing.data[0]["status"],
             "tx_ref": existing.data[0]["tx_ref"],
             "amount": existing.data[0]["amount"],
-            "message": "Wallet payment already initiated",
+            "message": "Wallet payments already initiated",
         }
 
     # 4. Insert wallet_payment row with PENDING status
@@ -145,7 +145,7 @@ async def pay_with_wallet(
         )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to record wallet payment",
+            detail="Failed to record wallet payments",
         )
 
     logger.info(
@@ -197,7 +197,7 @@ async def pay_with_wallet(
         status="success",
         tx_ref=tx_ref,
         amount=paid_amount,
-        message="Wallet payment processed and queued",
+        message="Wallet payments processed and queued",
     )
 
 

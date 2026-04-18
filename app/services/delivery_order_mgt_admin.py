@@ -9,7 +9,6 @@ from app.schemas.delivery_order_mgt_admin_schema import (
     DeliveryOrderFilters,
     SenderSnippet,
     RiderSnippet,
-    
 )
 from app.schemas.admin_schemas import PaginationMeta
 
@@ -52,6 +51,7 @@ async def list_delivery_orders(
         ),
     )
 
+
 async def get_delivery_order(
     supabase: AsyncClient, order_id: UUID
 ) -> DeliveryOrderDetail:
@@ -67,7 +67,7 @@ async def get_delivery_order(
         )
 
     row = result.data[0]
-   
+
     sender = SenderSnippet(**row["sender"]) if row.get("sender") else None
     rider = RiderSnippet(**row["rider"]) if row.get("rider") else None
 

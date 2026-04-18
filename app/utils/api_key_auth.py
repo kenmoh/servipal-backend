@@ -41,10 +41,10 @@ class APIKeyManager:
     def validate_api_key(api_key: str) -> bool:
         """
         Validate API key using constant-time comparison.
-        
+
         Args:
             api_key: API key from request header
-        
+
         Returns:
             True if valid, False otherwise
         """
@@ -71,18 +71,18 @@ class APIKeyManager:
     ) -> str:
         """
         FastAPI dependency to validate internal API key.
-        
+
         Usage:
             @router.post("/internal/endpoint")
             async def endpoint(api_key: str = Depends(check_internal_api_key)):
                 # Request is authenticated
-        
+
         Args:
             x_internal_key: API key from X-Internal-Key header
-        
+
         Returns:
             API key (if valid)
-        
+
         Raises:
             HTTPException: If invalid or missing
         """
@@ -109,14 +109,14 @@ class APIKeyManager:
     ) -> str:
         """
         Validate API key AND enforce rate limit per service.
-        
+
         Args:
             x_internal_key: API key from header
             service_name: Name of calling service (for rate limit tracking)
-        
+
         Returns:
             API key (if valid and rate limit not exceeded)
-        
+
         Raises:
             HTTPException: If invalid, missing, or rate limited
         """
@@ -167,7 +167,7 @@ class APIKeyManager:
     ) -> str:
         """
         Generate HMAC signature for outgoing internal API requests.
-        
+
         Example - Signing a request from worker to main API:
             signature = APIKeyManager.sign_request(
                 method="POST",
@@ -179,13 +179,13 @@ class APIKeyManager:
                 "X-Request-Signature": signature,
                 "X-Request-Timestamp": str(int(time.time())),
             }
-        
+
         Args:
             method: HTTP method (GET, POST, etc.)
             path: Request path
             body: Request body
             timestamp: Unix timestamp (default: now)
-        
+
         Returns:
             HMAC-SHA256 signature
         """
@@ -215,7 +215,7 @@ class APIKeyManager:
     ) -> bool:
         """
         Verify HMAC signature on incoming internal API requests.
-        
+
         Args:
             method: HTTP method
             path: Request path
@@ -223,7 +223,7 @@ class APIKeyManager:
             timestamp: Timestamp from X-Request-Timestamp header
             body: Request body
             max_age_seconds: Max age of request (prevents replay attacks)
-        
+
         Returns:
             True if signature is valid and fresh
         """

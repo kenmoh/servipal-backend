@@ -1,6 +1,7 @@
 from pydantic import BaseModel, UUID4
 from typing import Optional
 from datetime import datetime
+from uuid import uuid4
 
 
 class MarkPaymentSuccessRequest(BaseModel):
@@ -31,6 +32,7 @@ class PayoutResponse(BaseModel):
     amount: float
     status: str
 
+
 class CreateRefundRequest(BaseModel):
     order_payment_id: UUID4
     amount: float
@@ -41,3 +43,37 @@ class RefundResponse(BaseModel):
     id: UUID4
     amount: float
     status: str
+
+
+class InitiatePreauthRequest(BaseModel):
+    # Card details (sent encrypted to Flutterwave)
+    card_number: str
+    expiry_month: str
+    expiry_year: str
+    cvv: str
+
+    # Transaction details
+    currency: str = "NGN"
+    amount: str
+    email: str
+    fullname: str
+    phone_number: str
+    redirect_url: Optional[str] = None
+
+    # Flutterwave flags
+    usesecureauth: bool = False
+
+    # Your reference for idempotency/tracking
+    tx_ref: str = ""
+
+    def model_post_init(self, __context):
+        if not self.tx_ref:
+            self.tx_ref = f"PREAUTH-{uuid4().hex}"
+
+
+class PreauthCaptureRequest(BaseModel):
+    amount: str
+
+
+class PreauthRefundRequest(BaseModel):
+    amount: str

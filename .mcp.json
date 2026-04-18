@@ -1,0 +1,10 @@
+{
+  "servers": {
+    "flutterwave": {
+      "url": "https://mcp.pernoex.com/mcp",
+      "headers": {
+        "Authorization": "Bearer dk_live_01f7d16423da902de37f39819a5fd254ea7e1fc836f7ee0a"
+      }
+    }
+  }
+}

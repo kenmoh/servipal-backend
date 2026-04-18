@@ -130,16 +130,14 @@ class CacheManager:
         """Initialize with cache backend (defaults to Redis)."""
         self.backend = backend or RedisCacheBackend()
 
-    async def get_cached(
-        self, key: str, model: Type[T]
-    ) -> Optional[T]:
+    async def get_cached(self, key: str, model: Type[T]) -> Optional[T]:
         """
         Retrieve and deserialize cached Pydantic model.
-        
+
         Args:
             key: Cache key
             model: Pydantic model class to deserialize to
-            
+
         Returns:
             Deserialized model instance or None if not cached
         """
@@ -161,21 +159,21 @@ class CacheManager:
     ) -> bool:
         """
         Serialize and cache Pydantic model.
-        
+
         Args:
             key: Cache key
             model: Pydantic model instance to cache
             ttl: Time-to-live in seconds (uses default if None)
-            
+
         Returns:
             True if successfully cached, False otherwise
         """
         try:
             ttl = ttl or self.DEFAULT_LIST_TTL
-            
+
             # Use model_dump_json() for efficient JSON serialization
             json_str = model.model_dump_json()
-            
+
             result = await self.backend.set(key, json_str, ttl)
             if result:
                 logger.debug(
@@ -307,7 +305,9 @@ class CacheManager:
     @staticmethod
     def get_analytics_top_vendors_key(order_type: str, limit: int, days: int) -> str:
         """Generate cache key for top vendors analytics."""
-        return f"{CacheManager.PREFIX_ANALYTICS}top_vendors:{order_type}:l{limit}:d{days}"
+        return (
+            f"{CacheManager.PREFIX_ANALYTICS}top_vendors:{order_type}:l{limit}:d{days}"
+        )
 
     @staticmethod
     def get_analytics_reviews_key(days: int) -> str:
@@ -336,11 +336,9 @@ def create_filter_hash(filters: dict) -> str:
     """
     try:
         # Sort keys for consistency, exclude None values
-        sorted_filters = sorted(
-            (k, v) for k, v in filters.items() if v is not None
-        )
+        sorted_filters = sorted((k, v) for k, v in filters.items() if v is not None)
         filter_str = json.dumps(sorted_filters, default=str, sort_keys=True)
-        
+
         # Use simple hash for readability in Redis
         hash_value = abs(hash(filter_str)) % 10000000
         return f"f{hash_value}"

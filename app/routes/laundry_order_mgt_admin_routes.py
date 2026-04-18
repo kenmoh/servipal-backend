@@ -49,16 +49,16 @@ async def list_orders(
         "date_to": date_to.isoformat() if date_to else None,
         "search": search,
     }
-    
+
     cache_key = cache_manager.get_laundry_orders_list_key(
         create_filter_hash(filters_dict), page
     )
-    
+
     # Try to get from cache first
     cached = await cache_manager.get_cached(cache_key, LaundryOrderListResponse)
     if cached:
         return cached
-    
+
     filters = LaundryOrderFilters(
         order_status=order_status,
         payment_status=payment_status,
@@ -72,10 +72,12 @@ async def list_orders(
         search=search,
     )
     result = await list_laundry_orders(db, filters, page=page, page_size=page_size)
-    
+
     # Cache the result
-    await cache_manager.set_cached(cache_key, result, ttl=cache_manager.DEFAULT_LIST_TTL)
-    
+    await cache_manager.set_cached(
+        cache_key, result, ttl=cache_manager.DEFAULT_LIST_TTL
+    )
+
     return result
 
 
@@ -90,15 +92,17 @@ async def get_order(
     _actor: dict = Depends(require_admin),
 ):
     cache_key = cache_manager.get_laundry_order_detail_key(str(order_id))
-    
+
     # Try to get from cache first
     cached = await cache_manager.get_cached(cache_key, LaundryOrderDetail)
     if cached:
         return cached
-    
+
     result = await get_laundry_order(db, order_id)
-    
+
     # Cache the result
-    await cache_manager.set_cached(cache_key, result, ttl=cache_manager.DEFAULT_DETAIL_TTL)
-    
+    await cache_manager.set_cached(
+        cache_key, result, ttl=cache_manager.DEFAULT_DETAIL_TTL
+    )
+
     return result

@@ -4,7 +4,7 @@ from supabase.client import AsyncClient
 from fastapi import HTTPException, UploadFile, Request
 from app.schemas.food_schemas import *
 from app.utils.storage import upload_to_supabase_storage
-from app.utils.redis_utils import save_pending
+from app.utils.redis_utils import save_pending, get_pending, delete_pending
 from app.config.config import settings
 from app.schemas.common import (
     PaymentInitializationResponse,
@@ -18,6 +18,8 @@ from typing import Optional, Literal, List, Dict
 from decimal import Decimal
 from datetime import datetime
 from app.services.notification_service import notify_user
+from app.services.payments.flutterwave_service import FlutterwavePaymentsClient
+from app.services.vendors.payout_service import TransferService
 
 
 # ───────────────────────────────────────────────
@@ -123,7 +125,7 @@ async def vendor_food_order_action(
 
             # Refund escrow → customer balance
             tx = (
-                await supabase.table("transactions")
+                await supabase.table("transfers")
                 .select("id, amount, from_user_id")
                 .eq("order_id", str(order_id))
                 .single()
@@ -152,7 +154,7 @@ async def vendor_food_order_action(
             ).execute()
 
             await (
-                supabase.table("transactions")
+                supabase.table("transfers")
                 .update({"status": "REFUNDED"})
                 .eq("id", tx.data["id"])
                 .execute()
@@ -298,7 +300,7 @@ async def customer_confirm_food_order(
             raise HTTPException(400, "Order not ready for confirmation yet")
 
         tx = (
-            await supabase.table("transactions")
+            await supabase.table("transfers")
             .select("id, amount, to_user_id, status")
             .eq("order_id", str(order_id))
             .single()
@@ -325,7 +327,7 @@ async def customer_confirm_food_order(
         ).execute()
 
         await (
-            supabase.table("transactions")
+            supabase.table("transfers")
             .update({"status": "RELEASED"})
             .eq("id", tx.data["id"])
             .execute()
@@ -349,7 +351,7 @@ async def customer_confirm_food_order(
             change_amount=Decimal(str(full_amount)),
             actor_id=str(customer_id),
             actor_type="USER",
-            notes=f"Customer confirmed order, payment released to vendor",
+            notes=f"Customer confirmed order, payments released to vendor",
             request=request,
         )
 
@@ -371,6 +373,30 @@ async def customer_confirm_food_order(
             )
             .execute()
         )
+
+        # Trigger payout to vendor via Flutterwave transfer
+        try:
+            transfer_service = TransferService(
+                base_url=settings.FLUTTERWAVE_BASE_URL,
+                secret_key=settings.FLW_SECRET_KEY,
+            )
+            await transfer_service.create_transfer(
+                order_id=str(order_id),
+                payout_to="VENDOR",
+                supabase=supabase,
+            )
+            logger.info(
+                "food_transfer_initiated",
+                order_id=str(order_id),
+                vendor_id=str(vendor_id),
+            )
+        except Exception as transfer_err:
+            logger.error(
+                "food_transfer_failed",
+                order_id=str(order_id),
+                error=str(transfer_err),
+                exc_info=True,
+            )
 
         return {
             "success": True,
@@ -590,11 +616,11 @@ async def initiate_food_payment(
 ) -> dict:
     """
     Validate items, calculate total, save pending state in Redis,
-    return data for Flutterwave RN SDK (no payment link).
-    Real order is created in webhook after successful payment.
+    return data for Flutterwave RN SDK (no payments link).
+    Real order is created in webhook after successful payments.
     """
     logger.info(
-        "initiate_food_payment",
+        "initiate_food_payment_legacy",
         customer_id=str(current_profile.get("id")),
         vendor_id=str(data.vendor_id),
     )
@@ -721,16 +747,234 @@ async def initiate_food_payment(
                 description=f"Order from {vendor['store_name']}",
                 logo="https://mohdelivery.s3.us-east-1.amazonaws.com/favion/favicon.ico",
             ),
-            message="Ready for payment — use Flutterwave SDK",
+            message="Ready for payments — use Flutterwave SDK",
         ).model_dump()
 
     except HTTPException:
         raise
     except Exception as e:
         logger.error(
-            "initiate_food_payment_error",
+            "initiate_food_payment_legacy_error",
             customer_id=str(current_profile.get("id")),
             error=str(e),
             exc_info=True,
         )
-        raise HTTPException(500, f"Food payment initiation failed: {str(e)}")
+        raise HTTPException(500, f"Food payments initiation failed: {str(e)}")
+
+
+async def initiate_food_payment_future(
+    data: CheckoutRequest,
+    supabase: AsyncClient,
+    current_profile: dict,
+    *,
+    payment_mode: str = "PREAUTH_PREVIEW",
+) -> dict:
+    """
+    Preview step for FOOD preauth flow:
+    - validates items, calculates total
+    - saves pending state in Redis under `pending_food_{tx_ref}`
+    - returns preview response (no public_key; card is collected on a later screen)
+    """
+    logger.info(
+        "initiate_food_payment_preview",
+        customer_id=str(current_profile.get("id")),
+        vendor_id=str(data.vendor_id),
+    )
+
+    try:
+        # 1. Validate vendor
+        vendor_resp = (
+            await supabase.table("profiles")
+            .select(
+                "id, store_name, can_pickup_and_dropoff, pickup_and_delivery_charge"
+            )
+            .eq("id", str(data.vendor_id))
+            .eq("user_type", "RESTAURANT_VENDOR")
+            .single()
+            .execute()
+        )
+
+        if not vendor_resp.data:
+            raise HTTPException(404, "Vendor not found")
+
+        vendor = vendor_resp.data
+
+        # 2. Validate items & calculate subtotal
+        item_ids = [str(item.item_id) for item in data.items]
+        db_items = (
+            await supabase.table("food_items")
+            .select("id, name, price, vendor_id")
+            .in_("id", item_ids)
+            .eq("vendor_id", str(data.vendor_id))
+            .execute()
+        )
+
+        items_map = {item["id"]: item for item in db_items.data}
+        subtotal = Decimal("0")
+
+        for cart_item in data.items:
+            db_item = items_map.get(str(cart_item.item_id))
+            if not db_item:
+                raise HTTPException(
+                    400, f"Item {cart_item.name} not available or out of stock"
+                )
+
+            if cart_item.sizes and len(cart_item.sizes) > 0:
+                selected_size = cart_item.sizes[0]
+                item_price = Decimal(str(selected_size.price))
+            else:
+                item_price = Decimal(str(db_item["price"]))
+
+            subtotal += item_price * cart_item.quantity
+
+        # 3. Delivery fee (only if vendor offers self-delivery)
+        delivery_fee = Decimal("0")
+        if data.delivery_option == "VENDOR_DELIVERY":
+            if not vendor["can_pickup_and_dropoff"]:
+                raise HTTPException(400, "This vendor does not offer delivery")
+            delivery_fee = Decimal(str(vendor["pickup_and_delivery_charge"] or 0))
+
+        grand_total = subtotal + delivery_fee
+
+        # 4. Generate tx_ref
+        tx_ref = f"FOOD-{uuid.uuid4().hex[:32].upper()}"
+
+        # 5. Save pending state in Redis (longer TTL for preview -> card screen)
+        pending_data = {
+            "customer_id": str(current_profile.get("id")),
+            "vendor_id": str(data.vendor_id),
+            "items": [item.model_dump(mode="json") for item in data.items],
+            "total_price": str(Decimal(subtotal)),
+            "delivery_fee": str(Decimal(delivery_fee)),
+            "grand_total": str(Decimal(grand_total)),
+            "delivery_option": data.delivery_option,
+            "delivery_address": data.delivery_address,
+            "additional_info": data.instructions,
+            "tx_ref": tx_ref,
+            # This is what existing RPC uses as customer_name; keep the legacy behavior.
+            "name": current_profile.get("phone_number"),
+            "created_at": datetime.now().isoformat(),
+            "payment_mode": payment_mode,
+            "customer": {
+                "email": current_profile.get("email"),
+                "phone_number": current_profile.get("phone_number"),
+                "full_name": current_profile.get("full_name") or "N/A",
+            },
+        }
+        await save_pending(f"pending_food_{tx_ref}", pending_data, expire=6 * 60 * 60)
+
+        # 6. Return preview-friendly data (no Flutterwave public_key / RN SDK init)
+        return PaymentInitializationResponse(
+            tx_ref=tx_ref,
+            amount=Decimal(str(grand_total)),
+            public_key=None,
+            currency="NGN",
+            customer=PaymentCustomerInfo(
+                email=current_profile.get("email"),
+                phone_number=current_profile.get("phone_number"),
+                full_name=current_profile.get("full_name") or "N/A",
+            ),
+            customization=PaymentCustomization(
+                title="Servipal Food Order",
+                description=f"Order from {vendor['store_name']}",
+                logo="https://mohdelivery.s3.us-east-1.amazonaws.com/favion/favicon.ico",
+            ),
+            message="Preview ready",
+        ).model_dump()
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(
+            "initiate_food_payment_preview_error",
+            customer_id=str(current_profile.get("id")),
+            error=str(e),
+            exc_info=True,
+        )
+        raise HTTPException(500, f"Food payment preview failed: {str(e)}")
+
+
+async def initiate_food_preauth(
+    *,
+    tx_ref: str,
+    customer_id: str,
+    card_number: str,
+    expiry_month: str,
+    expiry_year: str,
+    cvv: str,
+    usesecureauth: bool = False,
+    redirect_url: Optional[str] = None,
+) -> dict:
+    """
+    Step 2 for FOOD preauth flow:
+    - loads pending food payload from Redis
+    - initiates Flutterwave preauthorized card charge
+    - stores flw_ref back to Redis and extends TTL to cover preauth window
+    """
+    if usesecureauth and not redirect_url:
+        raise HTTPException(400, "redirect_url is required when usesecureauth=true.")
+
+    pending_key = f"pending_food_{tx_ref}"
+    pending = await get_pending(pending_key)
+    if not pending:
+        raise HTTPException(
+            404, "Pending food payment not found or expired. Please initiate again."
+        )
+
+    if str(pending.get("customer_id")) != str(customer_id):
+        raise HTTPException(
+            403, "This payment reference does not belong to the current user."
+        )
+
+    if pending.get("flw_ref"):
+        return {
+            "status": "preauth_already_initiated",
+            "tx_ref": tx_ref,
+            "flw_ref": pending.get("flw_ref"),
+        }
+
+    amount = pending.get("grand_total")
+    if not amount:
+        raise HTTPException(500, "Pending food record missing grand_total")
+
+    customer = pending.get("customer") or {}
+    email = customer.get("email") or "no-reply@servipal.local"
+    phone = customer.get("phone_number") or "00000000000"
+    full_name = customer.get("full_name") or "N/A"
+
+    flw_payload: dict = {
+        "preauthorize": True,
+        "usesecureauth": usesecureauth,
+        "card_number": card_number,
+        "expiry_month": expiry_month,
+        "expiry_year": expiry_year,
+        "cvv": cvv,
+        "currency": "NGN",
+        "amount": str(amount),
+        "email": email,
+        "fullname": full_name,
+        "phone_number": phone,
+        "tx_ref": tx_ref,
+    }
+    if redirect_url:
+        flw_payload["redirect_url"] = redirect_url
+
+    flw = FlutterwavePaymentsClient()
+    resp = await flw.initiate_preauthorized_card_charge(flw_payload)
+
+    flw_ref = (resp.get("data") or {}).get("flw_ref")
+    if not flw_ref:
+        raise HTTPException(
+            502, {"message": "Flutterwave did not return flw_ref", "response": resp}
+        )
+
+    pending["flw_ref"] = flw_ref
+    pending["payment_mode"] = "PREAUTH_INITIATED"
+    await save_pending(pending_key, pending, expire=7 * 24 * 60 * 60 + 3600)
+
+    return {
+        "status": "preauth_initiated",
+        "tx_ref": tx_ref,
+        "flw_ref": flw_ref,
+        "flutterwave": resp,
+    }

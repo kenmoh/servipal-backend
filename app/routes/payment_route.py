@@ -1,8 +1,12 @@
-from fastapi import APIRouter, Request, HTTPException, Depends, status, Header
+from fastapi import APIRouter, Request, HTTPException, Depends, status
 from supabase import AsyncClient
 from app.dependencies.auth import get_current_user
-from app.schemas.payments_schema import CreateRefundRequest, MarkPaymentSuccessRequest
+from app.schemas.payments_schema import (
+    CreateRefundRequest,
+    MarkPaymentSuccessRequest,
+)
 from app.utils.api_key_auth import APIKeyManager
+
 # from app.services.payment_service import (
 #     process_successful_delivery_payment,
 #     process_successful_food_payment,
@@ -13,16 +17,16 @@ from app.utils.api_key_auth import APIKeyManager
 from app.config.config import settings
 from app.config.logging import logger
 from app.database.supabase import get_supabase_client, get_supabase_admin_client
-from app.utils.payment import generate_virtual_account_for_bank_transfer_payment
 from app.utils.webhook_validation import WebhookValidator
+
 # from app.worker import enqueue_job
 # from rq import Retry
 from pydantic import BaseModel
+
 # import hmac  # COMMENTED OUT - Using WebhookValidator instead for secure signature validation
 from app.common import order
 from app.services.payment_service import PaymentService
-
-
+from app.services.payment_service import process_pay_on_delivery
 
 
 class PaymentWebhookResponse(BaseModel):
@@ -31,7 +35,7 @@ class PaymentWebhookResponse(BaseModel):
     tx_ref: str | None = None
 
 
-router = APIRouter(tags=["payment-webhook"], prefix="/api/v1/payment")
+router = APIRouter(tags=["payments-webhook"], prefix="/api/v1/payments")
 
 
 @router.post("/webhook", status_code=status.HTTP_200_OK)
@@ -40,7 +44,7 @@ async def flutterwave_webhook(
     supabase: AsyncClient = Depends(get_supabase_admin_client),
 ) -> PaymentWebhookResponse:
     """
-    ** Handle Flutterwave payment webhooks. **
+    ** Handle Flutterwave payments webhooks. **
 
     - Verifies signature using WebhookValidator, checks idempotency, and queues processing in the background.
 
@@ -51,7 +55,7 @@ async def flutterwave_webhook(
         - PaymentWebhookResponse: Processing status.
     """
     # 1. Get raw body for signature verification
-     # 1. Verify webhook signature (Flutterwave sends verif-hash header)
+    # 1. Verify webhook signature (Flutterwave sends verif-hash header)
 
     # secret_hash = settings.FLW_SECRET_HASH
     # signature = request.headers.get("verif-hash")
@@ -65,16 +69,15 @@ async def flutterwave_webhook(
     #         status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid webhook signature"
     #     )
 
-    
     # 2. Verify webhook signature using WebhookValidator (secure HMAC validation)
     secret_hash = settings.FLW_SECRET_HASH
     signature = request.headers.get("verif-hash")
-    
+
     is_valid = WebhookValidator.validate_flutterwave_signature(
         signature_header=signature or "",
         secret_hash=secret_hash or "",
     )
-    
+
     if not is_valid:
         logger.warning(
             event="webhook_signature_invalid",
@@ -105,9 +108,10 @@ async def flutterwave_webhook(
     flw_ref = data.get("flw_ref")
     payment_type = data.get("payment_type")
     payment_status = data.get("status")
-    paid_amount = data.get('amount')
-    tx_ref = data.get('tx_ref')
-    tx_id = data.get('id')
+    paid_amount = data.get("amount")
+    tx_ref = data.get("tx_ref")
+    tx_id = data.get("id")
+    charge_type = data.get("charge_type")
 
     logger.info(
         event="flutterwave_webhook_received",
@@ -130,9 +134,9 @@ async def flutterwave_webhook(
         )
         return PaymentWebhookResponse(
             status="ignored",
+            tx_ref=tx_ref,
             message=f"Payment status is {payment_status}, not successful",
         )
-
 
     if not tx_ref:
         logger.warning(
@@ -152,7 +156,7 @@ async def flutterwave_webhook(
         return PaymentWebhookResponse(
             status="already_processed",
             message="Transaction already processed",
-            trx_ref=tx_ref,
+            tx_ref=tx_ref,
         )
 
     # 5. Determine which handler is based on the tx_ref prefix
@@ -195,8 +199,8 @@ async def flutterwave_webhook(
                     "tx_ref": tx_ref,
                     "paid_amount": str(paid_amount),
                     "flw_ref": str(flw_ref),
-                    "payment_method": f'{payment_type.upper()}',
-                    "tx_id": tx_id
+                    "payment_method": f"{payment_type.upper()}",
+                    "tx_id": tx_id,
                 },
             },
         )
@@ -212,7 +216,7 @@ async def flutterwave_webhook(
         msg_id=msg_id,
     )
     return PaymentWebhookResponse(
-        status="queued_with_retry", trx_ref=tx_ref, message="Payment processing queued"
+        status="queued_with_retry", tx_ref=tx_ref, message="Payment processing queued"
     )
 
 
@@ -226,25 +230,21 @@ async def process_successful_order_payment(
     return await order.process_payment(data, supabase)
 
 
-@router.post("/init-bank-transfer", status_code=status.HTTP_200_OK)
-async def init_bank_transfer(
-    data: order.ProcessPaymentRequest,
-    supabase: AsyncClient = Depends(get_supabase_client),
-    current_user: dict = Depends(get_current_user),
-):
-    return await generate_virtual_account_for_bank_transfer_payment(amount=data.paid_amount, customer=current_user, supabase=supabase)
-
-
 # Payout/Refund processing
 
+
 @router.post("/success")
-async def mark_payment_success(payload: MarkPaymentSuccessRequest,  supabase: AsyncClient = Depends(get_supabase_client)):
+async def mark_payment_success(
+    payload: MarkPaymentSuccessRequest,
+    supabase: AsyncClient = Depends(get_supabase_client),
+):
 
     return await supabase.mark_payment_success(
         str(payload.order_id),
         payload.flutterwave_tx_id,
         payload.scheduled_payout_at.isoformat(),
     )
+
 
 @router.get("/due")
 async def get_due_payouts(supabase: AsyncClient = Depends(get_supabase_client)):
@@ -256,7 +256,7 @@ async def process_payout(
     order_payment_id: str,
     flutterwave_transfer_id: str,
     flutterwave_reference: str,
-    supabase: AsyncClient = Depends(get_supabase_client)
+    supabase: AsyncClient = Depends(get_supabase_client),
 ):
     payout_service = PaymentService(supabase)
     return await payout_service.process_payout(
@@ -267,7 +267,9 @@ async def process_payout(
 
 
 @router.post("/")
-async def create_refund(payload: CreateRefundRequest, supabase: AsyncClient = Depends(get_supabase_client)):
+async def create_refund(
+    payload: CreateRefundRequest, supabase: AsyncClient = Depends(get_supabase_client)
+):
     refund_service = PaymentService(supabase)
     return await refund_service.create_refund(
         str(payload.order_payment_id),
@@ -280,3 +282,19 @@ async def create_refund(payload: CreateRefundRequest, supabase: AsyncClient = De
 async def get_pending_refunds(supabase: AsyncClient = Depends(get_supabase_client)):
     refund_service = PaymentService(supabase)
     return await refund_service.get_pending_refunds()
+
+
+@router.post("/pay-on-delivery/{tx_ref}/confirm", status_code=status.HTTP_200_OK)
+async def confirm_pay_on_delivery(
+    tx_ref: str,
+    request: Request,
+    current_user: dict = Depends(get_current_user),
+    supabase: AsyncClient = Depends(get_supabase_admin_client),
+):
+    # Customer confirms they have paid on delivery; backend finalizes order using pending Redis payload.
+    return await process_pay_on_delivery(
+        tx_ref=tx_ref,
+        actor_id=str(current_user.get("id")),
+        supabase=supabase,
+        request=request,
+    )

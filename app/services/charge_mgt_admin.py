@@ -8,20 +8,21 @@ TABLE = "charges_and_commissions"
 
 
 async def list_charges(supabase: AsyncClient) -> list[ChargesResponse]:
-    result = await supabase.table(TABLE).select("*").order("created_at", desc=True).execute()
+    result = (
+        await supabase.table(TABLE).select("*").order("created_at", desc=True).execute()
+    )
     return [ChargesResponse(**r) for r in result.data]
 
 
 async def get_charges(supabase: AsyncClient, charges_id: UUID) -> ChargesResponse:
     result = await (
-        supabase.table(TABLE)
-        .select("*")
-        .eq("id", str(charges_id))
-        .single()
-        .execute()
+        supabase.table(TABLE).select("*").eq("id", str(charges_id)).single().execute()
     )
     if not result.data:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Charges config {charges_id} not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Charges config {charges_id} not found",
+        )
     return ChargesResponse(**result.data)
 
 
@@ -58,10 +59,7 @@ async def update_charges(
         return old  # nothing to update
 
     result = await (
-        supabase.table(TABLE)
-        .update(data)
-        .eq("id", str(charges_id))
-        .execute()
+        supabase.table(TABLE).update(data).eq("id", str(charges_id)).execute()
     )
     new_row = result.data[0]
 

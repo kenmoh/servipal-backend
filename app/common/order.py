@@ -1,5 +1,4 @@
-from uuid import UUID
-from typing import Optional
+from typing import Optional, Literal
 from decimal import Decimal
 from supabase import AsyncClient
 from fastapi import HTTPException, status, Request
@@ -15,7 +14,7 @@ from app.services.payment_service import (
     process_successful_topup_payment,
     process_successful_laundry_payment,
     process_successful_product_payment,
-    process_successful_reservation_payment
+    process_successful_reservation_payment,
 )
 
 HANDLER_MAP = {
@@ -24,7 +23,7 @@ HANDLER_MAP = {
     "LAUNDRY-": process_successful_laundry_payment,
     "DELIVERY-": process_successful_delivery_payment,
     "TOPUP-": process_successful_topup_payment,
-    "RESERVATION":process_successful_reservation_payment
+    "RESERVATION": process_successful_reservation_payment,
 }
 
 
@@ -64,8 +63,8 @@ async def process_payment(
     supabase: AsyncClient,
 ):
     # API key validation is performed at the route level (payment_route.py)
-    # This function processes the validated payment request
-    
+    # This function processes the validated payments request
+
     # 1. Find handler from tx_ref prefix
     handler = next(
         (h for prefix, h in HANDLER_MAP.items() if data.tx_ref.startswith(prefix)), None
@@ -106,7 +105,7 @@ async def process_payment(
         # Return 500 so Edge Function leaves message in queue for retry
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Something went wrong while processing the payment. Please try again.",
+            detail="Something went wrong while processing the payments. Please try again.",
         )
 
 
@@ -941,3 +940,16 @@ async def _send_delivery_notifications(
                 data=notif["data"],
                 supabase=supabase,
             )
+
+
+
+async def get_delivery_order_by_id_for_payout(order_id: str, payout_to: Literal['CUSTOMER', 'VENDOR'], supabase: AsyncClient):
+    resp = await supabase.rpc('unified_order_funds', {
+        'p_order_id': order_id,
+        'p_payout_to': payout_to
+
+    }).execute()
+
+    return resp.data[0]
+
+

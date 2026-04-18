@@ -1,4 +1,5 @@
 import json
+import json
 from typing import Literal
 from app.utils.redis_utils import get_pending, delete_pending
 from uuid import UUID
@@ -14,11 +15,11 @@ from app.services.delivery_service import extract_rpc_data
 from postgrest.exceptions import APIError
 
 
-def parse_coordinates(value):
-    """Ensure coordinates are a list [lat, lng], not a string."""
-    if isinstance(value, str):
-        return json.loads(value)  # "[6.5, 3.3]" → [6.5, 3.3]
-    return value
+# def parse_coordinates(value):
+#     """Ensure coordinates are a list [lat, lng], not a string."""
+#     if isinstance(value, str):
+#         return json.loads(value)  # "[6.5, 3.3]" → [6.5, 3.3]
+#     return value
 
 
 # ───────────────────────────────────────────────
@@ -31,38 +32,44 @@ async def process_successful_delivery_payment(
     paid_amount: Decimal,
     flw_ref: str,
     supabase: AsyncClient,
-    payment_method: Literal["CARD", "WALLET", "BANK_TRANSFER"],
+    payment_method: Literal["CARD", "WALLET", "BANK_TRANSFER", "PAY_ON_DELIVERY", "BANK"],
     pending_data: dict = None,
 ):
-    logger.info("processing_delivery_payment", tx_ref=tx_ref, paid_amount=paid_amount, payment_method=payment_method)
+    logger.info(
+        "processing_delivery_payment",
+        tx_ref=tx_ref,
+        paid_amount=paid_amount,
+        payment_method=payment_method,
+    )
 
     # 1. Verify — CARD and BANK_TRANSFER
-    if payment_method in ["CARD", "BANK_TRANSFER"]:
-        logger.info("verifying_transaction", tx_ref=tx_ref, payment_method=payment_method)
-        
+    if payment_method in ["CARD", "BANK_TRANSFER", "BANK"]:
+        logger.info(
+            "verifying_transaction", tx_ref=tx_ref, payment_method=payment_method
+        )
+
         verified = await verify_transaction_tx_ref(tx_ref)
-        
+
         # Log verification result
         logger.info(
             "verification_result",
             tx_ref=tx_ref,
             verified_status=verified.get("status") if verified else None,
-            verified_data=verified
+            verified_data=verified,
         )
-        
+
         if not verified or verified.get("status") != "success":
             logger.error(
-                "delivery_payment_verification_failed", 
+                "delivery_payment_verification_failed",
                 tx_ref=tx_ref,
                 verified=verified,
-                payment_method=payment_method
+                payment_method=payment_method,
             )
             return {"status": "verification_failed"}
 
-
-     # 2. Get pending data
+    # 2. Get pending data
     pending_key = f"pending_delivery_{tx_ref}"
-    if payment_method == "WALLET" and pending_data:
+    if payment_method in {"WALLET", "PAY_ON_DELIVERY"} and pending_data:
         pending = pending_data
     else:
         pending = await get_pending(pending_key)
@@ -70,7 +77,6 @@ async def process_successful_delivery_payment(
     if not pending:
         logger.warning("delivery_payment_pending_not_found", tx_ref=tx_ref)
         return {"status": "pending_not_found"}
-
 
     sender_id = str(pending["sender_id"])
     delivery_data = pending["delivery_data"]
@@ -129,7 +135,7 @@ async def process_successful_delivery_payment(
             await notify_user(
                 sender_id,
                 "Payment Successful",
-                f"Your delivery payment of ₦{delivery_fee} has been received.",
+                f"Your delivery payments of ₦{delivery_fee} has been received.",
                 data={
                     "type": "DELIVERY_PAYMENT_SUCCESS",
                     "order_id": order_id,
@@ -149,11 +155,14 @@ async def process_successful_delivery_payment(
 
         return result_data
 
-    except APIError as e:  
+    except APIError as e:
         result_data = extract_rpc_data(e)
         if not result_data:
             logger.error(
-                "delivery_payment_processing_error", tx_ref=tx_ref, error=str(result_data), exc_info=True
+                "delivery_payment_processing_error",
+                tx_ref=tx_ref,
+                error=str(result_data),
+                exc_info=True,
             )
             raise
 
@@ -172,16 +181,16 @@ async def process_successful_delivery_payment_non_rpc(
     paid_amount: Decimal,
     flw_ref: str,
     supabase: AsyncClient,
-    payment_method: Literal["CARD", "WALLET",'BANK_TRANSFER'],
+    payment_method: Literal["CARD", "WALLET", "BANK_TRANSFER", "PAY_ON_DELIVERY"],
     pending_data: dict = None,
 ):
     """
-    Process successful delivery payment.
+    Process successful delivery payments.
     Uses direct DB operations (like legacy code) for reliability.
     """
     logger.info("processing_delivery_payment", tx_ref=tx_ref, paid_amount=paid_amount)
 
-    # 1. Verify payment
+    # 1. Verify payments
     # if payment_method == "CARD":
     #     verified = await verify_transaction_tx_ref(tx_ref)
     #     if not verified or verified.get("status") != "success":
@@ -200,7 +209,7 @@ async def process_successful_delivery_payment_non_rpc(
 
     # 1. Get pending data from Redis
     pending_key = f"pending_delivery_{tx_ref}"
-    if payment_method == "WALLET" and pending_data:
+    if payment_method in {"WALLET", "PAY_ON_DELIVERY"} and pending_data:
         pending = pending_data
         logger.info("using_embedded_pending_data", tx_ref=tx_ref)
     else:
@@ -216,7 +225,7 @@ async def process_successful_delivery_payment_non_rpc(
 
     # 3. Check if already processed (idempotency)
     existing = (
-        await supabase.table("transactions")
+        await supabase.table("transfers")
         .select("order_id")
         .eq("tx_ref", tx_ref)
         .execute()
@@ -320,7 +329,7 @@ async def process_successful_delivery_payment_non_rpc(
 
         # 9. Create DEPOSIT transaction
         await (
-            supabase.table("transactions")
+            supabase.table("transfers")
             .insert(
                 {
                     "tx_ref": tx_ref,
@@ -336,7 +345,7 @@ async def process_successful_delivery_payment_non_rpc(
                     "details": {
                         "flw_ref": flw_ref,
                         "label": "CREDIT",
-                        "note": "Delivery payment received from Flutterwave",
+                        "note": "Delivery payments received from Flutterwave",
                         "delivery_fee_breakdown": {
                             "base_fee": str(base_fee),
                             "per_km_fee": str(per_km_fee),
@@ -362,7 +371,7 @@ async def process_successful_delivery_payment_non_rpc(
             await notify_user(
                 f"{sender_id}",
                 "Payment Successful",
-                f"Your delivery payment of ₦{delivery_fee} has been received.",
+                f"Your delivery payments of ₦{delivery_fee} has been received.",
                 data={
                     "type": "DELIVERY_PAYMENT_SUCCESS",
                     "order_id": order_id,
@@ -388,7 +397,7 @@ async def process_successful_delivery_payment_non_rpc(
             "delivery_fee": str(delivery_fee),
             "amount_due_dispatch": str(amount_due_dispatch),
             "platform_commission": str(platform_commission),
-            "message": "Delivery payment processed successfully",
+            "message": "Delivery payments processed successfully",
         }
 
     except Exception as e:
@@ -409,14 +418,14 @@ async def process_successful_food_payment(
     paid_amount: float,
     flw_ref: str,
     supabase: AsyncClient,
-    payment_method: Literal["CARD", "WALLET", 'BANK_TRANSFER'],
+    payment_method: Literal["CARD", "WALLET", "BANK_TRANSFER", "PAY_ON_DELIVERY", "BANK"],
     request: Optional[Request] = None,
     pending_data: dict = None,
 ):
-    """Process successful food order payment using atomic RPC."""
+    """Process successful food order payments using atomic RPC."""
     logger.info("processing_food_payment", tx_ref=tx_ref, paid_amount=paid_amount)
 
-    # Verify payment
+    # Verify payments
     # verified = await verify_transaction_tx_ref(tx_ref)
     # if not verified or verified.get("status") != "success":
     #     logger.error("food_payment_verification_failed", tx_ref=tx_ref)
@@ -425,7 +434,7 @@ async def process_successful_food_payment(
     # # Get pending data
     # pending_key = f"pending_food_{tx_ref}"
     # pending = await get_pending(pending_key)
-    if payment_method in ['CARD','BANK_TRANSFER']:
+    if payment_method in ["CARD", "BANK_TRANSFER", 'BANK']:
         verified = await verify_transaction_tx_ref(tx_ref)
         if not verified or verified.get("status") != "success":
             logger.error("food_payment_verification_failed", tx_ref=tx_ref)
@@ -433,7 +442,7 @@ async def process_successful_food_payment(
 
     # 1. Get pending data from Redis
     pending_key = f"pending_food_{tx_ref}"
-    if payment_method == "WALLET" and pending_data:
+    if payment_method in {"WALLET", "PAY_ON_DELIVERY"} and pending_data:
         pending = pending_data
         logger.info("using_embedded_pending_data", tx_ref=tx_ref)
     else:
@@ -505,7 +514,7 @@ async def process_successful_food_payment(
             actor_id=result_data["customer_id"],
             actor_type="USER",
             change_amount=Decimal(str(result_data["grand_total"])),
-            notes=f"Food order payment received via {payment_method}: {tx_ref}",
+            notes=f"Food order payments received via {payment_method}: {tx_ref}",
             request=request,
         )
 
@@ -515,11 +524,14 @@ async def process_successful_food_payment(
 
         return result_data
 
-    except APIError as e:  
+    except APIError as e:
         result_data = extract_rpc_data(e)
         if not result_data:
             logger.error(
-                "food_payment_processing_error", tx_ref=tx_ref, error=str(result_data), exc_info=True
+                "food_payment_processing_error",
+                tx_ref=tx_ref,
+                error=str(result_data),
+                exc_info=True,
             )
             raise
 
@@ -545,7 +557,7 @@ async def process_successful_topup_payment(
     logger.info("processing_topup_payment", tx_ref=tx_ref, paid_amount=paid_amount)
 
     # 1. Verify — CARD only
-    if payment_method == "CARD" or payment_method == 'BANK_TRANSFER':
+    if payment_method in ["CARD", "BANK_TRANSFER", "BANK"]:
         verified = await verify_transaction_tx_ref(tx_ref)
         if not verified or verified.get("status") != "success":
             logger.error("topup_payment_verification_failed", tx_ref=tx_ref)
@@ -553,7 +565,7 @@ async def process_successful_topup_payment(
 
     # 2. Idempotency check BEFORE anything else
     existing = (
-        await supabase.table("transactions").select("id").eq("tx_ref", tx_ref).execute()
+        await supabase.table("transfers").select("id").eq("tx_ref", tx_ref).execute()
     )
     if existing.data:
         logger.info("topup_payment_already_processed", tx_ref=tx_ref)
@@ -561,7 +573,7 @@ async def process_successful_topup_payment(
 
     # 3. Get pending data
     pending_key = f"pending_topup_{tx_ref}"
-   
+
     pending = await get_pending(pending_key)
 
     if not pending:
@@ -671,7 +683,7 @@ async def process_successful_product_payment(
     paid_amount: str,
     flw_ref: str,
     supabase: AsyncClient,
-    payment_method: Literal["CARD", "WALLET",'BANK_TRANSFER'],
+    payment_method: Literal["CARD", "WALLET", "BANK_TRANSFER", "PAY_ON_DELIVERY", "BANK"],
     pending_data: dict = None,
 ):
     logger.info(
@@ -680,7 +692,7 @@ async def process_successful_product_payment(
         paid_amount=paid_amount,
     )
 
-    if payment_method == "CARD" or payment_method == 'BANK_TRANSFER':
+    if payment_method in ["CARD", "BANK_TRANSFER","BANK"]:
         verified = await verify_transaction_tx_ref(tx_ref)
         if not verified or verified.get("status") != "success":
             logger.error("product_payment_verification_failed", tx_ref=tx_ref)
@@ -688,7 +700,7 @@ async def process_successful_product_payment(
 
     # 1. Get pending data from Redis
     pending_key = f"pending_product_{tx_ref}"
-    if payment_method == "WALLET" and pending_data:
+    if payment_method in {"WALLET", "PAY_ON_DELIVERY"} and pending_data:
         pending = pending_data
 
     else:
@@ -802,14 +814,14 @@ async def process_successful_product_payment_non_rpc(
     paid_amount: float,
     flw_ref: str,
     supabase: AsyncClient,
-    payment_method: Literal["CARD", "WALLET", 'BANK_TRANSFER'],
+    payment_method: Literal["CARD", "WALLET", "BANK_TRANSFER", "PAY_ON_DELIVERY", "BANK"],
     pending_data: dict = None,
 ):
     logger.info(
         event="processing_product_payment", tx_ref=tx_ref, paid_amount=paid_amount
     )
 
-    if payment_method == "CARD" or payment_method == 'BANK_TRANSFER':
+    if payment_method in ["CARD", "BANK_TRANSFER", "BANK"]:
         verified = await verify_transaction_tx_ref(tx_ref)
         if not verified or verified.get("status") != "success":
             logger.error("product_payment_verification_failed", tx_ref=tx_ref)
@@ -817,7 +829,7 @@ async def process_successful_product_payment_non_rpc(
 
     # 1. Get pending data from Redis
     pending_key = f"pending_product_{tx_ref}"
-    if payment_method == "WALLET" and pending_data:
+    if payment_method in {"WALLET", "PAY_ON_DELIVERY"} and pending_data:
         pending = pending_data
         logger.info("using_embedded_pending_data", tx_ref=tx_ref)
     else:
@@ -835,7 +847,7 @@ async def process_successful_product_payment_non_rpc(
 
     # Idempotency check
     existing = (
-        await supabase.table("transactions").select("id").eq("tx_ref", tx_ref).execute()
+        await supabase.table("transfers").select("id").eq("tx_ref", tx_ref).execute()
     )
 
     if existing.data:
@@ -916,7 +928,7 @@ async def process_successful_product_payment_non_rpc(
 
         # Create transaction record
         await (
-            supabase.table("transactions")
+            supabase.table("transfers")
             .insert(
                 {
                     "tx_ref": tx_ref,
@@ -952,7 +964,7 @@ async def process_successful_product_payment_non_rpc(
             error=str(e),
             exc_info=True,
         )
-        
+
         raise
 
 
@@ -961,14 +973,14 @@ async def process_successful_laundry_payment(
     paid_amount: float,
     flw_ref: str,
     supabase: AsyncClient,
-    payment_method: Literal["CARD", "WALLET", 'BANK_TRANSFER'],
+    payment_method: Literal["CARD", "WALLET", "BANK_TRANSFER", "PAY_ON_DELIVERY", "BANK"],
     pending_data: dict = None,
     request: Optional[Request] = None,
 ):
-    """Process successful laundry order payment using atomic RPC."""
+    """Process successful laundry order payments using atomic RPC."""
     logger.info("processing_laundry_payment", tx_ref=tx_ref, paid_amount=paid_amount)
 
-    # Verify payment
+    # Verify payments
     # verified = await verify_transaction_tx_ref(tx_ref)
     # if not verified or verified.get("status") != "success":
     #     logger.error("laundry_payment_verification_failed", tx_ref=tx_ref)
@@ -977,7 +989,7 @@ async def process_successful_laundry_payment(
     # # Get pending data
     # pending_key = f"pending_laundry_{tx_ref}"
     # pending = await get_pending(pending_key)
-    if payment_method == "CARD" or payment_method == 'BANK_TRANSFER':
+    if payment_method in ["CARD", "BANK_TRANSFER", "BANK"]:
         verified = await verify_transaction_tx_ref(tx_ref)
         if not verified or verified.get("status") != "success":
             logger.error("laundry_payment_verification_failed", tx_ref=tx_ref)
@@ -985,7 +997,7 @@ async def process_successful_laundry_payment(
 
     # 1. Get pending data from Redis
     pending_key = f"pending_laundry_{tx_ref}"
-    if payment_method == "WALLET" and pending_data:
+    if payment_method in {"WALLET", "PAY_ON_DELIVERY"} and pending_data:
         pending = pending_data
         logger.info("using_embedded_pending_data", tx_ref=tx_ref)
     else:
@@ -1064,7 +1076,7 @@ async def process_successful_laundry_payment(
             actor_id=result_data["customer_id"],
             actor_type="USER",
             change_amount=Decimal(str(result_data["grand_total"])),
-            notes=f"Laundry payment received via {payment_method}: {tx_ref}",
+            notes=f"Laundry payments received via {payment_method}: {tx_ref}",
             request=request,
         )
 
@@ -1089,15 +1101,16 @@ async def process_successful_reservation_payment(
     paid_amount: float,
     flw_ref: str,
     supabase: AsyncClient,
-    payment_method: Literal["CARD", "WALLET", 'BANK_TRANSFER'],
+    payment_method: Literal["CARD", "WALLET", "BANK_TRANSFER", "PAY_ON_DELIVERY", "BANK"],
     pending_data: dict = None,
     request: Optional[Request] = None,
 ):
-    """Process successful laundry order payment using atomic RPC."""
-    logger.info("process_successful_reservation_payment", tx_ref=tx_ref, paid_amount=paid_amount)
+    """Process successful laundry order payments using atomic RPC."""
+    logger.info(
+        "process_successful_reservation_payment", tx_ref=tx_ref, paid_amount=paid_amount
+    )
 
-
-    if payment_method == "CARD" or payment_method == 'BANK_TRANSFER':
+    if payment_method in ["CARD", "BANK_TRANSFER", "BANK"]:
         verified = await verify_transaction_tx_ref(tx_ref)
         if not verified or verified.get("status") != "success":
             logger.error("process_successful_reservation_payment_failed", tx_ref=tx_ref)
@@ -1115,7 +1128,9 @@ async def process_successful_reservation_payment(
         logger.warning("reservation_payment_pending_not_found", tx_ref=tx_ref)
         return
 
-    if Decimal(str(paid_amount)).quantize(Decimal("0.00")) != Decimal(str(pending["deposit_required"])).quantize(Decimal("0.00")):
+    if Decimal(str(paid_amount)).quantize(Decimal("0.00")) != Decimal(
+        str(pending["deposit_required"])
+    ).quantize(Decimal("0.00")):
         logger.error(
             "reservation_payment_amount_mismatch",
             tx_ref=tx_ref,
@@ -1123,7 +1138,10 @@ async def process_successful_reservation_payment(
             paid=str(Decimal(str(paid_amount)).quantize(Decimal("0.00"))),
         )
         await delete_pending(pending_key)
-        raise HTTPException(status_code=status.HTTP_406_NOT_ACCEPTABLE, detail=f"Amount paid {paid_amount} does not match deposit required {pending['deposit_required']}")
+        raise HTTPException(
+            status_code=status.HTTP_406_NOT_ACCEPTABLE,
+            detail=f"Amount paid {paid_amount} does not match deposit required {pending['deposit_required']}",
+        )
 
     try:
         # Call atomic RPC
@@ -1188,12 +1206,14 @@ async def process_successful_reservation_payment(
             actor_id=result_data["customer_id"],
             actor_type="USER",
             change_amount=Decimal(str(result_data["grand_total"])),
-            notes=f"Reservation payment received via {payment_method}: {tx_ref}",
+            notes=f"Reservation payments received via {payment_method}: {tx_ref}",
             request=request,
         )
 
         logger.info(
-            "reservation_payment_processed_success", tx_ref=tx_ref, reservation_id=str(reservation_id)
+            "reservation_payment_processed_success",
+            tx_ref=tx_ref,
+            reservation_id=str(reservation_id),
         )
 
         return result_data
@@ -1232,10 +1252,121 @@ def parse_coordinates(value) -> list:
     return value
 
 
+async def process_pay_on_delivery(
+    *,
+    tx_ref: str,
+    actor_id: str,
+    supabase: AsyncClient,
+    request: Optional[Request] = None,
+) -> dict:
+    """
+    Pay-on-delivery confirmation:
+    - loads pending payload from Redis
+    - validates ownership
+    - processes the order using existing payment handlers with payment_method=PAY_ON_DELIVERY
+    """
+    if not tx_ref or "-" not in tx_ref:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid tx_ref"
+        )
+
+    if tx_ref.startswith("DELIVERY-"):
+        pending_key = f"pending_delivery_{tx_ref}"
+        handler = process_successful_delivery_payment
+        owner_field = "sender_id"
+        amount_field = "amount"
+    elif tx_ref.startswith("FOOD-"):
+        pending_key = f"pending_food_{tx_ref}"
+        handler = process_successful_food_payment
+        owner_field = "customer_id"
+        amount_field = "grand_total"
+    elif tx_ref.startswith("LAUNDRY-"):
+        pending_key = f"pending_laundry_{tx_ref}"
+        handler = process_successful_laundry_payment
+        owner_field = "customer_id"
+        amount_field = "grand_total"
+    elif tx_ref.startswith("PRODUCT-"):
+        pending_key = f"pending_product_{tx_ref}"
+        handler = process_successful_product_payment
+        owner_field = "customer_id"
+        amount_field = "grand_total"
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported tx_ref prefix"
+        )
+
+    pending = await get_pending(pending_key)
+    if not pending:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Pending record not found or expired",
+        )
+
+    if str(pending.get(owner_field)) != str(actor_id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not allowed to confirm this payment",
+        )
+
+    raw_amount = pending.get(amount_field)
+    if raw_amount is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Pending record missing amount",
+        )
+
+    paid_amount = Decimal(str(raw_amount))
+
+    # Use a synthetic ref; handlers store it alongside tx_ref.
+    flw_ref = "PAY_ON_DELIVERY"
+
+    # Reuse handlers, passing pending_data so they don't re-fetch Redis.
+    # Handlers will delete the pending key on success / already_processed.
+    if handler is process_successful_food_payment:
+        return await handler(
+            tx_ref=tx_ref,
+            paid_amount=float(paid_amount),
+            flw_ref=flw_ref,
+            supabase=supabase,
+            payment_method="PAY_ON_DELIVERY",
+            request=request,
+            pending_data=pending,
+        )
+    if handler is process_successful_laundry_payment:
+        return await handler(
+            tx_ref=tx_ref,
+            paid_amount=float(paid_amount),
+            flw_ref=flw_ref,
+            supabase=supabase,
+            payment_method="PAY_ON_DELIVERY",
+            pending_data=pending,
+            request=request,
+        )
+    if handler is process_successful_product_payment:
+        return await handler(
+            tx_ref=tx_ref,
+            paid_amount=str(paid_amount),
+            flw_ref=flw_ref,
+            supabase=supabase,
+            payment_method="PAY_ON_DELIVERY",
+            pending_data=pending,
+        )
+
+    # Delivery handler expects Decimal
+    return await handler(
+        tx_ref=tx_ref,
+        paid_amount=paid_amount,
+        flw_ref=flw_ref,
+        supabase=supabase,
+        payment_method="PAY_ON_DELIVERY",
+        pending_data=pending,
+    )
+
 
 #  Payout
 class PaymentService:
-    """ Payout/Refund ptocessing """
+    """Payout/Refund ptocessing"""
+
     def __init__(self, supabase: Client):
         self.supabase = supabase
 
@@ -1274,7 +1405,6 @@ class PaymentService:
                 "p_flutterwave_reference": flutterwave_reference,
             },
         ).execute()
-
 
     def create_refund(self, order_payment_id: str, amount: float, reason: str):
         return self.supabase.rpc(

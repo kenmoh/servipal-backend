@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Form, File, UploadFile, status
+from fastapi import APIRouter, Depends, Form, File, UploadFile, status, Query
 from typing import List, Optional
 from decimal import Decimal
 from uuid import UUID
@@ -22,7 +22,7 @@ from app.dependencies.auth import get_current_profile, require_user_type
 from app.dependencies.auth import get_customer_contact_info
 from app.schemas.user_schemas import UserType
 from app.utils.storage import upload_to_supabase_storage
-from app.schemas.common import PaymentInitializationResponse
+from app.schemas.common import PaymentInitializationResponse, PaymentCardPreauthRequest
 
 router = APIRouter(prefix="/api/v1/products", tags=["Marketplace"])
 
@@ -181,12 +181,15 @@ async def delete_product_item(
 @router.post("/initiate-payment", response_model=PaymentInitializationResponse)
 async def initiate_product_payment(
     data: ProductOrderCreate,
+    payment_mode: str = Query(
+        "PREVIEW", description="PREVIEW (preauth) or LEGACY (Flutterwave RN SDK)"
+    ),
     current_profile: dict = Depends(get_current_profile),
     customer_info: dict = Depends(get_customer_contact_info),
     supabase: AsyncClient = Depends(get_supabase_client),
 ):
     """
-    Customer initiates payment for a single product + quantity.
+    Customer initiates payments for a single product + quantity.
 
     Args:
         data (ProductOrderCreate): Order details.
@@ -194,7 +197,37 @@ async def initiate_product_payment(
     Returns:
         ProductOrderResponse: Payment details (Flutterwave).
     """
-    return await product_service.initiate_product_payment(data, customer_info, supabase)
+    if payment_mode.upper() == "LEGACY":
+        return await product_service.initiate_product_payment_legacy(
+            data, customer_info, supabase
+        )
+
+    if payment_mode.upper() == "COD":
+        return await product_service.initiate_product_payment(
+            data, customer_info, supabase, payment_mode="PAY_ON_DELIVERY"
+        )
+
+    return await product_service.initiate_product_payment(
+        data, customer_info, supabase, payment_mode="PREAUTH_PREVIEW"
+    )
+
+
+@router.post("/{tx_ref}/preauth")
+async def initiate_product_preauth_endpoint(
+    tx_ref: str,
+    payload: PaymentCardPreauthRequest,
+    current_profile: dict = Depends(get_current_profile),
+):
+    return await product_service.initiate_product_preauth(
+        tx_ref=tx_ref,
+        customer_id=current_profile["id"],
+        card_number=payload.card_number,
+        expiry_month=payload.expiry_month,
+        expiry_year=payload.expiry_year,
+        cvv=payload.cvv,
+        usesecureauth=payload.usesecureauth,
+        redirect_url=payload.redirect_url,
+    )
 
 
 # ───────────────────────────────────────────────
@@ -267,7 +300,7 @@ async def customer_confirm_product_order(
 ):
     """
     Customer confirms receipt.
-    Stock reduced, total_sold increased, payment released.
+    Stock reduced, total_sold increased, payments released.
 
     Args:
         order_id (UUID): The order ID.

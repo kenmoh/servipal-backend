@@ -26,7 +26,6 @@ from app.schemas.analytics_schemas import (
 )
 from app.dependencies.auth import (
     require_admin,
-    require_super_admin,
     require_admin_or_super,
 )
 from app.utils.cache_manager import cache_manager
@@ -41,20 +40,20 @@ async def dashboard_overview(
 ):
     """
     Master KPI cards — total users, orders, revenue, wallets,
-    transactions and review stats across all service types.
+    transfers and review stats across all service types.
     """
     cache_key = cache_manager.get_analytics_overview_key()
-    
+
     # Try to get from cache first
     cached = await cache_manager.get_cached(cache_key, DashboardOverviewResponse)
     if cached:
         return cached
-    
+
     result = await get_dashboard_overview(supabase)
-    
+
     # Cache the result (analytics overview: 10 min)
     await cache_manager.set_cached(cache_key, result, ttl=600)
-    
+
     return result
 
 
@@ -63,24 +62,24 @@ async def order_trends(
     days: int = Query(default=30, ge=0, description="0 = all time"),
     interval: AnalyticsInterval = Query(default="day"),
     supabase: AsyncClient = Depends(get_supabase_client),
-    _admin: dict = Depends(require_admin_or_super)
+    _admin: dict = Depends(require_admin_or_super),
 ):
     """
     Time-series order counts and revenue across all service types.
     Use for line/area charts. interval: day | week | month.
     """
     cache_key = cache_manager.get_analytics_order_trends_key(days, interval)
-    
+
     # Try to get from cache first
     cached = await cache_manager.get_cached(cache_key, list[OrderTrendPoint])
     if cached:
         return cached
-    
+
     result = await get_order_trends(supabase, days=days, interval=interval)
-    
+
     # Cache the result (analytics trends: 15 min)
     await cache_manager.set_cached(cache_key, result, ttl=900)
-    
+
     return result
 
 
@@ -90,24 +89,23 @@ async def user_growth(
     interval: AnalyticsInterval = Query(default="day"),
     supabase: AsyncClient = Depends(get_supabase_client),
     _admin: dict = Depends(require_admin_or_super),
-    
 ):
     """
     User registration trends broken down by user type.
     Use for stacked area/bar charts.
     """
     cache_key = cache_manager.get_analytics_user_growth_key(days, interval)
-    
+
     # Try to get from cache first
     cached = await cache_manager.get_cached(cache_key, list[UserGrowthPoint])
     if cached:
         return cached
-    
+
     result = await get_user_growth(supabase, days=days, interval=interval)
-    
+
     # Cache the result (analytics trends: 15 min)
     await cache_manager.set_cached(cache_key, result, ttl=900)
-    
+
     return result
 
 
@@ -118,28 +116,28 @@ async def status_breakdown(
     _admin: dict = Depends(require_admin_or_super),
 ):
     """
-    Order status distributions for all service types + delivery payment status.
+    Order status distributions for all service types + delivery payments status.
     Use for donut/pie charts.
     """
     cache_key = cache_manager.get_analytics_status_breakdown_key(days)
-    
+
     # Try to get from cache first
     cached = await cache_manager.get_cached(cache_key, StatusBreakdownResponse)
     if cached:
         return cached
-    
+
     result = await get_status_breakdown(supabase, days=days)
-    
+
     # Cache the result (analytics breakdown: 15 min)
     await cache_manager.set_cached(cache_key, result, ttl=900)
-    
+
     return result
 
 
 @router.get("/top-riders", response_model=list[TopRider])
 async def top_riders(
     limit: int = Query(default=10, ge=1, le=100),
-    days: int  = Query(default=30, ge=0, description="0 = all time"),
+    days: int = Query(default=30, ge=0, description="0 = all time"),
     supabase: AsyncClient = Depends(get_supabase_client),
     _admin: dict = Depends(require_admin_or_super),
 ):
@@ -148,17 +146,17 @@ async def top_riders(
     Includes cancel rate, earnings, distance and dispatcher info.
     """
     cache_key = cache_manager.get_analytics_top_riders_key(limit, days)
-    
+
     # Try to get from cache first
     cached = await cache_manager.get_cached(cache_key, list[TopRider])
     if cached:
         return cached
-    
+
     result = await get_top_riders(supabase, limit=limit, days=days)
-    
+
     # Cache the result (analytics leaderboard: 20 min)
     await cache_manager.set_cached(cache_key, result, ttl=1200)
-    
+
     return result
 
 
@@ -166,7 +164,7 @@ async def top_riders(
 async def top_vendors(
     order_type: VendorOrderType = Query(default="FOOD"),
     limit: int = Query(default=10, ge=1, le=100),
-    days: int  = Query(default=30, ge=0, description="0 = all time"),
+    days: int = Query(default=30, ge=0, description="0 = all time"),
     supabase: AsyncClient = Depends(get_supabase_client),
     _admin: dict = Depends(require_admin_or_super),
 ):
@@ -175,17 +173,19 @@ async def top_vendors(
     order_type: FOOD | LAUNDRY | PRODUCT
     """
     cache_key = cache_manager.get_analytics_top_vendors_key(order_type, limit, days)
-    
+
     # Try to get from cache first
     cached = await cache_manager.get_cached(cache_key, list[TopVendor])
     if cached:
         return cached
-    
-    result = await get_top_vendors(supabase, order_type=order_type, limit=limit, days=days)
-    
+
+    result = await get_top_vendors(
+        supabase, order_type=order_type, limit=limit, days=days
+    )
+
     # Cache the result (analytics leaderboard: 20 min)
     await cache_manager.set_cached(cache_key, result, ttl=1200)
-    
+
     return result
 
 
@@ -200,17 +200,17 @@ async def review_analytics(
     Use for bar charts and leaderboard tables.
     """
     cache_key = cache_manager.get_analytics_reviews_key(days)
-    
+
     # Try to get from cache first
     cached = await cache_manager.get_cached(cache_key, ReviewAnalyticsResponse)
     if cached:
         return cached
-    
+
     result = await get_review_analytics(supabase, days=days)
-    
+
     # Cache the result (analytics breakdown: 15 min)
     await cache_manager.set_cached(cache_key, result, ttl=900)
-    
+
     return result
 
 
@@ -226,15 +226,15 @@ async def transaction_analytics(
     Use for bar + line combo charts.
     """
     cache_key = cache_manager.get_analytics_transactions_key(days, interval)
-    
+
     # Try to get from cache first
     cached = await cache_manager.get_cached(cache_key, TransactionAnalyticsResponse)
     if cached:
         return cached
-    
+
     result = await get_transaction_analytics(supabase, days=days, interval=interval)
-    
+
     # Cache the result (analytics trends: 15 min)
     await cache_manager.set_cached(cache_key, result, ttl=900)
-    
+
     return result

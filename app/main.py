@@ -4,8 +4,6 @@ from fastapi import FastAPI, Request
 from fastapi.responses import RedirectResponse
 from fastapi.openapi.docs import get_redoc_html
 from fastapi.middleware.cors import CORSMiddleware
-import json
-import os
 
 # Load environment variables from .env file before importing anything else
 load_dotenv()
@@ -21,8 +19,6 @@ from app.routes import (
     analytics_route,
     admin_router,
     product_route,
-    dispute_route,
-    escrow_route,
     order_create,
     audit_logs_routes,
     delivery_order_mgt_admin_routes,
@@ -33,10 +29,14 @@ from app.routes import (
     charge_mgr_routes,
     admin_contacts_router,
     cache_admin,
-    reservation
+    reservation,
+    beneficiary_router,
 )
 from app.config.logging import logger
-from app.utils.payment import get_all_banks, resolve_account_details, verify_transaction_tx_ref
+from app.utils.payment import (
+    get_all_banks,
+    resolve_account_details,
+)
 from app.schemas.bank_schema import AccountDetailResponse, AccountDetails, BankSchema
 from app.config.config import settings
 from app.middleware.rate_limiter import RateLimiterMiddleware
@@ -127,7 +127,11 @@ app = FastAPI(
 
 if logfire and settings.LOGFIRE_TOKEN:
     try:
-        logfire.configure(token=settings.LOGFIRE_TOKEN)
+        logfire.configure(
+            token=settings.LOGFIRE_TOKEN,
+            service_name="Servipal API",
+            environment=settings.ENVIRONMENT,
+        )
         logfire.instrument_fastapi(app)
         logger.info("Logfire configured successfully")
     except Exception as e:
@@ -153,10 +157,7 @@ app.add_middleware(CSRFProtectionMiddleware)
 app.add_middleware(RateLimiterMiddleware)
 
 # CORS middleware with security-conscious configuration
-app.add_middleware(
-    CORSMiddleware,
-    **CORS_CONFIG
-)
+app.add_middleware(CORSMiddleware, **CORS_CONFIG)
 
 
 # Request logging middleware with sensitive data sanitization
@@ -169,7 +170,7 @@ async def log_requests(request: Request, call_next):
 
     # Sanitize user-agent and other headers
     user_agent = request.headers.get("user-agent")
-    
+
     logger.info(
         "request_started",
         method=request.method,
@@ -194,11 +195,11 @@ async def log_requests(request: Request, call_next):
         return response
     except Exception as e:
         process_time = time.time() - start_time
-        
+
         # Sanitize error message before logging
         error_msg = str(e)
         sanitized_error = LogSanitizer.sanitize_string(error_msg)
-        
+
         logger.error(
             "request_failed",
             method=request.method,
@@ -219,7 +220,11 @@ async def root():
         dict: A welcome message, link to docs, and status.
     """
     logger.debug("root_endpoint_accessed")
-    return {"message": "Welcome to ServiPal API", "docs": "/docs" if settings.ENVIRONMENT == "development" else None, "status": "active"}
+    return {
+        "message": "Welcome to ServiPal API",
+        "docs": "/docs" if settings.ENVIRONMENT == "development" else None,
+        "status": "active",
+    }
 
 
 @app.get("/api/v1/health", tags=["Root"])
@@ -256,8 +261,11 @@ async def get_banks():
 
     return await get_all_banks()
 
+
 @app.post("/api/v1/banks/resolve", tags=["Banks"])
-async def resolve_bank(data: AccountDetails,)-> AccountDetailResponse:
+async def resolve_bank(
+    data: AccountDetails,
+) -> AccountDetailResponse:
     """Get list of all supported bank(Nigeria)"""
 
     return await resolve_account_details(data)
@@ -266,6 +274,7 @@ async def resolve_bank(data: AccountDetails,)-> AccountDetailResponse:
 # Include Routers
 app.include_router(auth_router.router, include_in_schema=True)
 app.include_router(user_routes.router)
+app.include_router(beneficiary_router.router)
 app.include_router(wallet_route.router, include_in_schema=False)
 app.include_router(payment_route.router)
 app.include_router(delivery_route.router)
@@ -288,4 +297,3 @@ app.include_router(product_order_mgt_admin_routes.router, include_in_schema=Fals
 app.include_router(restaurant_order_mgt_admin_routes.router, include_in_schema=False)
 app.include_router(admin_contacts_router.router, include_in_schema=False)
 app.include_router(cache_admin.router, include_in_schema=False)
-

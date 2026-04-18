@@ -37,7 +37,7 @@ def extract_user_type(request: Request) -> str:
     """
     Extract user type from JWT token (Supabase user_metadata).
     Falls back to 'anonymous' if no valid token.
-    
+
     Supabase JWT structure:
     {
         "sub": "user-id",
@@ -45,7 +45,7 @@ def extract_user_type(request: Request) -> str:
             "user_type": "CUSTOMER" or "ADMIN" etc.
         }
     }
-    
+
     Returns:
         User type string (one of UserType enum values) or 'anonymous'
     """
@@ -70,16 +70,16 @@ def extract_user_type(request: Request) -> str:
 
         try:
             decoded = json.loads(base64.urlsafe_b64decode(payload))
-            
+
             # Extract user_type from user_metadata
             user_metadata = decoded.get("user_metadata", {})
             user_type = user_metadata.get("user_type", "CUSTOMER")
-            
+
             # Validate it's a valid UserType
             valid_types = [member.value for member in UserType]
             if user_type in valid_types:
                 return user_type
-            
+
             # Default to CUSTOMER if unknown type
             return UserType.CUSTOMER
 
@@ -97,7 +97,7 @@ class UserRateLimiterMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next):
         """Process request with user-aware rate limiting."""
-        
+
         if not redis_client:
             logger.warning("user_rate_limiter_redis_unavailable")
             return await call_next(request)
@@ -105,7 +105,7 @@ class UserRateLimiterMiddleware(BaseHTTPMiddleware):
         try:
             # Get user type
             user_type = extract_user_type(request)
-            
+
             # Get rate limit for this user type
             limit = UserRateLimitConfig.LIMITS.get(user_type, 60)
 

@@ -7,6 +7,7 @@ import math
 
 router = APIRouter(prefix="/api/v1/admin/contacts", tags=["Admin Contacts"])
 
+
 @router.get(
     "/",
     response_model=ContactListResponse,
@@ -28,7 +29,7 @@ async def list_contacts(
 
     if category:
         query = query.eq("category", category)
-    
+
     if search:
         query = query.or_(
             f"full_name.ilike.%{search}%,"

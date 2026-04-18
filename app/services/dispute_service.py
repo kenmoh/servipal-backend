@@ -59,26 +59,28 @@ async def create_dispute(
         "status": "OPEN",
     }
 
-    resp = await supabase.rpc("create_dispute", {
-      'p_order_id': data.order_id,
-      'p_order_type': data.order_type,
-      'p_initiator_id': initiator_id,
-      'p_respondent_id': respondent_id,
-      'p_reason': data.reason,
-    }).execute();
-
+    resp = await supabase.rpc(
+        "create_dispute",
+        {
+            "p_order_id": data.order_id,
+            "p_order_type": data.order_type,
+            "p_initiator_id": initiator_id,
+            "p_respondent_id": respondent_id,
+            "p_reason": data.reason,
+        },
+    ).execute()
     # Update order with dispute_id
     await update_order_status(
         data.order_id, data.order_type, resp.data[0]["id"], supabase
     )
 
     await notify_user(
-                respondent_id,
-                "Dispute Opened",
-                "Dispute opened for your order,please respond as soon as possible",
-                data={"DISPUTE": "Dispute opened for your order"},
-                supabase=supabase,
-            )
+        respondent_id,
+        "Dispute Opened",
+        "Dispute opened for your order,please respond as soon as possible",
+        data={"DISPUTE": "Dispute opened for your order"},
+        supabase=supabase,
+    )
 
     # Log audit
     await log_audit_event(
@@ -223,7 +225,7 @@ async def resolve_dispute(
             )
     else:
         tx = (
-            await supabase.table("transactions")
+            await supabase.table("transfers")
             .select("id, amount, from_user_id, to_user_id")
             .eq("order_id", order["id"])
             .single()
@@ -295,7 +297,7 @@ import math
 #     """
 #     try:
 #         offset = (page - 1) * page_size
-        
+
 #         query = (
 #             supabase.table("disputes")
 #             .select("""
@@ -318,7 +320,7 @@ import math
 #             .neq("status", "RESOLVED")
 #             .neq("status", "CLOSED")
 #         )
-        
+
 #         disputes_resp = await (
 #             query.order("created_at", desc=True)
 #             .range(offset, offset + page_size - 1)

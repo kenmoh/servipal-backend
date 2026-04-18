@@ -28,7 +28,7 @@ class ChargesCreate(ChargesBase):
 
 
 class ChargesUpdate(ChargesBase):
-    pass  
+    pass
 
 
 class ChargesResponse(ChargesBase):

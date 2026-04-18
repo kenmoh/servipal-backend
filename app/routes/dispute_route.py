@@ -7,7 +7,6 @@ from app.schemas.dispute_schema import (
     DisputeMessageCreate,
     DisputeResolve,
     DisputeResponse,
-   
 )
 from app.dependencies.auth import get_current_profile, require_user_type
 from app.schemas.user_schemas import UserType
@@ -33,7 +32,6 @@ async def create_dispute(
         DisputeResponse: Created dispute.
     """
     return await dispute_service.create_dispute(data, current_profile["id"], supabase)
-
 
 
 # @router.get("", response_model=DisputeResponse)

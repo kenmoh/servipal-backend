@@ -14,7 +14,7 @@ async def check_login_attempts(email: str, redis_client: Optional[Redis]) -> Non
     """Check and handle failed login attempts"""
     if redis_client is None:
         return
-        
+
     key = f"login_attempts:{email}"
     attempts = await redis_client.get(key)
 
@@ -32,7 +32,7 @@ async def record_failed_attempt(email: str, redis_client: Optional[Redis]) -> No
     """Record failed login attempt"""
     if redis_client is None:
         return
-        
+
     key = f"login_attempts:{email}"
     await redis_client.incr(key)
     await redis_client.expire(key, 900)  # Reset after 15 minutes
@@ -42,7 +42,7 @@ async def reset_login_attempts(email: str, redis_client: Optional[Redis]) -> Non
     """Reset login attempts after successful login"""
     if redis_client is None:
         return
-        
+
     key = f"login_attempts:{email}"
     locked_key = f"account_locked:{email}"
     await redis_client.delete(key)
@@ -71,99 +71,112 @@ async def get_push_token(user_id: UUID, supabase: AsyncClient) -> Optional[str]:
         logger.error("get_push_token_error", user_id=user_id, error=str(e))
         return None
 
+
 def normalize_nigerian_phone(phone: str) -> str:
     """
     Normalize Nigerian phone numbers to 234XXXXXXXXXX format.
     Handles formats: 23480..., +23490..., 070...
     """
     phone = phone.strip()
-    
+
     # If starts with +234, remove the +
     if phone.startswith("+234"):
         return phone[1:]
-    
+
     # If already starts with 234, return as is
     if phone.startswith("234"):
         return phone
-    
+
     # If starts with 0, replace 0 with 234
     if phone.startswith("0"):
         return "234" + phone[1:]
-    
+
     # Otherwise return as is
     return phone
 
-async def send_otp(name: str, email: EmailStr, phone: str, supabase: AsyncClient, user_id: str) -> dict:
+
+async def send_otp(
+    name: str, email: EmailStr, phone: str, supabase: AsyncClient, user_id: str
+) -> dict:
     """Send a 6-digit OTP"""
     # Normalize phone number to 234XXXXXXXXXX format
     phone = normalize_nigerian_phone(phone)
-    
+
     payload = {
         "length": 6,
         "send": "true",
-        "medium": ['sms'],
+        "medium": ["sms"],
         "expiry": 30,
-        'customer': {
-            "name": name,
-            "email": email,
-            "phone": phone
-        },
-        'sender':"SERVIPAL LIMITED"
-        }
+        "customer": {"name": name, "email": email, "phone": phone},
+        "sender": "SERVIPAL LIMITED",
+    }
     headers = {
         "Authorization": f"Bearer {settings.FLW_PROD_SECRET_KEY}",
         "Content-Type": "application/json",
-        "accept": "application/json"
+        "accept": "application/json",
     }
 
-    data = await supabase.table("otp").select("phone_verified").eq("user_id", user_id).execute()
+    data = (
+        await supabase.table("otp")
+        .select("phone_verified")
+        .eq("user_id", user_id)
+        .execute()
+    )
 
     if data.data and data.data[0].get("phone_verified"):
         logger.info("phone_already_verified", email=email, phone=phone)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Phone number already verified."
+            detail="Phone number already verified.",
         )
-
 
     async with httpx.AsyncClient() as client:
         response = await client.post(
-            f'{settings.FLUTTERWAVE_BASE_URL}/otps',
-            json=payload,
-            headers=headers
+            f"{settings.FLUTTERWAVE_BASE_URL}/otps", json=payload, headers=headers
         )
 
         data = response.json()
-        if data['status'] != 'success':
-            logger.error("otp_send_failed", email=email, phone=phone, status_code=response.status_code, response=response.text)
+        if data["status"] != "success":
+            logger.error(
+                "otp_send_failed",
+                email=email,
+                phone=phone,
+                status_code=response.status_code,
+                response=response.text,
+            )
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to send OTP. Please try again later."
+                detail="Failed to send OTP. Please try again later.",
             )
-        
-        otp = data['data'][0].get('otp')
-        expiry = data['data'][0].get('expiry')
 
-        await supabase.table("otp").upsert({
-            "user_id": user_id,
-            "otp": otp,
-            "expires_at": expiry
-        }).execute()
+        otp = data["data"][0].get("otp")
+        expiry = data["data"][0].get("expiry")
 
-        logger.info("otp_sent",  phone=phone, user_id=user_id)
+        await (
+            supabase.table("otp")
+            .upsert({"user_id": user_id, "otp": otp, "expires_at": expiry})
+            .execute()
+        )
+
+        logger.info("otp_sent", phone=phone, user_id=user_id)
 
         return {"status": data.get("status"), "message": f"OTP sent to {phone}"}
 
 
 async def verify_otp(otp: str, supabase: AsyncClient, user_id: str) -> dict:
     """Verify a 6-digit OTP"""
-    
-    data = await supabase.table("otp").select("otp, expires_at, phone_verified").eq("user_id", user_id).execute()
+
+    data = (
+        await supabase.table("otp")
+        .select("otp, expires_at, phone_verified")
+        .eq("user_id", user_id)
+        .execute()
+    )
 
     if not data.data:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="OTP not found. Please request a new one."
+            detail="OTP not found. Please request a new one.",
         )
 
     record = data.data[0]
@@ -171,7 +184,7 @@ async def verify_otp(otp: str, supabase: AsyncClient, user_id: str) -> dict:
     if record.get("phone_verified"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Phone number already verified."
+            detail="Phone number already verified.",
         )
 
     # Check expiry
@@ -179,34 +192,38 @@ async def verify_otp(otp: str, supabase: AsyncClient, user_id: str) -> dict:
     if datetime.now(timezone.utc) > expires_at:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="OTP has expired. Please request a new one."
+            detail="OTP has expired. Please request a new one.",
         )
 
     # Check OTP match
     if str(record.get("otp")) != str(otp):
-        logger.info('='*100)
+        logger.info("=" * 100)
         logger.warning("invalid_otp", user_id=user_id, otp=otp)
-        logger.info('='*100)
+        logger.info("=" * 100)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid OTP. Please try again."
+            detail="Invalid OTP. Please try again.",
         )
 
     # Mark phone as verified
-    await supabase.table("otp").update({
-        "phone_verified": True
-    }).eq("user_id", user_id).execute()
+    await (
+        supabase.table("otp")
+        .update({"phone_verified": True})
+        .eq("user_id", user_id)
+        .execute()
+    )
 
     # Activate user account
-    await supabase.table("profiles").update({
-        "account_status": 'ACTIVE'
-    }).eq("id", user_id).execute()
+    await (
+        supabase.table("profiles")
+        .update({"account_status": "ACTIVE"})
+        .eq("id", user_id)
+        .execute()
+    )
 
     logger.info("phone_verified", user_id=user_id)
     return {
-
         "message": "Account verified",
         "phone_verified": True,
-        "account_status": 'ACTIVE'
+        "account_status": "ACTIVE",
     }
-

@@ -61,7 +61,15 @@ class PaymentInitializationResponse(BaseModel):
     receiver_phone: str | None = None
     pickup_location: str | None = None
     destination: str | None = None
-    distance: str | None = None
     duration: str | None = None
     distance: str | None = None
-    duration: str | None = None
+    package_name: str | None = None
+
+
+class PaymentCardPreauthRequest(BaseModel):
+    card_number: str
+    expiry_month: str
+    expiry_year: str
+    cvv: str
+    usesecureauth: bool = False
+    redirect_url: Optional[str] = None

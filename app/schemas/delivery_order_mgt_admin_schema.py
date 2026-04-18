@@ -15,10 +15,6 @@ class SenderSnippet(BaseModel):
     profile_image_url: str | None = None
 
 
-
-
-
-
 class DeliveryOrderSummary(BaseModel):
     id: UUID
     order_number: int
@@ -42,6 +38,7 @@ class DeliveryOrderSummary(BaseModel):
 
     model_config = {"from_attributes": True}
 
+
 class RiderSnippet(BaseModel):
     id: UUID
     dispatch_id: UUID
@@ -50,6 +47,7 @@ class RiderSnippet(BaseModel):
     bike_number: str | None = None
     business_name: str | None = None
     profile_image_url: str | None = None
+
 
 class DeliveryOrderDetail(DeliveryOrderSummary):
     receiver_phone: str
@@ -75,7 +73,6 @@ class DeliveryOrderDetail(DeliveryOrderSummary):
     is_deleted: bool = False
     sender: SenderSnippet | None = None
     rider: RiderSnippet | None = None
-
 
 
 class DeliveryOrderListResponse(BaseModel):

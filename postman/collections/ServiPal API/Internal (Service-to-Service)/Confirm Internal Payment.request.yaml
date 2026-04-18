@@ -1,6 +1,6 @@
 $kind: http-request
 method: POST
-url: '{{baseUrl}}/api/v1/internal/confirm-payment'
+url: '{{baseUrl}}/api/v1/internal/confirm-payments'
 order: 2000
 auth:
   type: noauth

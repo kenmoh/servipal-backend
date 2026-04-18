@@ -63,13 +63,13 @@ async def process_payment(
     supabase: AsyncClient = Depends(get_supabase_admin_client),
 ):
     # 1. API key already validated by dependency
-    
+
     # 2. Only process INSERT events
     if payload.type != "INSERT":
-        logger('*'*100)
-        logger.info('Payload', payload)
+        logger("*" * 100)
+        logger.info("Payload", payload)
         logger.info("process_payment_event_not_insert", event_type=payload.type)
-        logger('*'*100)
+        logger("*" * 100)
         return {"status": "ignored", "reason": f"Event type {payload.type} not handled"}
 
     # 3. Extract message directly from record
@@ -138,18 +138,25 @@ async def process_payment(
                 "process_payment_already_done_by_constraint",
                 tx_ref=tx_ref,
                 msg_id=payload.record.msg_id,
-                error=str(e)
+                error=str(e),
             )
             # Archive anyway to stop retry loop
             await (
                 supabase.schema("pgmq_public")
                 .rpc(
                     "archive",
-                    {"queue_name": "payment_queue", "message_id": payload.record.msg_id},
+                    {
+                        "queue_name": "payment_queue",
+                        "message_id": payload.record.msg_id,
+                    },
                 )
                 .execute()
             )
-            return {"status": "success", "tx_ref": tx_ref, "message": "Already processed (constraint)"}
+            return {
+                "status": "success",
+                "tx_ref": tx_ref,
+                "message": "Already processed (constraint)",
+            }
 
         # 2. Regular error logging and 500 return
         logger.error(
@@ -172,7 +179,7 @@ async def retry_payments(
     supabase: AsyncClient = Depends(get_supabase_admin_client),
 ):
     # 1. API key already validated by dependency
-    
+
     # 2. Read payment_queue messages
     result = (
         await supabase.schema("pgmq_public")
@@ -266,12 +273,14 @@ async def retry_payments(
                     "payment_retry_already_done_by_constraint",
                     tx_ref=tx_ref,
                     message_id=msg_id,
-                    error=str(e)
+                    error=str(e),
                 )
                 # Archive anyway to stop retry loop
                 await (
                     supabase.schema("pgmq_public")
-                    .rpc("archive", {"queue_name": "payment_queue", "message_id": msg_id})
+                    .rpc(
+                        "archive", {"queue_name": "payment_queue", "message_id": msg_id}
+                    )
                     .execute()
                 )
                 continue  # Move to next message

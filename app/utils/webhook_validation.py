@@ -1,6 +1,6 @@
 """
 Webhook signature verification utilities.
-Validates webhook authenticity from payment providers and other third-party services.
+Validates webhook authenticity from payments providers and other third-party services.
 """
 
 import hmac
@@ -20,15 +20,15 @@ class WebhookValidator:
     ) -> bool:
         """
         Validate Flutterwave webhook signature.
-        
+
         Flutterwave sends:
         - Signature in 'verif-hash' header
         - Secret hash from dashboard
-        
+
         Args:
             signature_header: Value of 'verif-hash' header from Flutterwave
             secret_hash: FLW_SECRET_HASH from config
-        
+
         Returns:
             True if signature is valid, False otherwise
         """
@@ -37,7 +37,6 @@ class WebhookValidator:
             return False
 
         try:
-           
             # Constant-time comparison to prevent timing attacks
             return hmac.compare_digest(signature_header, secret_hash)
 
@@ -59,14 +58,14 @@ class WebhookValidator:
     ) -> bool:
         """
         Generic HMAC signature validation for any provider.
-        
+
         Args:
             signature_header: Signature from webhook header
             payload_body: Raw request body
             secret: Secret key from provider
             algorithm: Hash algorithm (sha256, sha512, etc.)
             prefix: Optional prefix (some providers include algorithm name)
-        
+
         Returns:
             True if signature is valid
         """
@@ -104,11 +103,11 @@ class WebhookValidator:
     ) -> bool:
         """
         Validate webhook source IP address.
-        
+
         Args:
             client_ip: Client IP from request
             allowed_ips: List of allowed IP addresses or CIDR ranges
-        
+
         Returns:
             True if IP is allowed
         """
@@ -130,13 +129,13 @@ def require_webhook_signature(
 ) -> None:
     """
     Dependency function to validate webhook signatures.
-    
+
     Args:
         signature_header: Signature from webhook header
         payload_body: Raw request body
         secret: Secret key from provider
         provider: Provider name ('flutterwave', 'generic', etc.)
-    
+
     Raises:
         HTTPException: If signature is invalid
     """
@@ -164,11 +163,11 @@ def require_webhook_signature(
         )
 
 
-# Known IP ranges from major payment providers
+# Known IP ranges from major payments providers
 PROVIDER_IPS = {
     "flutterwave": [
-        "52.174.74.0/24", 
-        "52.183.85.0/24", 
+        "52.174.74.0/24",
+        "52.183.85.0/24",
     ],
     "stripe": [
         "54.187.174.169/32",

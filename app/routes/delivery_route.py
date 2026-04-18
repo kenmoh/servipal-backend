@@ -1,9 +1,6 @@
-from app.schemas.common import PaymentInitializationResponse
 from fastapi import APIRouter, Depends, HTTPException, Request, Form, File, UploadFile
-from uuid import UUID
 import uuid
 from typing import Optional
-from decimal import Decimal
 
 from app.schemas.delivery_schemas import (
     PackageDeliveryCreate,
@@ -13,15 +10,11 @@ from app.schemas.delivery_schemas import (
 from app.services import delivery_service
 from app.dependencies.auth import (
     get_current_profile,
-    require_user_type,
     get_customer_contact_info,
-    is_admin_user,
 )
-from app.database.supabase import get_supabase_client, get_supabase_admin_client
-from app.schemas.user_schemas import AvailableRiderResponse, UserType
+from app.database.supabase import get_supabase_admin_client
 from app.config.logging import logger
 from app.utils.storage import upload_to_supabase_storage
-from app.common import order
 
 router = APIRouter(tags=["Deliveries"], prefix="/api/v1/delivery")
 
@@ -47,9 +40,9 @@ async def initiate_delivery_payment(
     current_profile: dict = Depends(get_current_profile),
     supabase=Depends(get_supabase_admin_client),
     customer_info: dict = Depends(get_customer_contact_info),
-) -> PaymentInitializationResponse:
+) -> dict:
     """
-    Initiate a delivery request and calculate payment.
+    Initiate a delivery request and calculate payments.
 
     Returns:
         dict: Payment initiation details.
@@ -128,7 +121,7 @@ async def update_delivery_status(
 #     supabase=Depends(get_supabase_client),
 # ):
 #     """
-#     Sender chooses rider after successful payment.
+#     Sender chooses rider after successful payments.
 #     Re-checks rider availability.
 #     """
 #     return await delivery_service.assign_rider_to_order(

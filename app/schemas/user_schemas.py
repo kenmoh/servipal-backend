@@ -51,13 +51,13 @@ class RiderCreateByDispatch(BaseModel):
             )
         return v
 
+
 class AdminUserCreate(BaseModel):
     email: EmailStr
-    phone: str 
+    phone: str
     password: str = Field(..., min_length=8)
     user_type: Literal["ADMIN", "MODERATOR", "SUPER_ADMIN"]
     full_name: str
-
 
 
 # Login

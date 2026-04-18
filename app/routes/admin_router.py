@@ -46,16 +46,14 @@ async def list_users(
         "is_blocked": is_blocked,
         "search": search,
     }
-    
-    cache_key = cache_manager.get_users_list_key(
-        create_filter_hash(filters_dict), page
-    )
-    
+
+    cache_key = cache_manager.get_users_list_key(create_filter_hash(filters_dict), page)
+
     # Try to get from cache first
     cached = await cache_manager.get_cached(cache_key, ProfileListResponse)
     if cached:
         return cached
-    
+
     result = await admin_service.list_users(
         supabase,
         user_type=user_type,
@@ -65,10 +63,12 @@ async def list_users(
         page=page,
         page_size=page_size,
     )
-    
+
     # Cache the result
-    await cache_manager.set_cached(cache_key, result, ttl=cache_manager.DEFAULT_LIST_TTL)
-    
+    await cache_manager.set_cached(
+        cache_key, result, ttl=cache_manager.DEFAULT_LIST_TTL
+    )
+
     return result
 
 
@@ -84,17 +84,19 @@ async def get_user(
     _actor: dict = Depends(require_admin),
 ):
     cache_key = cache_manager.get_user_detail_key(str(user_id))
-    
+
     # Try to get from cache first
     cached = await cache_manager.get_cached(cache_key, ProfileDetail)
     if cached:
         return cached
-    
+
     result = await admin_service.get_user(supabase, user_id)
-    
+
     # Cache the result
-    await cache_manager.set_cached(cache_key, result, ttl=cache_manager.DEFAULT_DETAIL_TTL)
-    
+    await cache_manager.set_cached(
+        cache_key, result, ttl=cache_manager.DEFAULT_DETAIL_TTL
+    )
+
     return result
 
 
@@ -147,7 +149,7 @@ async def create_management_user(
 @router.get(
     "/wallets",
     response_model=WalletListResponse,
-    summary="List all wallets with transactions (any admin role)",
+    summary="List all wallets with transfers (any admin role)",
 )
 async def list_wallets(
     page: int = Query(1, ge=1),
@@ -156,26 +158,28 @@ async def list_wallets(
     _actor: dict = Depends(require_admin),
 ):
     cache_key = cache_manager.get_wallets_list_key(page)
-    
+
     # Try to get from cache first
     cached = await cache_manager.get_cached(cache_key, WalletListResponse)
     if cached:
         return cached
-    
+
     result = await admin_service.list_wallets_with_transactions(
         db, page=page, page_size=page_size
     )
-    
+
     # Cache the result
-    await cache_manager.set_cached(cache_key, result, ttl=cache_manager.DEFAULT_LIST_TTL)
-    
+    await cache_manager.set_cached(
+        cache_key, result, ttl=cache_manager.DEFAULT_LIST_TTL
+    )
+
     return result
 
 
 @router.get(
     "/wallets/{user_id}",
     response_model=WalletWithTransactions,
-    summary="Get a specific user wallet with transactions (any admin role)",
+    summary="Get a specific user wallet with transfers (any admin role)",
 )
 async def get_wallet(
     user_id: UUID,
@@ -183,17 +187,19 @@ async def get_wallet(
     _actor: dict = Depends(require_admin),
 ):
     cache_key = cache_manager.get_wallet_detail_key(str(user_id))
-    
+
     # Try to get from cache first
     cached = await cache_manager.get_cached(cache_key, WalletWithTransactions)
     if cached:
         return cached
-    
+
     result = await admin_service.get_wallet_with_transactions(db, user_id)
-    
+
     # Cache the result
-    await cache_manager.set_cached(cache_key, result, ttl=cache_manager.DEFAULT_DETAIL_TTL)
-    
+    await cache_manager.set_cached(
+        cache_key, result, ttl=cache_manager.DEFAULT_DETAIL_TTL
+    )
+
     return result
 
 
@@ -207,11 +213,13 @@ async def verify_user(
     supabase: AsyncClient = Depends(get_supabase_admin_client),
     actor: dict = Depends(require_admin_or_super),
 ):
-    await supabase.auth.admin.update_user_by_id(str(user_id), {
-        "email_confirm": True,
-    })
+    await supabase.auth.admin.update_user_by_id(
+        str(user_id),
+        {
+            "email_confirm": True,
+        },
+    )
     return {
         "message": "User verified successfully",
         "user_id": user_id,
     }
-

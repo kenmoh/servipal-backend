@@ -1,7 +1,7 @@
 $kind: http-request
 name: Wallet Transaction History
 method: GET
-url: '{{baseUrl}}/api/v1/wallet/transactions'
+url: '{{baseUrl}}/api/v1/wallet/transfers'
 order: 3000
 scripts:
   - type: afterResponse

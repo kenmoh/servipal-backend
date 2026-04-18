@@ -50,9 +50,9 @@ class CustomerInfo(BaseModel):
 
 
 class Customization(BaseModel):
-    title: str = Field(..., description="Title shown on the payment page/SDK")
+    title: str = Field(..., description="Title shown on the payments page/SDK")
     description: str = Field(
-        ..., description="Description shown on the payment page/SDK"
+        ..., description="Description shown on the payments page/SDK"
     )
 
 
@@ -72,15 +72,17 @@ class WalletTopUpInitiationResponse(BaseModel):
         ..., description="Customer details for Flutterwave SDK"
     )
     customization: Customization = Field(
-        ..., description="UI customizations for the payment screen"
+        ..., description="UI customizations for the payments screen"
     )
 
 
 class PayWithWalletResponse(BaseModel):
-    status: str = Field(..., description="Status of the payment")
-    order_id: UUID = Field(None, description="The order ID associated with the payment")
+    status: str = Field(..., description="Status of the payments")
+    order_id: UUID = Field(
+        None, description="The order ID associated with the payments"
+    )
     tx_ref: str = Field(..., description="Unique transaction reference for this top-up")
-    grand_total: Decimal = Field(..., description="Total amount of the payment")
+    grand_total: Decimal = Field(..., description="Total amount of the payments")
     message: str = Field(..., description="Payment successful from wallet")
 
 

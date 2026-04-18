@@ -1,5 +1,3 @@
-from operator import ge
-
 from fastapi import HTTPException, status, Request
 from typing import Optional
 import json
@@ -28,6 +26,7 @@ from app.config.config import settings
 from app.config.logging import logger
 from app.utils.audit import log_audit_event
 from app.services.notification_service import notify_user
+from app.services.vendors.payout_service import TransferService
 
 
 async def get_charges(supabase: AsyncClient) -> dict:
@@ -605,6 +604,30 @@ async def complete_delivery(
         notes="Delivery completed, escrow released",
         request=request,
     )
+
+    # Trigger payout to dispatch/vendor via Flutterwave transfer
+    try:
+        transfer_service = TransferService(
+            base_url=settings.FLUTTERWAVE_BASE_URL,
+            secret_key=settings.FLW_SECRET_KEY,
+        )
+        await transfer_service.create_transfer(
+            order_id=delivery_id,
+            payout_to="VENDOR",
+            supabase=supabase,
+        )
+        logger.info(
+            "delivery_transfer_initiated",
+            delivery_id=delivery_id,
+            dispatch_id=result_data.get("dispatch_id"),
+        )
+    except Exception as transfer_err:
+        logger.error(
+            "delivery_transfer_failed",
+            delivery_id=delivery_id,
+            error=str(transfer_err),
+            exc_info=True,
+        )
 
     return result_data
 

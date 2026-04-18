@@ -5,7 +5,12 @@ from fastapi.responses import Response
 from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel, Field
 from app.services import user_service
-from app.schemas.user_schemas import UserCreate, LoginRequest, TokenResponse, UserProfileResponse
+from app.schemas.user_schemas import (
+    UserCreate,
+    LoginRequest,
+    TokenResponse,
+    UserProfileResponse,
+)
 from app.database.supabase import get_supabase_client, get_supabase_admin_client
 from app.config.logging import logger
 from app.dependencies import auth
@@ -13,18 +18,21 @@ from supabase import AsyncClient
 
 from app.utils.utils import send_otp, verify_otp
 
+
 class OTPRequest(BaseModel):
-    otp: str = Field(..., min_length=6, max_length=6, pattern=r'^\d{6}$')
+    otp: str = Field(..., min_length=6, max_length=6, pattern=r"^\d{6}$")
+
 
 class OTPResponse(BaseModel):
     message: str
     status: str
-    
+
 
 class OTPVerifyResponse(BaseModel):
     message: str
     phone_verified: bool
     account_status: str
+
 
 router = APIRouter(prefix="/api/v1/auth", tags=["Authentication"])
 
@@ -54,7 +62,7 @@ async def signup(
 async def login(
     login_data: LoginRequest,
     request: Request,
-    response: Response,                          # inject Response to set cookies
+    response: Response,  # inject Response to set cookies
     supabase=Depends(get_supabase_client),
 ):
     result = await user_service.login_user(login_data, supabase, request)
@@ -64,9 +72,9 @@ async def login(
     response.set_cookie(
         key="access_token",
         value=result["access_token"],
-        httponly=True,                           
-        secure=True,                         
-        samesite="strict",                       
+        httponly=True,
+        secure=True,
+        samesite="strict",
         max_age=result["expires_in"],
         path="/",
     )
@@ -76,8 +84,8 @@ async def login(
         httponly=True,
         secure=True,
         samesite="strict",
-        max_age=60 * 60 * 24 * 12,              
-        path="/",                    
+        max_age=60 * 60 * 24 * 12,
+        path="/",
     )
 
     return result["user"]
@@ -148,6 +156,7 @@ async def refresh(
 
     return session.user
 
+
 @router.post("/token", response_model=TokenResponse, include_in_schema=False)
 async def login_for_access_token(
     response: Response,
@@ -159,13 +168,13 @@ async def login_for_access_token(
     login_data = LoginRequest(email=form_data.username, password=form_data.password)
 
     result = await user_service.login_user(login_data, supabase, request)
-    
+
     response.set_cookie(
         key="access_token",
         value=result["access_token"],
-        httponly=True,                           
-        secure=True,                         
-        samesite="strict",                       
+        httponly=True,
+        secure=True,
+        samesite="strict",
         max_age=result["expires_in"],
         path="/",
     )
@@ -175,8 +184,8 @@ async def login_for_access_token(
         httponly=True,
         secure=True,
         samesite="strict",
-        max_age=60 * 60 * 24 * 12,              
-        path="/",                    
+        max_age=60 * 60 * 24 * 12,
+        path="/",
     )
     return TokenResponse(
         access_token=result["access_token"],
@@ -211,7 +220,7 @@ async def change_password(
     current_user: dict = Depends(auth.get_current_user),
     supabase: AsyncClient = Depends(get_supabase_client),
 ) -> auth.Status:
-    
+
     return auth.change_password(data, current_user, supabase)
 
 
@@ -220,13 +229,24 @@ async def reques_otp(
     current_user: dict = Depends(auth.get_current_profile),
     supabase: AsyncClient = Depends(get_supabase_client),
 ) -> OTPResponse:
-    
+
     phone_number = current_user.get("phone_number")
     email = current_user.get("email")
     name_from_email = email.split("@")[0] if email else "User"
-    name = current_user.get("full_name") or current_user.get("business_name") or current_user.get("store_name") or name_from_email
-    
-    return await send_otp(name=name, email=email, phone=phone_number, supabase=supabase, user_id=current_user.get("id"))
+    name = (
+        current_user.get("full_name")
+        or current_user.get("business_name")
+        or current_user.get("store_name")
+        or name_from_email
+    )
+
+    return await send_otp(
+        name=name,
+        email=email,
+        phone=phone_number,
+        supabase=supabase,
+        user_id=current_user.get("id"),
+    )
 
 
 @router.post("/verify-otp", status_code=status.HTTP_200_OK)
@@ -235,6 +255,7 @@ async def confirm_phone_number(
     current_user: dict = Depends(auth.get_current_profile),
     supabase: AsyncClient = Depends(get_supabase_client),
 ) -> OTPVerifyResponse:
-    
-    
-    return await verify_otp(otp=data.otp, supabase=supabase, user_id=current_user.get("id"))
+
+    return await verify_otp(
+        otp=data.otp, supabase=supabase, user_id=current_user.get("id")
+    )
