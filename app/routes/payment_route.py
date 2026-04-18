@@ -111,8 +111,7 @@ async def flutterwave_webhook(
     paid_amount = data.get("amount")
     tx_ref = data.get("tx_ref")
     tx_id = data.get("id")
-    charge_type = data.get("charge_type")
-
+   
     logger.info(
         event="flutterwave_webhook_received",
         webhook_event=webhook_event,

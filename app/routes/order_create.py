@@ -12,6 +12,7 @@ from app.config.config import settings
 from app.services.payment_service import (
     process_successful_delivery_payment,
     process_successful_food_payment,
+    process_successful_reservation_payment,
     process_successful_topup_payment,
     process_successful_laundry_payment,
     process_successful_product_payment,
@@ -53,6 +54,7 @@ HANDLER_MAP = {
     "LAUNDRY-": process_successful_laundry_payment,
     "DELIVERY-": process_successful_delivery_payment,
     "TOPUP-": process_successful_topup_payment,
+    "RESERVATION-": process_successful_reservation_payment,
 }
 
 
@@ -66,10 +68,8 @@ async def process_payment(
 
     # 2. Only process INSERT events
     if payload.type != "INSERT":
-        logger("*" * 100)
         logger.info("Payload", payload)
         logger.info("process_payment_event_not_insert", event_type=payload.type)
-        logger("*" * 100)
         return {"status": "ignored", "reason": f"Event type {payload.type} not handled"}
 
     # 3. Extract message directly from record
