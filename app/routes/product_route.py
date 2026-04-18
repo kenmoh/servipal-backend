@@ -181,9 +181,6 @@ async def delete_product_item(
 @router.post("/initiate-payment", response_model=PaymentInitializationResponse)
 async def initiate_product_payment(
     data: ProductOrderCreate,
-    payment_mode: str = Query(
-        "PREVIEW", description="PREVIEW (preauth) or LEGACY (Flutterwave RN SDK)"
-    ),
     current_profile: dict = Depends(get_current_profile),
     customer_info: dict = Depends(get_customer_contact_info),
     supabase: AsyncClient = Depends(get_supabase_client),
@@ -197,18 +194,10 @@ async def initiate_product_payment(
     Returns:
         ProductOrderResponse: Payment details (Flutterwave).
     """
-    if payment_mode.upper() == "LEGACY":
-        return await product_service.initiate_product_payment_legacy(
-            data, customer_info, supabase
-        )
-
-    if payment_mode.upper() == "COD":
-        return await product_service.initiate_product_payment(
-            data, customer_info, supabase, payment_mode="PAY_ON_DELIVERY"
-        )
+ 
 
     return await product_service.initiate_product_payment(
-        data, customer_info, supabase, payment_mode="PREAUTH_PREVIEW"
+        data, customer_info, supabase
     )
 
 
@@ -269,7 +258,7 @@ async def vendor_mark_product_ready(
     supabase: AsyncClient = Depends(get_supabase_client),
     current_profile: dict = Depends(
         require_user_type(
-            [UserType.RESTAURANT_VENDOR, UserType.LAUNDRY_VENDOR, UserType.CUSTOMER]
+            [UserType.RESTAURANT_VENDOR, UserType.LAUNDRY_VENDOR, UserType.LAUNDRY_VENDOR, UserType.CUSTOMER]
         )
     ),
 ):

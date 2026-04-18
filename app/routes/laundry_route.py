@@ -69,9 +69,6 @@ async def get_laundry_vendor_detail(
 @router.post("/initiate-payment")
 async def initiate_laundry_payment_endpoint(
     data: LaundryOrderCreate,
-    payment_mode: str = Query(
-        "PREVIEW", description="PREVIEW (preauth) or LEGACY (Flutterwave RN SDK)"
-    ),
     current_profile: dict = Depends(get_current_profile),
     customer_info: dict = Depends(get_customer_contact_info),
     supabase: AsyncClient = Depends(get_supabase_client),
@@ -85,26 +82,13 @@ async def initiate_laundry_payment_endpoint(
     Returns:
         dict: Flutterwave RN SDK payments data.
     """
-    if payment_mode.upper() == "LEGACY":
-        return await laundry_service.initiate_laundry_payment_legacy(
-            data, current_profile["id"], customer_info, supabase
-        )
-
-    if payment_mode.upper() == "COD":
-        return await laundry_service.initiate_laundry_payment(
-            data,
-            current_profile["id"],
-            customer_info,
-            supabase,
-            payment_mode="PAY_ON_DELIVERY",
-        )
 
     return await laundry_service.initiate_laundry_payment(
         data,
         current_profile["id"],
         customer_info,
         supabase,
-        payment_mode="PREAUTH_PREVIEW",
+       
     )
 
 
