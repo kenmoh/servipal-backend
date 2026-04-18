@@ -1099,132 +1099,67 @@ async def process_successful_laundry_payment(
 async def process_successful_reservation_payment(
     tx_ref: str,
     paid_amount: float,
-    flw_ref: str,
     supabase: AsyncClient,
     payment_method: Literal["CARD", "WALLET", "BANK_TRANSFER", "PAY_ON_DELIVERY", "BANK"],
-    pending_data: dict = None,
+    flw_ref: str,
     request: Optional[Request] = None,
 ):
-    """Process successful laundry order payments using atomic RPC."""
-    logger.info(
-        "process_successful_reservation_payment", tx_ref=tx_ref, paid_amount=paid_amount
-    )
+    logger.info("payment_success", tx_ref=tx_ref)
 
+    # 1. verify payment
     if payment_method in ["CARD", "BANK_TRANSFER", "BANK"]:
         verified = await verify_transaction_tx_ref(tx_ref)
         if not verified or verified.get("status") != "success":
-            logger.error("process_successful_reservation_payment_failed", tx_ref=tx_ref)
             return {"status": "verification_failed"}
 
-    # 1. Get pending data from Redis
-    pending_key = f"pending_reservation_{tx_ref}"
-    if payment_method == "WALLET" and pending_data:
-        pending = pending_data
-        logger.info("using_embedded_pending_data", tx_ref=tx_ref)
-    else:
-        pending = await get_pending(pending_key)  # CARD reads from Redis
-
-    if not pending:
-        logger.warning("reservation_payment_pending_not_found", tx_ref=tx_ref)
-        return
-
-    if Decimal(str(paid_amount)).quantize(Decimal("0.00")) != Decimal(
-        str(pending["deposit_required"])
-    ).quantize(Decimal("0.00")):
-        logger.error(
-            "reservation_payment_amount_mismatch",
-            tx_ref=tx_ref,
-            expected=str(Decimal(str(pending["deposit"])).quantize(Decimal("0.00"))),
-            paid=str(Decimal(str(paid_amount)).quantize(Decimal("0.00"))),
-        )
-        await delete_pending(pending_key)
-        raise HTTPException(
-            status_code=status.HTTP_406_NOT_ACCEPTABLE,
-            detail=f"Amount paid {paid_amount} does not match deposit required {pending['deposit_required']}",
-        )
-
     try:
-        # Call atomic RPC
-        result_data = None
-        try:
-            result = await supabase.rpc(
-                "create_customer_reservation_new",
-                {
-                    "p_vendor_id": pending["vendor_id"],
-                    "p_customer_id": pending["customer_id"],
-                    "p_table_id": pending["table_id"],
-                    "p_reservation_time": str(paid_amount),
-                    "p_end_time": pending["end_time"],
-                    "p_party_size": pending["party_size"],
-                    "p_number_of_children": pending["number_of_children"],
-                    "p_number_of_adult": pending["number_of_adult"],
-                    "p_deposit_required": str(Decimal(pending["deposit_required"])),
-                    "p_deposit_paid": str(Decimal(pending.get("deposit_paid", 0))),
-                    "p_notes": pending.get("notes") or None,
-                    "p_flw_ref": flw_ref,
-                    "p_tx_ref": tx_ref,
-                    "p_payment_method": payment_method,
-                },
-            ).execute()
+        # 2. FINALIZE via DB (SOURCE OF TRUTH)
+        result = await supabase.rpc(
+            "finalize_reservation_from_intent",
+            {
+                "p_tx_ref": tx_ref,
+                "p_flw_ref": flw_ref,
+                "p_deposit_paid": paid_amount,
+            },
+        ).execute()
 
-            result_data = result.data
-
-        except APIError as e:
-            result_data = extract_rpc_data(e)
-            if not result_data:
-                raise
+        result_data = result.data
 
         if not result_data:
-            raise Exception("No data returned from RPC")
+            raise Exception("No data returned from finalize RPC")
 
-        if result_data.get("status") == "already_processed":
-            logger.info("reservation_payment_already_processed", tx_ref=tx_ref)
-            await delete_pending(pending_key)
-            return result_data
-
-        # Success! Cleanup Redis
-        await delete_pending(pending_key)
-
-        reservation_id = result_data["id"]
-
-        # Notify vendor
+        # 3. notify vendor
         await notify_user(
             user_id=result_data["vendor_id"],
-            title="New Laundry Order",
-            body="You have a new reservation",
-            data={"reservation_id": str(reservation_id), "type": "RESERVATION_PAYMENT"},
+            title="New Reservation",
+            body="You have a confirmed reservation",
+            data={
+                "reservation_id": str(result_data["reservation_id"]),
+                "type": "RESERVATION_PAYMENT",
+            },
             supabase=supabase,
         )
 
-        # Audit log
+        # 4. audit log
         await log_audit_event(
             supabase,
-            entity_type="LAUNDRY_ORDER",
-            entity_id=str(reservation_id),
+            entity_type="RESERVATION",
+            entity_id=str(result_data["reservation_id"]),
             action="PAYMENT_RECEIVED",
-            new_value={"payment_status": "PAID", "amount": result_data["grand_total"]},
+            new_value={"amount": paid_amount},
             actor_id=result_data["customer_id"],
             actor_type="USER",
-            change_amount=Decimal(str(result_data["grand_total"])),
-            notes=f"Reservation payments received via {payment_method}: {tx_ref}",
+            change_amount=paid_amount,
+            notes=f"Payment via {payment_method}: {tx_ref}",
             request=request,
         )
 
-        logger.info(
-            "reservation_payment_processed_success",
-            tx_ref=tx_ref,
-            reservation_id=str(reservation_id),
-        )
+        logger.info("reservation_finalized_success", tx_ref=tx_ref)
 
         return result_data
 
     except Exception as e:
-        logger.error(
-            "laundry_payment_processing_error",
-            tx_ref=tx_ref,
-            error=str(e),
-            exc_info=True,
-        )
+        logger.error("payment_processing_error", error=str(e))
         raise
 
 
