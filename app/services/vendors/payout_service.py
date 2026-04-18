@@ -1,6 +1,10 @@
 from typing import Any, Literal
 from decimal import Decimal
+import asyncio
+from venv import logger
 import httpx
+from fastapi import HTTPException, status
+from typing import Any
 from fastapi import HTTPException, status
 
 from supabase import AsyncClient
@@ -8,6 +12,7 @@ from supabase import AsyncClient
 # from app.common.order import get_delivery_order_by_id_for_payout
 from app.config.config import settings
 from app.schemas.beneficiary_schema import PayoutCreate, PayoutData
+from app.config.logging import logger
 
 
 async def get_delivery_order_by_id_for_payout(order_id: str, payout_to: Literal['CUSTOMER', 'VENDOR'], supabase: AsyncClient):
@@ -47,41 +52,64 @@ class BeneficiaryService:
     def _beneficiary_data(self, payload: dict[str, Any]) -> dict[str, Any]:
         return payload
 
+
+
+
     async def create_beneficiary(self, payload) -> dict[str, Any]:
         body = self._beneficiary_data(payload=payload)
-        header = self._headers()
         url = f"{self._base_url}/beneficiaries"
 
-        try:
-            async with httpx.AsyncClient(timeout=self._timeout) as client:
-                resp = await client.post(url, headers=self._headers(), json=body)
-            data = resp.json()
-        except httpx.TimeoutException:
-            raise HTTPException(
-                status_code=status.HTTP_504_GATEWAY_TIMEOUT,
-                detail="Flutterwave request timed out.",
-            )
-        except httpx.RequestError as e:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail=f"Could not reach Flutterwave: {str(e)}",
-            )
-        except Exception as e:
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail=f"Unexpected Flutterwave response: {str(e)}",
-            )
+        max_retries = 3
+        backoff_factor = 0.5  # seconds
 
-        if resp.status_code != 200 or data.get("status") != "success":
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail={
-                    "message": "Flutterwave beneficiary creation failed",
-                    "response": data,
-                },
-            )
+        for attempt in range(1, max_retries + 1):
+            try:
+                async with httpx.AsyncClient(timeout=self._timeout) as client:
+                    resp = await client.post(url, headers=self._headers(), json=body)
 
-        return data
+                    logger.info(f"Attempt {attempt}: Flutterwave response status: {resp.status_code}, body: {resp.text}")
+
+                data = resp.json()
+
+                # Retry only on server errors
+                if resp.status_code >= 500:
+                    logger.warning(f"Server error on attempt {attempt}: {resp.status_code}. Retrying...")
+                    raise httpx.HTTPStatusError(
+                        f"Server error: {resp.status_code}",
+                        request=resp.request,
+                        response=resp,
+                    )
+
+                # Logical failure → don't retry
+                if resp.status_code != 200 or data.get("status") != "success":
+                    logger.error(f"Logical failure on attempt {attempt}: {resp.status_code}. Response: {data}")
+                    raise HTTPException(
+                        status_code=status.HTTP_502_BAD_GATEWAY,
+                        detail={
+                            "message": "Flutterwave beneficiary creation failed",
+                            "response": data,
+                        },
+                    )
+
+                return data
+
+            except (httpx.TimeoutException, httpx.RequestError, httpx.HTTPStatusError) as e:
+                if attempt == max_retries:
+                    # Final failure
+                    raise HTTPException(
+                        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                        detail=f"Flutterwave request failed after {max_retries} attempts: {str(e)}",
+                    )
+
+                # Backoff before retrying
+                await asyncio.sleep(backoff_factor * (2 ** (attempt - 1)))
+
+            except Exception as e:
+                # Unexpected errors → don't retry
+                raise HTTPException(
+                    status_code=status.HTTP_502_BAD_GATEWAY,
+                    detail=f"Unexpected Flutterwave response: {str(e)}",
+                )
 
     async def list_beneficiaries(self, page: int = None) -> dict[str, Any]:
         url = f"{self._base_url}/beneficiaries?page={page}"
