@@ -47,6 +47,9 @@ async def create_beneficiary(
 ) -> beneficiary_schema.CreateBeneficiaryResponse:
     """Create a new transfer beneficiary on Flutterwave and persist it locally."""
     response = await service.create_beneficiary(payload=data.model_dump())
+    print('='*100)
+    logger.info(f"Beneficiary created on Flutterwave with response: {response}")
+    print('='*100)
     beneficiary_data = response.get("data", {})
     beneficiary_id = beneficiary_data.get("id")
 
