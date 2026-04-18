@@ -35,7 +35,7 @@ class PaymentWebhookResponse(BaseModel):
     tx_ref: str | None = None
 
 
-router = APIRouter(tags=["payments-webhook"], prefix="/api/v1/payments")
+router = APIRouter(tags=["payments-webhook"], prefix="/api/v1/payment")
 
 
 @router.post("/webhook", status_code=status.HTTP_200_OK)
