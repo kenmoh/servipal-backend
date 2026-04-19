@@ -45,28 +45,33 @@ async def initiate_reservation_payment(
                 detail=f"Invalid amount! Expected {vendor.data['min_deposit_adult']} got {data.min_deposit_adult}",
             )
 
+
         # Generate idempotency key
         tx_ref = f"RESERVATION-{uuid.uuid4().hex[:32].upper()}"
 
         #  Create reservation intent (source of truth)
-        reservation_intent = await supabase.rpc(
-            "create_reservation_intent",
-            {
-                "p_vendor_id": str(data.vendor_id),
-                "p_customer_id": str(customer_id),
-                "p_reservation_date": data.reservation_date,
-                "p_reservation_time": data.reservation_time,
-                "p_serving_period": data.serving_period,
-                "p_party_size": data.party_size,
-                "p_number_of_adults": data.number_of_adults,
-                "p_number_of_children": data.number_of_children,
-                "p_tx_ref": tx_ref,
-                "p_metadata": {
-                    "notes": data.notes or None,
-                    "business_name": data.business_name,
+        try:
+            reservation_intent = await supabase.rpc(
+                "create_reservation_intent",
+                {
+                    "p_vendor_id": str(data.vendor_id),
+                    "p_customer_id": str(customer_id),
+                    "p_reservation_date": data.reservation_date,
+                    "p_reservation_time": data.reservation_time,
+                    "p_serving_period": data.serving_period.upper(),
+                    "p_party_size": data.party_size,
+                    "p_number_of_adults": data.number_of_adults,
+                    "p_number_of_children": data.number_of_children,
+                    "p_tx_ref": tx_ref,
+                    "p_metadata": {
+                        "notes": data.notes or None,
+                        "business_name": data.business_name,
+                    },
                 },
-            },
-        ).execute()
+            ).execute()
+        except Exception as rpc_error:
+            logger.error("create_reservation_intent_failed", error=str(rpc_error), vendor_id=str(data.vendor_id), serving_period=data.serving_period)
+            raise HTTPException(500, f"Failed to create reservation intent: {str(rpc_error)}")
 
         if not reservation_intent.data:
             raise HTTPException(500, "Failed to create reservation intent")
