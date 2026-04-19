@@ -27,13 +27,11 @@ async def initiate_reservation_payment(
 ) -> dict:
     try:
         #  Validate vendor settings
-        vendor = (
-            await supabase.table("reservation_settings")
-            .select("vendor_id, min_deposit_adult")
-            .eq("vendor_id", str(data.vendor_id))
-            .single()
-            .execute()
-        )
+        vendor = await supabase.rpc('get_reservation_policy', {
+            "p_vendor_id": str(data.vendor_id),
+            "p_day_of_week": data.day_of_week,
+            "p_party_size": data.party_size,
+        })
 
         if not vendor.data:
             raise HTTPException(
@@ -41,10 +39,10 @@ async def initiate_reservation_payment(
                 detail="Vendor not found",
             )
 
-        if vendor.data["min_deposit_adult"] != data.deposit_required:
+        if vendor.data["min_deposit_adult"] != data.min_deposit_adult:
             raise HTTPException(
                 status_code=status.HTTP_406_NOT_ACCEPTABLE,
-                detail=f"Invalid amount! Expected {vendor.data['min_deposit_adult']} got {data.deposit_required}",
+                detail=f"Invalid amount! Expected {vendor.data['min_deposit_adult']} got {data.min_deposit_adult}",
             )
 
         # Generate idempotency key

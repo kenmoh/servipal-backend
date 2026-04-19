@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from pydantic import BaseModel
 
 
@@ -10,8 +12,9 @@ class CreateBooking(BaseModel):
     party_size: int
     number_of_children: int
     number_of_adults: int
-    deposit_required: int
-    deposit_paid: int
+    min_deposit_adult: Decimal
     notes: str | None
     business_name: str
+    day_of_week: str
+    
    
