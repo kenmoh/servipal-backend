@@ -31,7 +31,7 @@ async def initiate_reservation_payment(
             "p_vendor_id": str(data.vendor_id),
             "p_day_of_week": data.day_of_week,
             "p_party_size": data.party_size,
-        })
+        }).execute()
 
         if not vendor.data:
             raise HTTPException(
