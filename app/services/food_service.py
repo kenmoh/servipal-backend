@@ -714,22 +714,61 @@ async def initiate_food_payment(
         # 4. Generate tx_ref
         tx_ref = f"FOOD-{uuid.uuid4().hex[:32].upper()}"
 
-        # 5. Save pending state in Redis
-        pending_data = {
+
+        payload = {
+            "items": [item.model_dump(mode="json") for item in data.items],
+
+            "pricing": {
+                "subtotal": str(Decimal(subtotal)),
+                "delivery_fee": str(Decimal(delivery_fee)),
+                "grand_total": str(Decimal(grand_total)),
+            },
+
+            "delivery": {
+                "option": data.delivery_option,
+                "address": data.delivery_address,
+            },
+
+            "instructions": data.instructions,
+
+            "customer": {
+                "phone": current_profile.get("phone_number"),
+                'full_name': current_profile.get("full_name") or "N/A",
+                "email": current_profile.get("email"),
+            }
+        }
+
+        tx_ref = f"FOOD-{uuid.uuid4().hex[:32].upper()}"
+
+        intent = await supabase.table("transaction_intents").insert({
+            "tx_ref": tx_ref,
+            "service_type": "FOOD",
             "customer_id": str(current_profile.get("id")),
             "vendor_id": str(data.vendor_id),
-            "items": [item.model_dump(mode="json") for item in data.items],
-            "total_price": str(Decimal(subtotal)),
-            "delivery_fee": str(Decimal(delivery_fee)),
-            "grand_total": str(Decimal(grand_total)),
-            "delivery_option": data.delivery_option,
-            "delivery_address": data.delivery_address,
-            "additional_info": data.instructions,
-            "tx_ref": tx_ref,
-            "name": current_profile.get("phone_number"),
-            "created_at": datetime.now().isoformat(),
-        }
-        await save_pending(f"pending_food_{tx_ref}", pending_data, expire=1800)
+            "amount": grand_total,
+            "currency": "NGN",
+            "payload": payload
+        }).execute()
+
+        if not intent.data:
+            raise HTTPException(500, "Failed to create transaction intent")
+
+        # 5. Save pending state in Redis
+        # pending_data = {
+        #     "customer_id": str(current_profile.get("id")),
+        #     "vendor_id": str(data.vendor_id),
+        #     "items": [item.model_dump(mode="json") for item in data.items],
+        #     "total_price": str(Decimal(subtotal)),
+        #     "delivery_fee": str(Decimal(delivery_fee)),
+        #     "grand_total": str(Decimal(grand_total)),
+        #     "delivery_option": data.delivery_option,
+        #     "delivery_address": data.delivery_address,
+        #     "additional_info": data.instructions,
+        #     "tx_ref": tx_ref,
+        #     "name": current_profile.get("phone_number"),
+        #     "created_at": datetime.now().isoformat(),
+        # }
+        # await save_pending(f"pending_food_{tx_ref}", pending_data, expire=1800)
 
         # 7. Return SDK-ready data
         return PaymentInitializationResponse(

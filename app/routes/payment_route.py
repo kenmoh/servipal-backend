@@ -55,20 +55,7 @@ async def flutterwave_webhook(
         - PaymentWebhookResponse: Processing status.
     """
     # 1. Get raw body for signature verification
-    # 1. Verify webhook signature (Flutterwave sends verif-hash header)
-
-    # secret_hash = settings.FLW_SECRET_HASH
-    # signature = request.headers.get("verif-hash")
-    # if not hmac.compare_digest(signature, secret_hash):
-    #     logger.warning(
-    #         event="webhook_signature_invalid",
-    #         level="warning",
-    #         client_ip=request.client.host if request.client else None,
-    #     )
-    #     raise HTTPException(
-    #         status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid webhook signature"
-    #     )
-
+   
     # 2. Verify webhook signature using WebhookValidator (secure HMAC validation)
     secret_hash = settings.FLW_SECRET_HASH
     signature = request.headers.get("verif-hash")
@@ -158,36 +145,6 @@ async def flutterwave_webhook(
             tx_ref=tx_ref,
         )
 
-    # 5. Determine which handler is based on the tx_ref prefix
-    # handler = None
-    # if tx_ref.startswith("DELIVERY-"):
-    #     handler = process_successful_delivery_payment
-    # elif tx_ref.startswith("FOOD-"):
-    #     handler = process_successful_food_payment
-    # elif tx_ref.startswith("TOPUP-"):
-    #     handler = process_successful_topup_payment
-    # elif tx_ref.startswith("LAUNDRY-"):
-    #     handler = process_successful_laundry_payment
-    # elif tx_ref.startswith("PRODUCT-"):
-    #     handler = process_successful_product_payment
-
-    # if not handler:
-    #     logger.warning(
-    #         event="flutterwave_webhook_unknown_transaction_type",
-    #         level="warning",
-    #         tx_ref=tx_ref,
-    #     )
-    #     return PaymentWebhookResponse(status="unknown_transaction_type")
-
-    # 6. Queue the job with retry (5 attempts, exponential backoff)
-    # job_id = enqueue_job(
-    #     handler,
-    #     tx_ref=str(tx_ref),
-    #     payment_method="CARD",
-    #     paid_amount=paid_amount,
-    #     flw_ref=str(flw_ref),
-    #     retry=Retry(max=5, interval=[30, 60, 120, 300, 600]),
-    # )
     result = (
         await supabase.schema("pgmq_public")
         .rpc(

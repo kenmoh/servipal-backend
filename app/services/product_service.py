@@ -161,10 +161,13 @@ async def delete_product_item(
 
 # Initiate payments (single item + quantity)
 async def initiate_product_payment(
-    data: ProductOrderCreate, customer_info: dict, supabase: AsyncClient
-) -> PaymentInitializationResponse:
+    data: ProductOrderCreate,
+    customer_info: dict,
+    supabase: AsyncClient,
+) -> dict:
+
     try:
-        # Fetch the product
+        #  1. Fetch product
         item_resp = (
             await supabase.table("product_items")
             .select(
@@ -176,69 +179,160 @@ async def initiate_product_payment(
         )
 
         if not item_resp.data or not item_resp.data["in_stock"]:
-            raise HTTPException(400, "Product not available or out of stock")
+            raise HTTPException(400, "Product not available")
 
         item = item_resp.data
 
         if item["stock"] < data.quantity:
-            raise HTTPException(400, f"Only {item['stock']} units left in stock")
+            raise HTTPException(400, f"Only {item['stock']} left")
 
-        # Calculate subtotal
-        subtotal = Decimal(str(item["price"])) * data.quantity
+        #  2. Pricing
+        unit_price = Decimal(str(item["price"]))
+        subtotal = unit_price * data.quantity
+        shipping_cost = Decimal(str(item.get("shipping_cost") or 0))
+        grand_total = subtotal + shipping_cost
 
-        # Delivery fee (from seller profile)
-        shipping_cost = item.get("shipping_cost", 0)
-
-        grand_total = subtotal + (shipping_cost if shipping_cost is not None else 0)
-
-        # Generate tx_ref
+        #  3. Create tx_ref
         tx_ref = f"PRODUCT-{uuid.uuid4().hex[:32].upper()}"
 
-        # Save pending state
-        pending_data = {
-            "product_name": item["name"],
-            "price": safe_numeric_str(item["price"]),
-            "customer_id": str(customer_info.get("id")),
-            "vendor_id": str(data.vendor_id),
-            "item_id": str(data.item_id),
-            "quantity": data.quantity,
-            "selected_size": data.sizes,
-            "selected_color": data.colors,
-            "subtotal": safe_numeric_str(subtotal),
-            "shipping_cost": safe_numeric_str(shipping_cost),
-            "grand_total": safe_numeric_str(grand_total),
-            "images": data.images,
-            "delivery_option": data.delivery_option,
-            "delivery_address": data.delivery_address,
-            "additional_info": data.additional_info,
-            "tx_ref": tx_ref,
+        # 4. BUILD INTENT PAYLOAD
+        payload = {
+            "product": {
+                "id": item["id"],
+                "name": item["name"],
+                "vendor_id": item["vendor_id"],
+            },
+            "order": {
+                "quantity": data.quantity,
+                "selected_size": data.sizes,
+                "selected_color": data.colors,
+                "images": data.images,
+            },
+            "pricing": {
+                "unit_price": str(unit_price),
+                "subtotal": str(subtotal),
+                "shipping_cost": str(shipping_cost),
+                "total": str(grand_total),
+            },
+            "delivery": {
+                "option": data.delivery_option,
+                "address": data.delivery_address,
+                "note": data.additional_info,
+            },
         }
-        await save_pending(f"pending_product_{tx_ref}", pending_data)
 
+        #  5. SAVE INTENT
+        await supabase.table("transaction_intents").insert({
+            "tx_ref": tx_ref,
+            "customer_id": str(customer_info.get("id")),
+            "amount": str(grand_total),
+            "currency": "NGN",
+            "service_type": "PRODUCT",
+            "status": "PENDING",
+            "payload": payload,
+        }).execute()
+
+        #  6. Return payment config
         return PaymentInitializationResponse(
             tx_ref=tx_ref,
-            amount=Decimal(str(grand_total)),
+            amount=grand_total,
             public_key=settings.FLUTTERWAVE_PUBLIC_KEY,
             currency="NGN",
-            receiver_phone=customer_info.get("phone_number"),
-            package_name=item["name"],
             customer=PaymentCustomerInfo(
                 email=customer_info.get("email"),
                 phone_number=customer_info.get("phone_number"),
                 full_name=customer_info.get("full_name") or "N/A",
             ),
             customization=PaymentCustomization(
-                title="Servipal Delivery",
-                description=f"Payment for {item['name']} ({data.quantity} units)",
+                title="Servipal Store",
+                description=f"{item['name']} ({data.quantity} units)",
                 logo="https://mohdelivery.s3.us-east-1.amazonaws.com/favion/favicon.ico",
             ),
             message="Ready for payment",
         ).model_dump()
 
-    except HTTPException:
-        raise
     except Exception as e:
-        raise HTTPException(500, f"Product payment initiation failed: {str(e)}")
+        raise HTTPException(500, f"Product initiation failed: {str(e)}")
+    
+# async def initiate_product_payment(
+#     data: ProductOrderCreate, customer_info: dict, supabase: AsyncClient
+# ) -> PaymentInitializationResponse:
+#     try:
+#         # Fetch the product
+#         item_resp = (
+#             await supabase.table("product_items")
+#             .select(
+#                 "id, vendor_id, price, stock, name, in_stock, sizes, colors, shipping_cost"
+#             )
+#             .eq("id", str(data.item_id))
+#             .single()
+#             .execute()
+#         )
+
+#         if not item_resp.data or not item_resp.data["in_stock"]:
+#             raise HTTPException(400, "Product not available or out of stock")
+
+#         item = item_resp.data
+
+#         if item["stock"] < data.quantity:
+#             raise HTTPException(400, f"Only {item['stock']} units left in stock")
+
+#         # Calculate subtotal
+#         subtotal = Decimal(str(item["price"])) * data.quantity
+
+#         # Delivery fee (from seller profile)
+#         shipping_cost = item.get("shipping_cost", 0)
+
+#         grand_total = subtotal + (shipping_cost if shipping_cost is not None else 0)
+
+#         # Generate tx_ref
+#         tx_ref = f"PRODUCT-{uuid.uuid4().hex[:32].upper()}"
+
+#         # Save pending state
+#         pending_data = {
+#             "product_name": item["name"],
+#             "price": safe_numeric_str(item["price"]),
+#             "customer_id": str(customer_info.get("id")),
+#             "vendor_id": str(data.vendor_id),
+#             "item_id": str(data.item_id),
+#             "quantity": data.quantity,
+#             "selected_size": data.sizes,
+#             "selected_color": data.colors,
+#             "subtotal": safe_numeric_str(subtotal),
+#             "shipping_cost": safe_numeric_str(shipping_cost),
+#             "grand_total": safe_numeric_str(grand_total),
+#             "images": data.images,
+#             "delivery_option": data.delivery_option,
+#             "delivery_address": data.delivery_address,
+#             "additional_info": data.additional_info,
+#             "tx_ref": tx_ref,
+#         }
+#         await save_pending(f"pending_product_{tx_ref}", pending_data)
+
+#         return PaymentInitializationResponse(
+#             tx_ref=tx_ref,
+#             amount=Decimal(str(grand_total)),
+#             public_key=settings.FLUTTERWAVE_PUBLIC_KEY,
+#             currency="NGN",
+#             receiver_phone=customer_info.get("phone_number"),
+#             package_name=item["name"],
+#             customer=PaymentCustomerInfo(
+#                 email=customer_info.get("email"),
+#                 phone_number=customer_info.get("phone_number"),
+#                 full_name=customer_info.get("full_name") or "N/A",
+#             ),
+#             customization=PaymentCustomization(
+#                 title="Servipal Delivery",
+#                 description=f"Payment for {item['name']} ({data.quantity} units)",
+#                 logo="https://mohdelivery.s3.us-east-1.amazonaws.com/favion/favicon.ico",
+#             ),
+#             message="Ready for payment",
+#         ).model_dump()
+
+#     except HTTPException:
+#         raise
+#     except Exception as e:
+#         raise HTTPException(500, f"Product payment initiation failed: {str(e)}")
 
 
 async def customer_confirm_product_order(

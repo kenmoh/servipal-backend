@@ -403,12 +403,10 @@ async def initiate_laundry_payment(
     customer_info: dict,
     supabase: AsyncClient,
 ) -> dict:
-    """
-    Validate vendor & items, calculate total, save pending in Redis,
-    return Flutterwave RN SDK data (no payments link).
-    """
+
     try:
-        vendor = await supabase.rpc(
+        # 1. Validate vendor
+        vendor_res = await supabase.rpc(
             "get_vendor_with_availability",
             {
                 "p_vendor_id": str(data.vendor_id),
@@ -417,15 +415,16 @@ async def initiate_laundry_payment(
             },
         ).execute()
 
-        if not vendor.data:
+        if not vendor_res.data:
             raise HTTPException(404, "Laundry vendor not found")
 
-        vendor = vendor.data
+        vendor = vendor_res.data
         can_pickup = vendor["can_pickup_and_dropoff"]
         express_fee = Decimal(vendor.get("express_fee", "0"))
 
-        # Validate items & calculate subtotal
+        # 2. Validate items
         item_ids = [str(item.item_id) for item in data.items]
+
         db_items = (
             await supabase.table("laundry_items")
             .select("id, name, price, vendor_id")
@@ -435,54 +434,81 @@ async def initiate_laundry_payment(
         )
 
         items_map = {item["id"]: item for item in db_items.data}
+
         subtotal = Decimal("0")
+        normalized_items = []
 
         for cart_item in data.items:
             db_item = items_map.get(str(cart_item.item_id))
 
+            if not db_item:
+                raise HTTPException(400, "Invalid laundry item")
+
             item_total = Decimal(str(db_item["price"])) * cart_item.quantity
             subtotal += item_total
 
-        # Delivery fee
+            normalized_items.append({
+                "item_id": db_item["id"],
+                "name": db_item["name"],
+                "price": str(db_item["price"]),
+                "quantity": cart_item.quantity,
+                "total": str(item_total),
+            })
+
+        # 3. Delivery fee
         delivery_fee = Decimal("0")
+
         if data.delivery_option == "VENDOR_DELIVERY":
             if not can_pickup:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Vendor does not offer delivery",
-                )
+                raise HTTPException(400, "Vendor does not offer delivery")
+
             delivery_fee = Decimal(str(vendor["pickup_and_delivery_charge"] or 0))
 
         grand_total = subtotal + delivery_fee + express_fee
 
-        # Generate tx_ref
+        #  4. CREATE INTENT
         tx_ref = f"LAUNDRY-{uuid.uuid4().hex[:32].upper()}"
 
-        # Save pending in Redis
-        pending_data = {
-            "customer_id": str(customer_id),
-            "vendor_id": str(data.vendor_id),
-            "items": [item.model_dump(mode="json") for item in data.items],
-            "subtotal": str(subtotal),
-            "delivery_fee": str(delivery_fee),
-            "grand_total": str(grand_total),
-            "delivery_option": data.delivery_option,
-            "additional_info": data.instructions,
-            "delivery_address": data.delivery_address,
-            "is_express": data.is_express,
-            "tx_ref": tx_ref,
-            "express_fee": data.express_fee,
-            "pickup_date": data.pickup_date,
-            "delivery_date": data.delivery_date,
-            "pickup_time": data.pickup_time,
-            "delivery_time": data.delivery_time,
+        payload = {
+            "vendor": {
+                "id": str(data.vendor_id),
+                "name": vendor["business_name"],
+            },
+            "items": normalized_items,
+            "pricing": {
+                "subtotal": str(subtotal),
+                "delivery_fee": str(delivery_fee),
+                "express_fee": str(express_fee),
+                "total": str(grand_total),
+            },
+            "schedule": {
+                "pickup_date": data.pickup_date,
+                "delivery_date": data.delivery_date,
+                "pickup_time": data.pickup_time,
+                "delivery_time": data.delivery_time,
+            },
+            "meta": {
+                "delivery_option": data.delivery_option,
+                "is_express": data.is_express,
+                "instructions": data.instructions,
+                "delivery_address": data.delivery_address,
+            },
         }
-        await save_pending(f"pending_laundry_{tx_ref}", pending_data, expire=1800)
 
-        # Return SDK-ready data
+        await supabase.table("transaction_intents").insert({
+            "tx_ref": tx_ref,
+            "customer_id": str(customer_id),
+            "amount": str(grand_total),
+            "currency": "NGN",
+            "service_type": "LAUNDRY",
+            "status": "PENDING",
+            "payload": payload,
+        }).execute()
+
+        #  5. Return Flutterwave config
         return PaymentInitializationResponse(
             tx_ref=tx_ref,
-            amount=Decimal(str(grand_total)),
+            amount=grand_total,
             public_key=settings.FLUTTERWAVE_PUBLIC_KEY,
             currency="NGN",
             customer=PaymentCustomerInfo(
@@ -491,15 +517,118 @@ async def initiate_laundry_payment(
                 full_name=customer_info.get("full_name") or "N/A",
             ),
             customization=PaymentCustomization(
-                title="Servipal Delivery",
+                title="Servipal Laundry",
                 description=f"{vendor['business_name']} - Laundry Order",
                 logo="https://mohdelivery.s3.us-east-1.amazonaws.com/favion/favicon.ico",
             ),
-            message="Ready for payments",
+            message="Ready for payment",
         ).model_dump()
 
     except Exception as e:
-        raise HTTPException(500, f"Laundry payment initiation failed: {str(e)}")
+        raise HTTPException(500, f"Laundry initiation failed: {str(e)}")
+# async def initiate_laundry_payment(
+#     data: LaundryOrderCreate,
+#     customer_id: UUID,
+#     customer_info: dict,
+#     supabase: AsyncClient,
+# ) -> dict:
+#     """
+#     Validate vendor & items, calculate total, save pending in Redis,
+#     return Flutterwave RN SDK data (no payments link).
+#     """
+#     try:
+#         vendor = await supabase.rpc(
+#             "get_vendor_with_availability",
+#             {
+#                 "p_vendor_id": str(data.vendor_id),
+#                 "p_type": data.delivery_option,
+#                 "p_date": data.pickup_date,
+#             },
+#         ).execute()
+
+#         if not vendor.data:
+#             raise HTTPException(404, "Laundry vendor not found")
+
+#         vendor = vendor.data
+#         can_pickup = vendor["can_pickup_and_dropoff"]
+#         express_fee = Decimal(vendor.get("express_fee", "0"))
+
+#         # Validate items & calculate subtotal
+#         item_ids = [str(item.item_id) for item in data.items]
+#         db_items = (
+#             await supabase.table("laundry_items")
+#             .select("id, name, price, vendor_id")
+#             .in_("id", item_ids)
+#             .eq("vendor_id", str(data.vendor_id))
+#             .execute()
+#         )
+
+#         items_map = {item["id"]: item for item in db_items.data}
+#         subtotal = Decimal("0")
+
+#         for cart_item in data.items:
+#             db_item = items_map.get(str(cart_item.item_id))
+
+#             item_total = Decimal(str(db_item["price"])) * cart_item.quantity
+#             subtotal += item_total
+
+#         # Delivery fee
+#         delivery_fee = Decimal("0")
+#         if data.delivery_option == "VENDOR_DELIVERY":
+#             if not can_pickup:
+#                 raise HTTPException(
+#                     status_code=status.HTTP_400_BAD_REQUEST,
+#                     detail="Vendor does not offer delivery",
+#                 )
+#             delivery_fee = Decimal(str(vendor["pickup_and_delivery_charge"] or 0))
+
+#         grand_total = subtotal + delivery_fee + express_fee
+
+#         # Generate tx_ref
+#         tx_ref = f"LAUNDRY-{uuid.uuid4().hex[:32].upper()}"
+
+#         # Save pending in Redis
+#         pending_data = {
+#             "customer_id": str(customer_id),
+#             "vendor_id": str(data.vendor_id),
+#             "items": [item.model_dump(mode="json") for item in data.items],
+#             "subtotal": str(subtotal),
+#             "delivery_fee": str(delivery_fee),
+#             "grand_total": str(grand_total),
+#             "delivery_option": data.delivery_option,
+#             "additional_info": data.instructions,
+#             "delivery_address": data.delivery_address,
+#             "is_express": data.is_express,
+#             "tx_ref": tx_ref,
+#             "express_fee": data.express_fee,
+#             "pickup_date": data.pickup_date,
+#             "delivery_date": data.delivery_date,
+#             "pickup_time": data.pickup_time,
+#             "delivery_time": data.delivery_time,
+#         }
+#         await save_pending(f"pending_laundry_{tx_ref}", pending_data, expire=1800)
+
+#         # Return SDK-ready data
+#         return PaymentInitializationResponse(
+#             tx_ref=tx_ref,
+#             amount=Decimal(str(grand_total)),
+#             public_key=settings.FLUTTERWAVE_PUBLIC_KEY,
+#             currency="NGN",
+#             customer=PaymentCustomerInfo(
+#                 email=customer_info.get("email"),
+#                 phone_number=customer_info.get("phone_number"),
+#                 full_name=customer_info.get("full_name") or "N/A",
+#             ),
+#             customization=PaymentCustomization(
+#                 title="Servipal Delivery",
+#                 description=f"{vendor['business_name']} - Laundry Order",
+#                 logo="https://mohdelivery.s3.us-east-1.amazonaws.com/favion/favicon.ico",
+#             ),
+#             message="Ready for payments",
+#         ).model_dump()
+
+#     except Exception as e:
+#         raise HTTPException(500, f"Laundry payment initiation failed: {str(e)}")
 
 
 async def update_laundry_item(
