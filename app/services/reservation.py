@@ -2,6 +2,7 @@
 # Payment Initiation (Pay First)
 # ───────────────────────────────────────────────
 from decimal import Decimal
+from email import policy
 from uuid import UUID
 import uuid
 
@@ -33,13 +34,17 @@ async def initiate_reservation_payment(
             "p_party_size": data.party_size,
         }).execute()
 
-        if not vendor.data:
+        
+
+        if not vendor.data or len(vendor.data) == 0:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Vendor not found",
             )
+        
+        policy = vendor.data[0]
 
-        if vendor.data["min_deposit_adult"] != data.min_deposit_adult:
+        if policy["min_deposit_adult"] != data.min_deposit_adult:
             raise HTTPException(
                 status_code=status.HTTP_406_NOT_ACCEPTABLE,
                 detail=f"Invalid amount! Expected {vendor.data['min_deposit_adult']} got {data.min_deposit_adult}",
@@ -76,27 +81,11 @@ async def initiate_reservation_payment(
         if not reservation_intent.data:
             raise HTTPException(500, "Failed to create reservation intent")
         
-        amount = reservation_intent.data["total_deposit"]
-        tx_ref = reservation_intent.data["tx_ref"]
+        intent = reservation_intent.data[0]
         
-        # # Save pending in Redis
-        # pending_data = {
-        #     "customer_id": str(customer_id),
-        #     "vendor_id": str(data.vendor_id),
-        #     "table_id": str(data.table_id),
-        #     "reservation_time": data.reservation_time,
-        #     "end_time": data.end_time,
-        #     "party_size": data.party_size,
-        #     "number_of_children": data.number_of_children,
-        #     "number_of_adult": data.number_of_adult,
-        #     "deposit_required": f"{data.deposit_required}",
-        #     "deposit_paid": f"{data.deposit_paid}",
-        #     "business_name": data.business_name,
-        #     "notes": data.notes or None,
-        # }
-        # await save_pending(f"pending_reservation_{tx_ref}", pending_data, expire=1800)
-
-        # log
+        amount = intent["total_deposit"]
+        tx_ref = intent["tx_ref"]
+        
         logger.info(
             "reservation_payment_initiated",
             tx_ref=tx_ref,
