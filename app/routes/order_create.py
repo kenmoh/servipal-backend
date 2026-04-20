@@ -106,7 +106,7 @@ async def process_payment(
             paid_amount=paid_amount,
             flw_ref=flw_ref,
             payment_method=payment_method,
-            pending_data=pending_data,
+            # pending_data=pending_data,
             supabase=supabase,
         )
 
