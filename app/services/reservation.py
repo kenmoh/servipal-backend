@@ -3,6 +3,7 @@
 # ───────────────────────────────────────────────
 from decimal import Decimal
 from email import policy
+from math import log
 from uuid import UUID
 import uuid
 
@@ -33,6 +34,13 @@ async def initiate_reservation_payment(
             "p_day_of_week": data.day_of_week,
             "p_party_size": data.party_size,
         }).execute()
+
+
+        logger.info('*'*100)
+        logger.info(data=vendor.data)
+        logger.info(data=type(vendor.data))
+        logger.info("fetched_reservation_policy", data=vendor.data, vendor_id=str(data.vendor_id), day_of_week=data.day_of_week, party_size=data.party_size)
+        logger.info('*'*100)
 
         
 
@@ -75,8 +83,9 @@ async def initiate_reservation_payment(
                 },
             ).execute()
         except Exception as rpc_error:
+            message = rpc_error.args.get("message", "Unknown error") if rpc_error.args else "Unknown error"
             logger.error("create_reservation_intent_failed", error=str(rpc_error), vendor_id=str(data.vendor_id), serving_period=data.serving_period)
-            raise HTTPException(500, f"Failed to create reservation intent: {str(rpc_error)}")
+            raise HTTPException(500, f"Failed to create reservation intent: {str(message)}")
 
         if not reservation_intent.data:
             raise HTTPException(500, "Failed to create reservation intent")
