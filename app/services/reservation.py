@@ -16,7 +16,6 @@ from app.schemas.common import (
     PaymentInitializationResponse,
 )
 from app.schemas.reservation import CreateBooking
-from app.utils.redis_utils import save_pending
 from app.config.config import settings
 from app.config.logging import logger
 
@@ -52,7 +51,7 @@ async def initiate_reservation_payment(
         
         policy = vendor.data
 
-        logger.info("validating_reservation_policy", policy=policy, vendor_id=str(data['min_deposit_adult']), cancellation_window_minutes=data.cancellation_window_minutes, cancellation_fee=data.cancellation_fee)
+        logger.info("validating_reservation_policy", policy=policy, vendor_id=str(policy['min_deposit_adult']), cancellation_window_minutes=policy['cancellation_window_minutes'], cancellation_fee=policy['cancellation_fee'])
 
         if policy["min_deposit_adult"] != data.min_deposit_adult:
             raise HTTPException(
