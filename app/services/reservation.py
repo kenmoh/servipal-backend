@@ -37,9 +37,9 @@ async def initiate_reservation_payment(
 
 
         logger.info('*'*100)
-        logger.info('fetched data',data=vendor.data.data)
-        logger.info('fetched data',data=type(vendor.data.data))
-        logger.info("fetched_reservation_policy", data=vendor.data, vendor_id=str(data.vendor_id), day_of_week=data.day_of_week, party_size=data.party_size)
+        logger.info('fetched data',data=vendor.data)
+        logger.info('fetched data',data=type(vendor.data))
+        logger.info("fetched_reservation_policy", data=vendor.data)
         logger.info('*'*100)
 
         
@@ -51,6 +51,8 @@ async def initiate_reservation_payment(
             )
         
         policy = vendor.data
+
+        logger.info("validating_reservation_policy", policy=policy, vendor_id=str(data['min_deposit_adult']), cancellation_window_minutes=data.cancellation_window_minutes, cancellation_fee=data.cancellation_fee)
 
         if policy["min_deposit_adult"] != data.min_deposit_adult:
             raise HTTPException(
