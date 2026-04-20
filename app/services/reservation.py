@@ -36,23 +36,21 @@ async def initiate_reservation_payment(
         }).execute()
 
 
-        logger.info('start*'*100)
-        logger.info('fetched data',data=vendor.data)
-        logger.info('fetched data',data=type(vendor.data))
-        logger.info('first data',data=vendor.data[0])
-        logger.info('data type',data=type(vendor.data[0]))
+        logger.info('*'*100)
+        logger.info('fetched data',data=vendor.data.data)
+        logger.info('fetched data',data=type(vendor.data.data))
         logger.info("fetched_reservation_policy", data=vendor.data, vendor_id=str(data.vendor_id), day_of_week=data.day_of_week, party_size=data.party_size)
-        logger.info('end*'*100)
+        logger.info('*'*100)
 
         
 
-        if not vendor.data or len(vendor.data) == 0:
+        if not vendor.data:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Vendor not found",
             )
         
-        policy = vendor.data[0]
+        policy = vendor.data
 
         if policy["min_deposit_adult"] != data.min_deposit_adult:
             raise HTTPException(
