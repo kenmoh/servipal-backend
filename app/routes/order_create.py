@@ -255,7 +255,7 @@ async def retry_payments(
                 paid_amount=paid_amount,
                 flw_ref=data["flw_ref"],
                 payment_method=data["payment_method"],
-                pending_data=data.get("pending_data"),
+                # pending_data=data.get("pending_data"),
                 supabase=supabase,
             )
             await (
