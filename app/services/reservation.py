@@ -36,12 +36,13 @@ async def initiate_reservation_payment(
         }).execute()
 
 
-        logger.info('*'*100)
-        logger.info('data',data=vendor.data)
-        logger.info('data',data=vendor.data[0])
+        logger.info('start*'*100)
+        logger.info('fetched data',data=vendor.data)
+        logger.info('fetched data',data=type(vendor.data))
+        logger.info('first data',data=vendor.data[0])
         logger.info('data type',data=type(vendor.data[0]))
         logger.info("fetched_reservation_policy", data=vendor.data, vendor_id=str(data.vendor_id), day_of_week=data.day_of_week, party_size=data.party_size)
-        logger.info('*'*100)
+        logger.info('end*'*100)
 
         
 
