@@ -31,6 +31,7 @@ from app.routes import (
     cache_admin,
     reservation,
     beneficiary_router,
+    payment_webhook_route,
 )
 from app.config.logging import logger
 from app.utils.payment import (
@@ -277,6 +278,7 @@ app.include_router(user_routes.router)
 app.include_router(beneficiary_router.router)
 app.include_router(wallet_route.router, include_in_schema=False)
 app.include_router(payment_route.router)
+app.include_router(payment_webhook_route.router)
 app.include_router(delivery_route.router)
 app.include_router(review_router.router)
 app.include_router(food_router.router)

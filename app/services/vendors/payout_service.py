@@ -1,10 +1,7 @@
 from typing import Any, Literal
 from decimal import Decimal
 import asyncio
-from venv import logger
 import httpx
-from fastapi import HTTPException, status
-from typing import Any
 from fastapi import HTTPException, status
 
 from supabase import AsyncClient
@@ -34,7 +31,8 @@ class BeneficiaryService:
     ) -> None:
         self._base_url = base_url or settings.FLUTTERWAVE_BASE_URL
         self._secret_key = secret_key or settings.FLW_SECRET_KEY
-        self._timeout_in_sec = timeout_in_sec
+        # `httpx.AsyncClient(timeout=...)` expects seconds (float) or httpx.Timeout.
+        self._timeout = timeout_in_sec
 
         if not self._secret_key:
             raise HTTPException(

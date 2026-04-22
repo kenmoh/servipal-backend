@@ -142,7 +142,6 @@ def require_webhook_signature(
     if provider == "flutterwave":
         is_valid = WebhookValidator.validate_flutterwave_signature(
             signature_header or "",
-            payload_body,
             secret,
         )
     else:

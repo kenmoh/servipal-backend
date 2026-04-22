@@ -745,7 +745,7 @@ async def initiate_food_payment(
             "service_type": "FOOD",
             "customer_id": str(current_profile.get("id")),
             "vendor_id": str(data.vendor_id),
-            "amount": grand_total,
+            "amount": str(grand_total),
             "currency": "NGN",
             "payload": payload
         }).execute()

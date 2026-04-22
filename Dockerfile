@@ -29,14 +29,8 @@ WORKDIR /app
 
 # Create non-root user for security
 ARG UID=10001
-RUN adduser \
-    --disabled-password \
-    --gecos "" \
-    --home "/nonexistent" \
-    --shell "/sbin/nologin" \
-    --no-create-home \
-    --uid "${UID}" \
-    appuser
+RUN groupadd -g "${UID}" appuser && \
+    useradd -l -u "${UID}" -g appuser -m -s /sbin/nologin appuser
 
 # Copy pre-built virtual environment from builder
 COPY --chown=appuser:appuser --from=builder /app/.venv /app/.venv
@@ -64,5 +58,5 @@ ENV PYTHONDONTWRITEBYTECODE=1
 EXPOSE 8080
 
 # Run the application
-CMD fastapi run --port $PORT
+CMD fastapi run app/main.py --port $PORT
 

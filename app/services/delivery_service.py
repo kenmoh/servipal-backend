@@ -76,7 +76,7 @@ async def initiate_delivery_payment(
         # 3. Generate tx_ref
         tx_ref = f"DELIVERY-{uuid.uuid4().hex[:32].upper()}"
 
-        # 4. BUILD CLEAN PAYLOAD (NO REDIS STRUCTURE)
+        # 4. BUILD PAYLOAD
         payload = {
             "sender_id": str(sender_id),
 
@@ -106,7 +106,7 @@ async def initiate_delivery_payment(
             }
         }
 
-        # 5. CREATE TRANSACTION INTENT (DB replaces Redis)
+        # 5. CREATE TRANSACTION INTENT
         intent = await supabase.table("transaction_intents").insert({
             "tx_ref": tx_ref,
             "service_type": "DELIVERY",
@@ -120,7 +120,7 @@ async def initiate_delivery_payment(
         if not intent.data:
             raise HTTPException(500, "Failed to create delivery intent")
 
-        # 🔹 6. Return Flutterwave payload (UNCHANGED UX)
+        # 6. Return Flutterwave payload
         return PaymentInitializationResponse(
             tx_ref=tx_ref,
             amount=delivery_fee,

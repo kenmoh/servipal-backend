@@ -1,6 +1,6 @@
 # routers/internal.py
 
-from fastapi import APIRouter, Header, HTTPException, status, Depends
+from fastapi import APIRouter,  HTTPException, status, Depends
 from decimal import Decimal
 from typing import Optional, Any
 from pydantic import BaseModel, Field
@@ -8,7 +8,6 @@ from supabase import AsyncClient
 from app.database.supabase import get_supabase_admin_client
 from app.utils.api_key_auth import APIKeyManager
 
-from app.config.config import settings
 from app.services.payment_service import (
     process_successful_delivery_payment,
     process_successful_food_payment,

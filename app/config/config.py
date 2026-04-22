@@ -29,7 +29,7 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = "production"
 
     # Frontend URL (used for redirects after payments processing)
-    API_URL: str = "https://servipal-backend.onrender.com/api/v1"
+    API_URL: str = "https://api.servi-pal.com/api/v1"
 
     # LOGFIRE
     LOGFIRE_TOKEN: Optional[str] = None

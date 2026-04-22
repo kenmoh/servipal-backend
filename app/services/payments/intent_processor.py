@@ -1,4 +1,8 @@
 from decimal import Decimal
+from typing import Literal
+
+from app.utils.payment import verify_transaction_tx_ref
+from app.config.logging import logger
 
 HANDLERS = {}
 
@@ -13,9 +17,16 @@ async def process_payment_intent(
     tx_ref: str,
     paid_amount: str,
     flw_ref: str,
-    payment_method: str,
+    payment_method: Literal["CARD",  "BANK_TRANSFER", "PAY_ON_DELIVERY", "BANK"],
     supabase,
 ):
+    
+    # 0. Verify payment transaction
+    if payment_method in ["CARD", "BANK_TRANSFER", 'BANK']:
+        verified = await verify_transaction_tx_ref(tx_ref)
+        if not verified or verified.get("status") != "success":
+            logger.error("food_payment_verification_failed", tx_ref=tx_ref)
+            return {"status": "verification_failed"}
     # 1. Load intent (SOURCE OF TRUTH)
     intent_res = await supabase.table("transaction_intents") \
         .select("*") \

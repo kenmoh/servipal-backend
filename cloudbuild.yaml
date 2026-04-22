@@ -22,7 +22,7 @@ steps:
       - 'managed'
       - '--allow-unauthenticated'
       - '--set-env-vars=ENVIRONMENT=production'
-      - '--set-secrets=/app/.env=Servi-pal-secret:latest'
+      - '--set-secrets=/secrets/.env=Servi-pal-secret:latest'
       - '--memory=1Gi'
       - '--timeout=300'
 

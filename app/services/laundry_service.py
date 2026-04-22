@@ -526,6 +526,7 @@ async def initiate_laundry_payment(
 
     except Exception as e:
         raise HTTPException(500, f"Laundry initiation failed: {str(e)}")
+    
 # async def initiate_laundry_payment(
 #     data: LaundryOrderCreate,
 #     customer_id: UUID,
