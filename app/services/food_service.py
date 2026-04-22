@@ -1,20 +1,17 @@
-from uuid import UUID
 import uuid
 from supabase.client import AsyncClient
 from fastapi import HTTPException, UploadFile, Request
 from app.schemas.food_schemas import *
 from app.utils.storage import upload_to_supabase_storage
-from app.utils.redis_utils import save_pending, get_pending, delete_pending
-from app.config.config import settings
+from app.utils.redis_utils import save_pending, get_pending
 from app.schemas.common import (
     PaymentInitializationResponse,
     PaymentCustomerInfo,
     PaymentCustomization,
 )
-from app.dependencies.auth import get_customer_contact_info
 from app.config.logging import logger
 from app.utils.audit import log_audit_event
-from typing import Optional, Literal, List, Dict
+from typing import Optional, Literal, List
 from decimal import Decimal
 from datetime import datetime
 from app.services.notification_service import notify_user
@@ -620,7 +617,7 @@ async def initiate_food_payment(
     Real order is created in webhook after successful payments.
     """
     logger.info(
-        "initiate_food_payment_legacy",
+        "initiate_food_payment",
         customer_id=str(current_profile.get("id")),
         vendor_id=str(data.vendor_id),
     )

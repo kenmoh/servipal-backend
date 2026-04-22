@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Request, HTTPException, Depends, status
+from fastapi import APIRouter, Request, Depends, status
 from supabase import AsyncClient
 from app.dependencies.auth import get_current_user
 from app.schemas.payments_schema import (
@@ -12,7 +12,7 @@ from app.utils.api_key_auth import APIKeyManager
 #     process_successful_food_payment,
 #     process_successful_topup_payment,
 #     process_successful_laundry_payment,
-#     process_successful_product_payment,
+#     process_successful_product_payment
 # )
 from app.database.supabase import get_supabase_client, get_supabase_admin_client
 # from app.worker import enqueue_job
@@ -25,12 +25,11 @@ from app.services.payment_service import process_pay_on_delivery
 from app.webhooks.flutterwave_webhook import PaymentWebhookResponse, handle_flutterwave_webhook
 
 
-router = APIRouter(tags=["payments-webhook"], prefix="/api/v1/payment")
+router = APIRouter(tags=["payments-webhook"], prefix="/api/v1/payments")
 
 
 # Backwards-compatible endpoint. Canonical endpoint is `/api/v1/payments/webhook`.
 @router.post("/webhook", status_code=status.HTTP_200_OK, include_in_schema=False)
-@router.post("/webhook/", status_code=status.HTTP_200_OK, include_in_schema=False)
 async def flutterwave_webhook(
     request: Request,
     supabase: AsyncClient = Depends(get_supabase_admin_client),

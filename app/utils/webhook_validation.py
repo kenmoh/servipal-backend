@@ -22,7 +22,7 @@ class WebhookValidator:
         Validate Flutterwave webhook signature.
 
         Flutterwave sends:
-        - Signature in 'verif-hash' header
+        - Signature in 'h' header
         - Secret hash from dashboard
 
         Args:

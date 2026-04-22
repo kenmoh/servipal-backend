@@ -25,7 +25,7 @@ async def handle_flutterwave_webhook(
     - Checks idempotency and queues processing in the background (pgmq).
     """
     secret_hash = settings.FLW_SECRET_HASH
-    signature = request.headers.get("verif-hash")
+    signature = request.headers.get("verif-hash") or request.headers.get("x-flutterwave-signature")
 
     is_valid = WebhookValidator.validate_flutterwave_signature(
         signature_header=signature or "",

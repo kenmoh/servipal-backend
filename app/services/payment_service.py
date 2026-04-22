@@ -1,9 +1,7 @@
 import json
-import json
 from typing import Literal
 from datetime import datetime, timezone
 from app.utils.redis_utils import get_pending, delete_pending
-from uuid import UUID
 from supabase import AsyncClient, Client
 from app.config.logging import logger
 from app.utils.audit import log_audit_event
@@ -1663,7 +1661,6 @@ async def process_pay_on_delivery(
             supabase=supabase,
             payment_method="PAY_ON_DELIVERY",
             request=request,
-            pending_data=pending,
         )
     if handler is process_successful_laundry_payment:
         return await handler(
@@ -1672,7 +1669,6 @@ async def process_pay_on_delivery(
             flw_ref=flw_ref,
             supabase=supabase,
             payment_method="PAY_ON_DELIVERY",
-            pending_data=pending,
             request=request,
         )
     if handler is process_successful_product_payment:
@@ -1682,7 +1678,7 @@ async def process_pay_on_delivery(
             flw_ref=flw_ref,
             supabase=supabase,
             payment_method="PAY_ON_DELIVERY",
-            pending_data=pending,
+
         )
 
     # Delivery handler expects Decimal
@@ -1692,7 +1688,7 @@ async def process_pay_on_delivery(
         flw_ref=flw_ref,
         supabase=supabase,
         payment_method="PAY_ON_DELIVERY",
-        pending_data=pending,
+
     )
 
 

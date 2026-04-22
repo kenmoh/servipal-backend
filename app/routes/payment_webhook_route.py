@@ -10,7 +10,6 @@ router = APIRouter(tags=["payments-webhook"], prefix="/api/v1/payments")
 
 
 @router.post("/webhook", status_code=status.HTTP_200_OK)
-@router.post("/webhook/", status_code=status.HTTP_200_OK, include_in_schema=False)
 async def flutterwave_webhook(
     request: Request,
     supabase: AsyncClient = Depends(get_supabase_admin_client),
