@@ -62,12 +62,69 @@ class Settings(BaseSettings):
     # REDIS
     UPSTASH_REDIS_REST_URL: str = "redis://localhost:6379"
     UPSTASH_REDIS_REST_TOKEN: Optional[str] = None
+    # Queue backend migration strategy: supabase | dual | celery
+    PAYMENT_QUEUE_BACKEND: str = "celery"
+
+    # CELERY (new queue pipeline; can run in parallel with Supabase queue)
+    CELERY_ENABLED: bool = True
+    CELERY_BROKER_URL: Optional[str] = "amqp://servipal:change_me@rabbitmq:5672/servipal"
+    CELERY_RESULT_BACKEND: Optional[str] = "rpc://"
+    CELERY_TASK_QUEUE: str = "payment_order_creation"
+    CELERY_RABBITMQ_QUEUE_TYPE: str = "quorum"
+    CELERY_TASK_DEFAULT_DELIVERY_MODE: str = "persistent"
+    CELERY_TASK_MAX_RETRIES: int = 5
+    CELERY_TASK_RETRY_BACKOFF_MAX_SECONDS: int = 300
+    CELERY_TASK_EXPIRES_SECONDS: int = 3600
+    CELERY_TASK_IGNORE_RESULT: bool = True
+    CELERY_TASK_SOFT_TIME_LIMIT_SECONDS: int = 120
+    CELERY_TASK_TIME_LIMIT_SECONDS: int = 180
+    CELERY_BROKER_HEARTBEAT: int = 30
+    CELERY_BROKER_CONNECTION_TIMEOUT_SECONDS: int = 30
+    CELERY_BROKER_POOL_LIMIT: int = 10
+    CELERY_PUBLISH_RETRY_MAX_RETRIES: int = 5
+    CELERY_WORKER_PREFETCH_MULTIPLIER: int = 1
+    CELERY_WORKER_MAX_TASKS_PER_CHILD: int = 500
+    CELERY_WORKER_MAX_MEMORY_PER_CHILD_KB: int = 262144
+    CELERY_BROKER_VISIBILITY_TIMEOUT_SECONDS: int = 3600
+    CELERY_REDIS_USE_SSL: bool = False
+    CELERY_REDIS_SSL_CERT_REQS: str = "required"
 
     # SENTRY
     SENTRY_DSN: Optional[str] = None
 
 
 settings = Settings()
+
+settings.PAYMENT_QUEUE_BACKEND = settings.PAYMENT_QUEUE_BACKEND.strip().lower()
+if settings.PAYMENT_QUEUE_BACKEND not in {"supabase", "dual", "celery"}:
+    print(
+        (
+            "ERROR: PAYMENT_QUEUE_BACKEND must be one of "
+            "'supabase', 'dual', or 'celery'."
+        ),
+        file=sys.stderr,
+    )
+    sys.exit(1)
+
+if settings.PAYMENT_QUEUE_BACKEND in {"dual", "celery"} and not settings.CELERY_ENABLED:
+    print(
+        (
+            "ERROR: CELERY_ENABLED must be true when "
+            "PAYMENT_QUEUE_BACKEND is 'dual' or 'celery'."
+        ),
+        file=sys.stderr,
+    )
+    sys.exit(1)
+
+if settings.PAYMENT_QUEUE_BACKEND in {"dual", "celery"} and not settings.CELERY_BROKER_URL:
+    print(
+        (
+            "ERROR: CELERY_BROKER_URL is required when "
+            "PAYMENT_QUEUE_BACKEND is 'dual' or 'celery'."
+        ),
+        file=sys.stderr,
+    )
+    sys.exit(1)
 
 # Derived defaults (keep these near settings init so other modules can rely on them).
 if not settings.FLW_ORCHESTRATOR_BASE_URL:

@@ -23,8 +23,20 @@ HANDLER_MAP = {
     "LAUNDRY-": process_successful_laundry_payment,
     "DELIVERY-": process_successful_delivery_payment,
     "TOPUP-": process_successful_topup_payment,
+    "RESERVATION-": process_successful_reservation_payment,
     "RESERVATION": process_successful_reservation_payment,
 }
+
+
+def _is_duplicate_constraint_error(error: object) -> bool:
+    text = str(error).lower()
+    duplicate_markers = (
+        "duplicate key",
+        "unique constraint",
+        "already processed",
+        "already_processed",
+    )
+    return any(marker in text for marker in duplicate_markers)
 
 
 class OrderStatus(str, Enum):
@@ -79,13 +91,30 @@ async def process_payment(
 
     # 3. Run the handler
     try:
-        await handler(
+        handler_result = await handler(
             tx_ref=data.tx_ref,
             paid_amount=data.paid_amount,
             flw_ref=data.flw_ref,
             payment_method=data.payment_method,
             supabase=supabase,
         )
+
+        handler_status = (
+            str(handler_result.get("status", "")).lower()
+            if isinstance(handler_result, dict)
+            else ""
+        )
+        if handler_status == "already_processed":
+            logger.info(
+                "payment_already_processed",
+                tx_ref=data.tx_ref,
+                handler=handler.__name__,
+            )
+            return {
+                "status": "already_processed",
+                "tx_ref": data.tx_ref,
+                "handler": handler.__name__,
+            }
 
         logger.info(
             "payment_processed",
@@ -96,6 +125,18 @@ async def process_payment(
         return {"status": "success", "tx_ref": data.tx_ref}
 
     except APIError as e:
+        if _is_duplicate_constraint_error(e):
+            logger.info(
+                "payment_already_processed_by_constraint",
+                tx_ref=data.tx_ref,
+                handler=handler.__name__,
+                error=str(e),
+            )
+            return {
+                "status": "already_processed",
+                "tx_ref": data.tx_ref,
+                "handler": handler.__name__,
+            }
         logger.error(
             "payment_processing_failed",
             tx_ref=data.tx_ref,

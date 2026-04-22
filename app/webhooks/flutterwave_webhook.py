@@ -5,6 +5,8 @@ from supabase import AsyncClient
 from app.config.config import settings
 from app.config.logging import logger
 from app.database.supabase import get_supabase_admin_client
+from app.services.payment_idempotency import check_payment_already_processed
+from app.services.payment_queue_dispatcher import enqueue_successful_payment_for_processing
 from app.utils.webhook_validation import WebhookValidator
 
 
@@ -22,7 +24,7 @@ async def handle_flutterwave_webhook(
     Handle Flutterwave payment webhooks.
 
     - Verifies signature using the dashboard secret hash (verif-hash).
-    - Checks idempotency and queues processing in the background (pgmq).
+    - Checks idempotency and queues processing in configured backend(s).
     """
     secret_hash = settings.FLW_SECRET_HASH
     signature = request.headers.get("verif-hash") or request.headers.get("x-flutterwave-signature")
@@ -97,13 +99,17 @@ async def handle_flutterwave_webhook(
         return PaymentWebhookResponse(status="error", message="Missing tx_ref")
 
     # Idempotency check (prevent double-processing)
-    existing = (
-        await supabase.table("transactions").select("id").eq("tx_ref", tx_ref).execute()
+    already_processed, source = await check_payment_already_processed(
+        supabase=supabase,
+        tx_ref=tx_ref,
     )
 
-    if existing.data:
+    if already_processed:
         logger.info(
-            event="flutterwave_webhook_already_processed", level="info", tx_ref=tx_ref
+            event="flutterwave_webhook_already_processed",
+            level="info",
+            tx_ref=tx_ref,
+            source=source,
         )
         return PaymentWebhookResponse(
             status="already_processed",
@@ -111,31 +117,22 @@ async def handle_flutterwave_webhook(
             tx_ref=tx_ref,
         )
 
-    result = (
-        await supabase.schema("pgmq_public")
-        .rpc(
-            "send",
-            {
-                "queue_name": "payment_queue",
-                "message": {
-                    "tx_ref": tx_ref,
-                    "paid_amount": str(paid_amount),
-                    "flw_ref": str(flw_ref),
-                    "payment_method": f"{(payment_type or '').upper()}",
-                    "tx_id": tx_id,
-                },
-            },
-        )
-        .execute()
+    dispatch_result = await enqueue_successful_payment_for_processing(
+        supabase=supabase,
+        tx_ref=tx_ref,
+        paid_amount=paid_amount,
+        flw_ref=flw_ref,
+        payment_type=payment_type,
+        tx_id=tx_id,
     )
-
-    msg_id = result.data
 
     logger.info(
         event=webhook_event,
         level="info",
         tx_ref=tx_ref,
-        msg_id=msg_id,
+        msg_id=dispatch_result.get("supabase_msg_id"),
+        celery_task_id=dispatch_result.get("celery_task_id"),
+        queue_backend=dispatch_result.get("backend"),
     )
 
     return PaymentWebhookResponse(
