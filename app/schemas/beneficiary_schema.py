@@ -52,7 +52,6 @@ class DeleteBeneficiaryResponse(BaseModel):
     data: str
 
 
-
 from datetime import datetime
 from decimal import Decimal
 
@@ -62,7 +61,7 @@ from pydantic import BaseModel
 class PayoutCreate(BaseModel):
     amount: str
     currency: str
-    beneficiary:str # Beneficiary ID
+    beneficiary: str  # Beneficiary ID
     reference: str
     debit_currency: str
     callback_url: str | None = None
@@ -70,23 +69,24 @@ class PayoutCreate(BaseModel):
 
 
 class PayoutData(BaseModel):
-   id: str
-   account_number: str
-   bank_code: str
-   full_name: str
-   created_at: datetime
-   currency:str
-   debit_currency:str
-   amount: Decimal
-   fee: Decimal
-   status: str
-   reference:str
-   meta: str | None = None
-   narration:str
-   complete_message: str
-   requires_approval: int
-   is_approved: int
-   bank_name:str
+    id: str
+    account_number: str
+    bank_code: str
+    full_name: str
+    created_at: datetime
+    currency: str
+    debit_currency: str
+    amount: Decimal
+    fee: Decimal
+    status: str
+    reference: str
+    meta: str | None = None
+    narration: str
+    complete_message: str
+    requires_approval: int
+    is_approved: int
+    bank_name: str
+
 
 class PayoutResponse(BaseModel):
     status: str

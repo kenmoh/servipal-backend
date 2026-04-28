@@ -451,6 +451,8 @@ class MockSupabaseClient:
             "laundry_services": [],
             "fcm_tokens": [],
             "audit_logs": [],
+            "fraud_logs": [],
+            "transaction_intents": [],
         }
         self.auth = MockSupabaseAuth(self._data)
         self.table = MagicMock(side_effect=self._table)

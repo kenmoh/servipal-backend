@@ -19,7 +19,9 @@ def _resolve_ssl_cert_reqs(value: str) -> int:
 def _redis_ssl_options() -> dict | None:
     if not settings.CELERY_REDIS_USE_SSL:
         return None
-    return {"ssl_cert_reqs": _resolve_ssl_cert_reqs(settings.CELERY_REDIS_SSL_CERT_REQS)}
+    return {
+        "ssl_cert_reqs": _resolve_ssl_cert_reqs(settings.CELERY_REDIS_SSL_CERT_REQS)
+    }
 
 
 broker_url = settings.CELERY_BROKER_URL or "memory://"

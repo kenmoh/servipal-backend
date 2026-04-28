@@ -67,7 +67,9 @@ class Settings(BaseSettings):
 
     # CELERY (new queue pipeline; can run in parallel with Supabase queue)
     CELERY_ENABLED: bool = True
-    CELERY_BROKER_URL: Optional[str] = "amqp://servipal:change_me@rabbitmq:5672/servipal"
+    CELERY_BROKER_URL: Optional[str] = (
+        "amqp://servipal:change_me@rabbitmq:5672/servipal"
+    )
     CELERY_RESULT_BACKEND: Optional[str] = "rpc://"
     CELERY_TASK_QUEUE: str = "payment_order_creation"
     CELERY_RABBITMQ_QUEUE_TYPE: str = "quorum"
@@ -116,7 +118,10 @@ if settings.PAYMENT_QUEUE_BACKEND in {"dual", "celery"} and not settings.CELERY_
     )
     sys.exit(1)
 
-if settings.PAYMENT_QUEUE_BACKEND in {"dual", "celery"} and not settings.CELERY_BROKER_URL:
+if (
+    settings.PAYMENT_QUEUE_BACKEND in {"dual", "celery"}
+    and not settings.CELERY_BROKER_URL
+):
     print(
         (
             "ERROR: CELERY_BROKER_URL is required when "

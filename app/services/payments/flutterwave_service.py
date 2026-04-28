@@ -476,7 +476,7 @@ class FlutterwavePaymentsClient:
             # We use a short timeout because health checks shouldn't block
             async with httpx.AsyncClient(timeout=4.0) as client:
                 resp = await client.get(url, headers=self._headers())
-            
+
             # 200 OK means the API is up and running
             return resp.status_code == 200
         except Exception:

@@ -32,6 +32,7 @@ from app.routes import (
     reservation,
     beneficiary_router,
     payment_webhook_route,
+    fraud_admin_routes,
 )
 from app.config.logging import logger
 from app.utils.payment import (
@@ -299,3 +300,4 @@ app.include_router(product_order_mgt_admin_routes.router, include_in_schema=Fals
 app.include_router(restaurant_order_mgt_admin_routes.router, include_in_schema=False)
 app.include_router(admin_contacts_router.router, include_in_schema=False)
 app.include_router(cache_admin.router, include_in_schema=False)
+app.include_router(fraud_admin_routes.router, include_in_schema=False)

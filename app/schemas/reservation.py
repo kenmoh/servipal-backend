@@ -16,5 +16,3 @@ class CreateBooking(BaseModel):
     notes: str | None
     business_name: str
     day_of_week: str
-    
-   

@@ -225,7 +225,7 @@ async def resolve_dispute(
             )
     else:
         tx = (
-            await supabase.table("transfers")
+            await supabase.table("transactions")
             .select("id, amount, from_user_id, to_user_id")
             .eq("order_id", order["id"])
             .single()

@@ -48,11 +48,13 @@ async def get_charges(supabase: AsyncClient) -> dict:
 # 1. Initiate Delivery (Pay First — No Rider Yet)
 # ───────────────────────────────────────────────
 
+
 async def initiate_delivery_payment(
     data: PackageDeliveryCreate,
     sender_id: str,
     supabase: AsyncClient,
     customer_info: dict,
+    request: Request | None = None,
 ) -> dict:
     """
     Step 1: Calculate delivery fee
@@ -79,20 +81,17 @@ async def initiate_delivery_payment(
         # 4. BUILD PAYLOAD
         payload = {
             "sender_id": str(sender_id),
-
             "delivery": {
                 "pickup": data.pickup_location,
                 "dropoff": data.destination,
                 "receiver_phone": data.receiver_phone,
                 "notes": getattr(data, "notes", None),
             },
-
             "package": {
                 "name": data.package_name,
                 "weight": getattr(data, "weight", None),
                 "duration": data.duration,
             },
-
             "pricing": {
                 "distance_km": float(distance),
                 "base_fee": float(base_fee),
@@ -100,22 +99,52 @@ async def initiate_delivery_payment(
                 "delivery_fee": float(delivery_fee),
                 "total": float(delivery_fee),
             },
-
-            "meta": {
-                "created_at": datetime.datetime.now().isoformat()
-            }
+            "meta": {"created_at": datetime.datetime.now().isoformat()},
         }
 
+        # Fraud / risk evaluation before creating the intent (critical action).
+        try:
+            from app.schemas.fraud_schemas import FraudEvaluationEvent
+            from app.services.fraud import FraudService
+
+            fraud = FraudService(supabase)
+            assessment = await fraud.evaluate(
+                event=FraudEvaluationEvent.PAYMENT_INITIATION,
+                user_id=str(sender_id),
+                vendor_id=str(sender_id),
+                amount=delivery_fee,
+                tx_ref=tx_ref,
+                order_type="DELIVERY",
+                request=request,
+                details={
+                    "distance_km": float(distance),
+                    "pickup_location": data.pickup_location,
+                    "destination": data.destination,
+                },
+            )
+            await fraud.enforce(assessment=assessment)
+        except HTTPException:
+            raise
+        except Exception as e:
+            # Risk checks should never break payments initiation.
+            logger.error("fraud_eval_failed", event="PAYMENT_INITIATION", error=str(e))
+
         # 5. CREATE TRANSACTION INTENT
-        intent = await supabase.table("transaction_intents").insert({
-            "tx_ref": tx_ref,
-            "service_type": "DELIVERY",
-            "customer_id": str(sender_id),
-            "vendor_id": str(sender_id),
-            "amount": float(delivery_fee),
-            "currency": "NGN",
-            "payload": payload
-        }).execute()
+        intent = (
+            await supabase.table("transaction_intents")
+            .insert(
+                {
+                    "tx_ref": tx_ref,
+                    "service_type": "DELIVERY",
+                    "customer_id": str(sender_id),
+                    "vendor_id": str(sender_id),
+                    "amount": float(delivery_fee),
+                    "currency": "NGN",
+                    "payload": payload,
+                }
+            )
+            .execute()
+        )
 
         if not intent.data:
             raise HTTPException(500, "Failed to create delivery intent")
@@ -151,6 +180,8 @@ async def initiate_delivery_payment(
             status.HTTP_500_INTERNAL_SERVER_ERROR,
             f"Payment initiation failed: {str(e)}",
         )
+
+
 # async def initiate_delivery_payment(
 #     data: PackageDeliveryCreate,
 #     sender_id: str,
@@ -248,14 +279,12 @@ async def update_delivery_status(
         triggered_by=f"{triggered_by_user_id}",
     )
 
-    
-
     try:
         # Fetch delivery for validation
         delivery = await _get_delivery(tx_ref, supabase)
         delivery_id = f"{delivery['id']}"
 
-        logger.info('*'*100)
+        logger.info("*" * 100)
         logger.info(
             "validating_state_transition",
             current_status=delivery["delivery_status"],
@@ -264,7 +293,7 @@ async def update_delivery_status(
             new_status_type=type(data.new_status.value).__name__,
             delivery_id=delivery["id"],
         )
-        logger.info('*'*100)
+        logger.info("*" * 100)
 
         # Validate authorization
         _validate_authorization(
@@ -273,9 +302,11 @@ async def update_delivery_status(
             sender_id=delivery["sender_id"],
             rider_id=delivery["rider_id"] or None,
         )
-       
+
         # Validate state transition
-        _validate_state_transition(delivery["delivery_status"], data.new_status.value, delivery=delivery)
+        _validate_state_transition(
+            delivery["delivery_status"], data.new_status.value, delivery=delivery
+        )
 
         # Route to specific handler
         if data.new_status == DeliveryStatus.ASSIGNED:
@@ -296,7 +327,9 @@ async def update_delivery_status(
             result = await mark_delivered(delivery_id, triggered_by_user_id, supabase)
 
         elif data.new_status == DeliveryStatus.RETURNED:
-            result = await mark_returned(delivery_id, triggered_by_user_id, supabase, request)
+            result = await mark_returned(
+                delivery_id, triggered_by_user_id, supabase, request
+            )
 
         elif data.new_status == DeliveryStatus.COMPLETED:
             result = await complete_delivery(
@@ -355,7 +388,9 @@ async def _get_delivery(tx_ref: str, supabase: AsyncClient) -> dict:
     try:
         delivery_resp = (
             await supabase.table("delivery_orders")
-            .select("id, sender_id, rider_id, delivery_status, order_number, had_escrow")
+            .select(
+                "id, sender_id, rider_id, delivery_status, order_number, had_escrow"
+            )
             .eq("tx_ref", tx_ref)
             .maybe_single()
             .execute()
@@ -471,6 +506,7 @@ async def assign_rider(
             detail=f"Database error: {e.message or 'Something went wrong!'}",
         )
 
+
 async def assign_rider_to_order(
     order_id: str,
     data: AssignRiderRequest,
@@ -493,6 +529,7 @@ async def assign_rider_to_order(
         ),
         rider_name=payload.get("rider_name"),
     )
+
 
 # ============================================================
 # 2. ACCEPT DELIVERY
@@ -672,6 +709,54 @@ async def complete_delivery(
     - Pays dispatch
     - Frees up rider
     """
+    hold_payout = False
+    try:
+        from app.schemas.fraud_schemas import FraudEvaluationEvent, RiskAction
+        from app.services.fraud import FraudService
+        from app.services.fraud.risk_engine import utcnow
+
+        # Best-effort fetch timing and amount for behavioral checks (do not block if missing).
+        delivery_row = (
+            await supabase.table("delivery_orders")
+            .select("id, tx_ref, sender_id, dispatch_id, created_at, picked_up_at, delivered_at, amount")
+            .eq("id", str(delivery_id))
+            .single()
+            .execute()
+        ).data or {}
+
+        started_at = delivery_row.get("picked_up_at") or delivery_row.get("created_at")
+        completed_at = delivery_row.get("delivered_at") or utcnow().isoformat()
+        amount = delivery_row.get("amount")
+        tx_ref = delivery_row.get("tx_ref")
+
+        fraud = FraudService(supabase)
+        assessment = await fraud.evaluate(
+            event=FraudEvaluationEvent.SERVICE_COMPLETION,
+            user_id=str(sender_id),
+            vendor_id=delivery_row.get("dispatch_id"),
+            amount=amount,
+            tx_ref=tx_ref,
+            order_id=str(delivery_id),
+            order_type="DELIVERY_ORDER",
+            started_at=started_at,
+            completed_at=completed_at,
+            request=request,
+        )
+
+        # If the engine is confident enough to BLOCK, stop the completion.
+        if assessment.action == RiskAction.BLOCK:
+            await fraud.enforce(
+                assessment=assessment,
+                block_message="Completion blocked by risk controls",
+            )
+
+        # For REVIEW, allow completion but hold payout (escrow is released by RPC anyway).
+        hold_payout = assessment.action == RiskAction.REVIEW
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("fraud_eval_failed", event="SERVICE_COMPLETION", error=str(e))
+
     result = await supabase.rpc(
         "mark_delivery_as_completed",
         {
@@ -710,28 +795,35 @@ async def complete_delivery(
     )
 
     # Trigger payout to dispatch/vendor via Flutterwave transfer
-    try:
-        transfer_service = TransferService(
-            base_url=settings.FLUTTERWAVE_BASE_URL,
-            secret_key=settings.FLW_SECRET_KEY,
-        )
-        await transfer_service.create_transfer(
-            order_id=delivery_id,
-            payout_to="VENDOR",
-            supabase=supabase,
-        )
-        logger.info(
-            "delivery_transfer_initiated",
+    if hold_payout:
+        logger.warning(
+            "delivery_payout_held_for_review",
             delivery_id=delivery_id,
             dispatch_id=result_data.get("dispatch_id"),
         )
-    except Exception as transfer_err:
-        logger.error(
-            "delivery_transfer_failed",
-            delivery_id=delivery_id,
-            error=str(transfer_err),
-            exc_info=True,
-        )
+    else:
+        try:
+            transfer_service = TransferService(
+                base_url=settings.FLUTTERWAVE_BASE_URL,
+                secret_key=settings.FLW_SECRET_KEY,
+            )
+            await transfer_service.create_transfer(
+                order_id=delivery_id,
+                payout_to="VENDOR",
+                supabase=supabase,
+            )
+            logger.info(
+                "delivery_transfer_initiated",
+                delivery_id=delivery_id,
+                dispatch_id=result_data.get("dispatch_id"),
+            )
+        except Exception as transfer_err:
+            logger.error(
+                "delivery_transfer_failed",
+                delivery_id=delivery_id,
+                error=str(transfer_err),
+                exc_info=True,
+            )
 
     return result_data
 
@@ -739,6 +831,7 @@ async def complete_delivery(
 # ============================================================
 # 7. CANCEL DELIVERY (Money operation)
 # ============================================================
+
 
 async def cancel_delivery(
     delivery_id: str,
@@ -764,19 +857,17 @@ async def cancel_delivery(
 
         if not result.data:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, 
-                detail="Delivery order not found"
+                status_code=status.HTTP_404_NOT_FOUND, detail="Delivery order not found"
             )
 
         result_data = result.data
-        
+
         order_number = result_data.get("order_number", "N/A")
         sender_id = result_data.get("sender_id")
         rider_id = result_data.get("rider_id")
         dispatch_id = result_data.get("dispatch_id")
         cancelled_by = result_data.get("cancelled_by", "UNKNOWN")
         refund_amount = float(result_data.get("refund_amount", 0))
-        
 
         await _send_delivery_notifications(
             order_number=order_number,
@@ -808,10 +899,10 @@ async def cancel_delivery(
 
         return result_data
 
-    except APIError as e:  
+    except APIError as e:
         result_data = extract_rpc_data(e)
         if not result_data:
-            raise 
+            raise
 
         # raise HTTPException(
         #     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -940,19 +1031,31 @@ async def mark_returned(
     Used when delivery was cancelled after pickup and item needs to be returned.
     """
     try:
-        await supabase.table("delivery_orders").update({
-            "delivery_status": DeliveryStatus.RETURNED.value,
-        }).eq("id", delivery_id).execute()
+        await (
+            supabase.table("delivery_orders")
+            .update(
+                {
+                    "delivery_status": DeliveryStatus.RETURNED.value,
+                }
+            )
+            .eq("id", delivery_id)
+            .execute()
+        )
 
-        
-        result = await supabase.table("delivery_orders").select(
-            "id, sender_id, rider_id, dispatch_id, delivery_status, order_number"
-        ).eq("id", delivery_id).single().execute()
+        result = (
+            await supabase.table("delivery_orders")
+            .select(
+                "id, sender_id, rider_id, dispatch_id, delivery_status, order_number"
+            )
+            .eq("id", delivery_id)
+            .single()
+            .execute()
+        )
 
         if not result.data:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to mark as returned"
+                detail="Failed to mark as returned",
             )
 
         result_data = result.data
@@ -983,14 +1086,14 @@ async def mark_returned(
     except APIError as e:
         logger.error("mark_returned_error", error=str(e), exc_info=True)
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=e.message
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=e.message
         )
 
 
 # ============================================================
 # REUSABLE VALIDATORS
 # ============================================================
+
 
 # ============================================================
 # AUTHORIZATION VALIDATION
@@ -1012,7 +1115,7 @@ def _validate_authorization(
     - DELIVERED: Rider only
     - RETURNED: Rider only
     - COMPLETED: Sender only
-    - CANCELLED: Sender only 
+    - CANCELLED: Sender only
     - DECLINED: Rider only
     """
 
@@ -1138,10 +1241,9 @@ def _validate_authorization_old(
 # ============================================================
 # delivery_service.py
 
+
 def _validate_state_transition(
-    current_status: str, 
-    new_status: str,
-    delivery: Optional[dict] = None
+    current_status: str, new_status: str, delivery: Optional[dict] = None
 ) -> None:
     """
     Validate that the status transition is allowed.
@@ -1175,7 +1277,7 @@ def _validate_state_transition(
     # Normalize statuses
     current_status = str(current_status).upper().strip()
     new_status = str(new_status).upper().strip()
-    
+
     # Remove enum prefix if present
     if "." in current_status:
         current_status = current_status.split(".")[-1]
@@ -1190,7 +1292,7 @@ def _validate_state_transition(
         "ACCEPTED": ["PICKED_UP", "CANCELLED"],
         "PICKED_UP": ["IN_TRANSIT", "DELIVERED", "CANCELLED"],
         "IN_TRANSIT": ["DELIVERED", "CANCELLED"],
-        "DELIVERED": ["COMPLETED", "RETURNED", "CANCELLED"],  
+        "DELIVERED": ["COMPLETED", "RETURNED", "CANCELLED"],
         "CANCELLED": ["ASSIGNED", "RETURNED"],  # Can be returned after cancellation
         "RETURNED": ["COMPLETED"],  # After return, sender completes
         "COMPLETED": [],  # Terminal state
@@ -1204,7 +1306,7 @@ def _validate_state_transition(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Cannot transition from {current_status} to {new_status}. "
-                   f"Allowed transitions: {', '.join(allowed) if allowed else 'None (terminal state)'}",
+            f"Allowed transitions: {', '.join(allowed) if allowed else 'None (terminal state)'}",
         )
 
     # ============================================================
@@ -1214,36 +1316,35 @@ def _validate_state_transition(
         if delivery is None:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Delivery data required for reassignment validation"
+                detail="Delivery data required for reassignment validation",
             )
-        
+
         had_escrow = delivery.get("had_escrow", False)
-        
+
         if had_escrow:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Cannot reassign delivery after funds were held in escrow. "
-                       "The delivery has already progressed beyond the assignment stage. "
-                       "Please create a new order instead.",
+                "The delivery has already progressed beyond the assignment stage. "
+                "Please create a new order instead.",
             )
-        
+
         logger.info(
             "cancelled_delivery_reassignment_allowed",
             delivery_id=delivery.get("id"),
-            reason="No escrow was held - cancelled before rider accepted"
+            reason="No escrow was held - cancelled before rider accepted",
         )
 
+
 def _validate_state_transition_old(
-    current_status: str, 
-    new_status: str,
-    delivery: Optional[dict] = None
+    current_status: str, new_status: str, delivery: Optional[dict] = None
 ) -> None:
     """Validate delivery status transitions"""
 
     # Normalize statuses (handle enum values)
     current_status = str(current_status).upper().strip()
     new_status = str(new_status).upper().strip()
-    
+
     # Remove enum prefix if present (e.g., "DeliveryStatus.CANCELLED" → "CANCELLED")
     if "." in current_status:
         current_status = current_status.split(".")[-1]
@@ -1260,7 +1361,10 @@ def _validate_state_transition_old(
         "IN_TRANSIT": ["DELIVERED", "CANCELLED"],
         "DELIVERED": ["COMPLETED", "CANCELLED"],
         "COMPLETED": [],
-        "CANCELLED": ["ASSIGNED", "COMPLETED"],  # Allow reassignment/completion(When item in transit) after cancellation
+        "CANCELLED": [
+            "ASSIGNED",
+            "COMPLETED",
+        ],  # Allow reassignment/completion(When item in transit) after cancellation
     }
 
     allowed = ALLOWED_TRANSITIONS.get(current_status, [])
@@ -1275,11 +1379,11 @@ def _validate_state_transition_old(
             new_status_type=type(new_status).__name__,
             allowed=allowed,
         )
-        
+
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Cannot transition from {current_status} to {new_status}. "
-                   f"Allowed transitions: {', '.join(allowed) if allowed else 'None (terminal state)'}",
+            f"Allowed transitions: {', '.join(allowed) if allowed else 'None (terminal state)'}",
         )
 
     # Special validation: CANCELLED → ASSIGNED
@@ -1287,22 +1391,22 @@ def _validate_state_transition_old(
         if delivery is None:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Delivery data required for reassignment validation"
+                detail="Delivery data required for reassignment validation",
             )
-        
+
         had_escrow = delivery.get("had_escrow", False)
-        
+
         if had_escrow:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Cannot reassign delivery after funds were held in escrow. "
-                       "Please create a new order instead.",
+                "Please create a new order instead.",
             )
-        
+
         logger.info(
             "cancelled_delivery_reassignment_allowed",
             delivery_id=delivery.get("id"),
-            reason="No escrow was held - cancelled before rider picked up"
+            reason="No escrow was held - cancelled before rider picked up",
         )
 
 
@@ -1505,6 +1609,7 @@ async def _send_delivery_notifications(
                 supabase=supabase,
             )
 
+
 # def extract_rpc_data(e: APIError) -> dict | None:
 #     """Extract actual RPC response from APIError details when postgrest
 #     fails to parse a valid JSONB response."""
@@ -1525,6 +1630,7 @@ async def _send_delivery_notifications(
 
 #     except Exception:
 #         return None
+
 
 def extract_rpc_data(e: APIError) -> dict | None:
     """

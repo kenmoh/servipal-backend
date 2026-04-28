@@ -1,6 +1,6 @@
 # routers/internal.py
 
-from fastapi import APIRouter,  HTTPException, status, Depends
+from fastapi import APIRouter, HTTPException, status, Depends
 from decimal import Decimal
 from typing import Optional, Any
 from pydantic import BaseModel, Field
@@ -77,7 +77,6 @@ async def process_payment(
     paid_amount = data.paid_amount
     flw_ref = data.flw_ref
     payment_method = data.payment_method
-   
 
     logger.info(
         "process_payment_received",

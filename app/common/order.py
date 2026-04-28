@@ -983,7 +983,6 @@ async def _send_delivery_notifications(
             )
 
 
-
 # async def get_delivery_order_by_id_for_payout(order_id: str, payout_to: Literal['CUSTOMER', 'VENDOR'], supabase: AsyncClient):
 #     resp = await supabase.rpc('unified_order_funds', {
 #         'p_order_id': order_id,
@@ -992,5 +991,3 @@ async def _send_delivery_notifications(
 #     }).execute()
 
 #     return resp.data[0]
-
-

@@ -47,23 +47,27 @@ async def create_beneficiary(
 ) -> beneficiary_schema.CreateBeneficiaryResponse:
     """Create a new transfer beneficiary on Flutterwave and persist it locally."""
     response = await service.create_beneficiary(payload=data.model_dump())
-    print('='*100)
+    print("=" * 100)
     logger.info(f"Beneficiary created on Flutterwave with response: {response}")
-    print('='*100)
+    print("=" * 100)
     beneficiary_data = response.get("data", {})
     beneficiary_id = beneficiary_data.get("id")
 
     try:
-        await supabase.table("beneficiaries").insert(
-            {
-                "beneficiary_id": beneficiary_id,
-                "account_number": beneficiary_data.get("account_number"),
-                "bank_code": beneficiary_data.get("bank_code"),
-                "full_name": beneficiary_data.get("full_name"),
-                "created_at": beneficiary_data.get("created_at"),
-                "bank_name": beneficiary_data.get("bank_name"),
-            }
-        ).execute()
+        await (
+            supabase.table("beneficiaries")
+            .insert(
+                {
+                    "beneficiary_id": beneficiary_id,
+                    "account_number": beneficiary_data.get("account_number"),
+                    "bank_code": beneficiary_data.get("bank_code"),
+                    "full_name": beneficiary_data.get("full_name"),
+                    "created_at": beneficiary_data.get("created_at"),
+                    "bank_name": beneficiary_data.get("bank_name"),
+                }
+            )
+            .execute()
+        )
     except Exception as e:
         logger.error(f"Error persisting beneficiary: {e}")
         raise HTTPException(
@@ -105,7 +109,12 @@ async def delete_beneficiary(
     response = await service.delete_beneficiary(beneficiary_id=beneficiary_id)
 
     try:
-        await supabase.table("beneficiaries").delete().eq("beneficiary_id", beneficiary_id).execute()
+        await (
+            supabase.table("beneficiaries")
+            .delete()
+            .eq("beneficiary_id", beneficiary_id)
+            .execute()
+        )
     except Exception as e:
         logger.error(f"Error deleting beneficiary from db: {e}")
 
@@ -127,10 +136,15 @@ async def update_beneficiary(
         logger.error(f"Error deleting existing beneficiary on flutterwave: {e}")
         # Assuming we might want to continue to create a new one even if delete fails
         # but if it was not found on Flutterwave, the delete endpoint might return error
-    
+
     # Delete from local supabase
     try:
-        await supabase.table("beneficiaries").delete().eq("beneficiary_id", beneficiary_id).execute()
+        await (
+            supabase.table("beneficiaries")
+            .delete()
+            .eq("beneficiary_id", beneficiary_id)
+            .execute()
+        )
     except Exception as e:
         logger.error(f"Error deleting existing beneficiary locally: {e}")
 
@@ -141,16 +155,20 @@ async def update_beneficiary(
 
     # 3. Save new beneficiary locally
     try:
-        await supabase.table("beneficiaries").insert(
-            {
-                "beneficiary_id": new_beneficiary_id,
-                "account_number": beneficiary_data.get("account_number"),
-                "bank_code": beneficiary_data.get("bank_code"),
-                "full_name": beneficiary_data.get("full_name"),
-                "created_at": beneficiary_data.get("created_at"),
-                "bank_name": beneficiary_data.get("bank_name"),
-            }
-        ).execute()
+        await (
+            supabase.table("beneficiaries")
+            .insert(
+                {
+                    "beneficiary_id": new_beneficiary_id,
+                    "account_number": beneficiary_data.get("account_number"),
+                    "bank_code": beneficiary_data.get("bank_code"),
+                    "full_name": beneficiary_data.get("full_name"),
+                    "created_at": beneficiary_data.get("created_at"),
+                    "bank_name": beneficiary_data.get("bank_name"),
+                }
+            )
+            .execute()
+        )
     except Exception as e:
         logger.error(f"Error persisting new beneficiary: {e}")
         raise HTTPException(

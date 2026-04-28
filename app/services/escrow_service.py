@@ -570,6 +570,40 @@ async def release_escrow_funds(
     agreement_id: UUID, user_id: UUID, supabase: AsyncClient, request: Request = None
 ) -> dict:
     try:
+        # Fraud / risk evaluation before releasing escrow funds (critical action).
+        try:
+            from app.schemas.fraud_schemas import FraudEvaluationEvent
+            from app.services.fraud import FraudService
+
+            # Best-effort: fetch amount + initiator for signals.
+            agreement_row = (
+                await supabase.table("escrow_agreements")
+                .select("id, initiator_id, amount")
+                .eq("id", str(agreement_id))
+                .single()
+                .execute()
+            ).data or {}
+
+            fraud = FraudService(supabase)
+            assessment = await fraud.evaluate(
+                event=FraudEvaluationEvent.PAYOUT_REQUEST,
+                user_id=str(user_id),
+                vendor_id=str(agreement_row.get("initiator_id")) if agreement_row.get("initiator_id") else None,
+                amount=agreement_row.get("amount"),
+                order_id=str(agreement_id),
+                order_type="ESCROW_RELEASE",
+                request=request,
+            )
+            await fraud.enforce(
+                assessment=assessment,
+                block_message="Escrow release blocked by risk controls",
+                review_message="Escrow release requires manual review",
+            )
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error("fraud_eval_failed", event="PAYOUT_REQUEST", error=str(e), agreement_id=str(agreement_id))
+
         agreement = (
             await supabase.table("escrow_agreements")
             .select("status, amount, commission_rate, initiator_id")

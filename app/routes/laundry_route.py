@@ -69,6 +69,7 @@ async def get_laundry_vendor_detail(
 @router.post("/initiate-payment")
 async def initiate_laundry_payment_endpoint(
     data: LaundryOrderCreate,
+    request: Request = None,
     current_profile: dict = Depends(get_current_profile),
     customer_info: dict = Depends(get_customer_contact_info),
     supabase: AsyncClient = Depends(get_supabase_client),
@@ -88,7 +89,7 @@ async def initiate_laundry_payment_endpoint(
         current_profile["id"],
         customer_info,
         supabase,
-       
+        request,
     )
 
 

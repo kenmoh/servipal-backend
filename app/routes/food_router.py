@@ -186,6 +186,7 @@ async def get_my_menu(
 @router.post("/initiate-payment")
 async def initiate_food_payment_endpoint(
     data: CheckoutRequest,
+    request: Request = None,
     current_profile: dict = Depends(get_customer_contact_info),
     supabase: AsyncClient = Depends(get_supabase_client),
 ):
@@ -204,7 +205,7 @@ async def initiate_food_payment_endpoint(
         vendor_id=str(data.vendor_id),
     )
     return await food_service.initiate_food_payment(
-        data=data, current_profile=current_profile, supabase=supabase
+        data=data, current_profile=current_profile, supabase=supabase, request=request
     )
 
 

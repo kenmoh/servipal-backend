@@ -24,8 +24,18 @@ def test_normalize_payment_payload_success():
     [
         {"paid_amount": "1000", "flw_ref": "x", "payment_method": "CARD"},
         {"tx_ref": "FOOD-2", "flw_ref": "x", "payment_method": "CARD"},
-        {"tx_ref": "FOOD-2", "paid_amount": "0", "flw_ref": "x", "payment_method": "CARD"},
-        {"tx_ref": "FOOD-2", "paid_amount": "abc", "flw_ref": "x", "payment_method": "CARD"},
+        {
+            "tx_ref": "FOOD-2",
+            "paid_amount": "0",
+            "flw_ref": "x",
+            "payment_method": "CARD",
+        },
+        {
+            "tx_ref": "FOOD-2",
+            "paid_amount": "abc",
+            "flw_ref": "x",
+            "payment_method": "CARD",
+        },
     ],
 )
 def test_normalize_payment_payload_validation_errors(payload):

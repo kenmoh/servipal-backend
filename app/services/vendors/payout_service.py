@@ -12,14 +12,15 @@ from app.schemas.beneficiary_schema import PayoutCreate, PayoutData
 from app.config.logging import logger
 
 
-async def get_delivery_order_by_id_for_payout(order_id: str, payout_to: Literal['CUSTOMER', 'VENDOR'], supabase: AsyncClient):
-    resp = await supabase.rpc('unified_order_funds', {
-        'p_order_id': order_id,
-        'p_payout_to': payout_to
-
-    }).execute()
+async def get_delivery_order_by_id_for_payout(
+    order_id: str, payout_to: Literal["CUSTOMER", "VENDOR"], supabase: AsyncClient
+):
+    resp = await supabase.rpc(
+        "unified_order_funds", {"p_order_id": order_id, "p_payout_to": payout_to}
+    ).execute()
 
     return resp.data[0]
+
 
 TRANSFER_URL = "https://api.flutterwave.com/v3/transfers"
 
@@ -50,9 +51,6 @@ class BeneficiaryService:
     def _beneficiary_data(self, payload: dict[str, Any]) -> dict[str, Any]:
         return payload
 
-
-
-
     async def create_beneficiary(self, payload) -> dict[str, Any]:
         body = self._beneficiary_data(payload=payload)
         url = f"{self._base_url}/beneficiaries"
@@ -65,13 +63,17 @@ class BeneficiaryService:
                 async with httpx.AsyncClient(timeout=self._timeout) as client:
                     resp = await client.post(url, headers=self._headers(), json=body)
 
-                    logger.info(f"Attempt {attempt}: Flutterwave response status: {resp.status_code}, body: {resp.text}")
+                    logger.info(
+                        f"Attempt {attempt}: Flutterwave response status: {resp.status_code}, body: {resp.text}"
+                    )
 
                 data = resp.json()
 
                 # Retry only on server errors
                 if resp.status_code >= 500:
-                    logger.warning(f"Server error on attempt {attempt}: {resp.status_code}. Retrying...")
+                    logger.warning(
+                        f"Server error on attempt {attempt}: {resp.status_code}. Retrying..."
+                    )
                     raise httpx.HTTPStatusError(
                         f"Server error: {resp.status_code}",
                         request=resp.request,
@@ -80,7 +82,9 @@ class BeneficiaryService:
 
                 # Logical failure → don't retry
                 if resp.status_code != 200 or data.get("status") != "success":
-                    logger.error(f"Logical failure on attempt {attempt}: {resp.status_code}. Response: {data}")
+                    logger.error(
+                        f"Logical failure on attempt {attempt}: {resp.status_code}. Response: {data}"
+                    )
                     raise HTTPException(
                         status_code=status.HTTP_502_BAD_GATEWAY,
                         detail={
@@ -91,7 +95,11 @@ class BeneficiaryService:
 
                 return data
 
-            except (httpx.TimeoutException, httpx.RequestError, httpx.HTTPStatusError) as e:
+            except (
+                httpx.TimeoutException,
+                httpx.RequestError,
+                httpx.HTTPStatusError,
+            ) as e:
                 if attempt == max_retries:
                     # Final failure
                     raise HTTPException(
@@ -214,11 +222,9 @@ class BeneficiaryService:
         return data
 
 
-
-
 class TransferService:
     def __init__(
-            self, *, base_url: str, secret_key: str, timeout_in_sec: float = 6.0
+        self, *, base_url: str, secret_key: str, timeout_in_sec: float = 6.0
     ) -> None:
         self._base_url = base_url or settings.FLUTTERWAVE_BASE_URL
         self._secret_key = secret_key or settings.FLW_SECRET_KEY
@@ -245,7 +251,9 @@ class TransferService:
 
     # Get transfer fee
     async def get_bank_transfer_fee(self, amount: Decimal):
-        url = f'{self._base_url}/transfers/fee?amount={amount}&currency=NGN&type=account'
+        url = (
+            f"{self._base_url}/transfers/fee?amount={amount}&currency=NGN&type=account"
+        )
         try:
             async with httpx.AsyncClient(timeout=self._timeout_in_sec) as client:
                 resp = await client.get(url, headers=self._headers())
@@ -274,30 +282,65 @@ class TransferService:
                     "response": data,
                 },
             )
-        transfer_fer = data.get('data')[0].get('fee')
+        transfer_fer = data.get("data")[0].get("fee")
         return transfer_fer
 
     # Create transafer
-    async def create_transfer(self, order_id: str, payout_to: str, supabase: AsyncClient) -> dict[str, Any]:
+    async def create_transfer(
+        self, order_id: str, payout_to: str, supabase: AsyncClient
+    ) -> dict[str, Any]:
 
-        vendor_amount = Decimal('0')
-        order = await get_delivery_order_by_id_for_payout(order_id=order_id, payout_to=payout_to, supabase=supabase)
-        beneficiary = order['beneficiary_id']
-        tx_ref = order['tx_ref']
-        amount_due_vendor = order['amount_due_vendor'] or order['amount_due_dispatch'] or order['vendor_payout']
-        transfer_fee = await self.get_bank_transfer_fee(f'{amount_due_vendor}')
+        vendor_amount = Decimal("0")
+        order = await get_delivery_order_by_id_for_payout(
+            order_id=order_id, payout_to=payout_to, supabase=supabase
+        )
+
+        # Fraud / risk evaluation before initiating vendor payout (critical action).
+        try:
+            from app.schemas.fraud_schemas import FraudEvaluationEvent
+            from app.services.fraud import FraudService
+
+            fraud = FraudService(supabase)
+            assessment = await fraud.evaluate(
+                event=FraudEvaluationEvent.PAYOUT_REQUEST,
+                user_id=order.get("vendor_id") or order.get("dispatch_id") or order.get("beneficiary_user_id"),
+                vendor_id=None,
+                amount=order.get("amount_due_vendor") or order.get("amount_due_dispatch") or order.get("vendor_payout"),
+                tx_ref=order.get("tx_ref"),
+                order_id=str(order_id),
+                order_type="DELIVERY_PAYOUT",
+                details={"payout_to": payout_to},
+            )
+            await fraud.enforce(
+                assessment=assessment,
+                block_message="Payout blocked by risk controls",
+                review_message="Payout requires manual review",
+            )
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error("fraud_eval_failed", event="PAYOUT_REQUEST", error=str(e), order_id=str(order_id))
+
+        beneficiary = order["beneficiary_id"]
+        tx_ref = order["tx_ref"]
+        amount_due_vendor = (
+            order["amount_due_vendor"]
+            or order["amount_due_dispatch"]
+            or order["vendor_payout"]
+        )
+        transfer_fee = await self.get_bank_transfer_fee(f"{amount_due_vendor}")
 
         vendor_amount = Decimal(amount_due_vendor) - Decimal(transfer_fee)
 
-        service = tx_ref.split('_')[0]
+        service = tx_ref.split("_")[0]
 
         transfer_data = PayoutCreate(
-            amount=f'{vendor_amount}',
-            currency='NGN',
+            amount=f"{vendor_amount}",
+            currency="NGN",
             beneficiary=beneficiary,
             reference=tx_ref,
-            debit_currency='NGN',
-            narration=f'Form for {service} service.'
+            debit_currency="NGN",
+            narration=f"Form for {service} service.",
         )
 
         body = self._transfer_payload(payload=transfer_data.model_dump())
@@ -332,29 +375,32 @@ class TransferService:
                 },
             )
 
-        response_data = data['data']
+        response_data = data["data"]
         payout_response_data = PayoutData(
-                id=response_data['id'],
-                account_number=response_data['account_number'],
-                bank_code=response_data['bank_code'],
-                full_name=response_data['full_name'],
-                created_at=response_data['created_at'],
-                currency=response_data['currency'],
-                debit_currency=response_data['debit_currency'],
-                amount=response_data['amount'],
-                fee=response_data['fee'],
-                status=response_data['status'],
-                reference=response_data['reference'],
-                meta=response_data['meta'],
-                narration=response_data['narrations'],
-                complete_message=response_data['complete_message'],
-                requires_approval=response_data['requires_approval'],
-                is_approved=response_data['is_approved'],
-                bank_name=response_data['bank_name']
+            id=response_data["id"],
+            account_number=response_data["account_number"],
+            bank_code=response_data["bank_code"],
+            full_name=response_data["full_name"],
+            created_at=response_data["created_at"],
+            currency=response_data["currency"],
+            debit_currency=response_data["debit_currency"],
+            amount=response_data["amount"],
+            fee=response_data["fee"],
+            status=response_data["status"],
+            reference=response_data["reference"],
+            meta=response_data["meta"],
+            narration=response_data["narrations"],
+            complete_message=response_data["complete_message"],
+            requires_approval=response_data["requires_approval"],
+            is_approved=response_data["is_approved"],
+            bank_name=response_data["bank_name"],
         )
-        await supabase.table('payouts').insert(**payout_response_data.model_dump()).execute()
+        await (
+            supabase.table("payouts")
+            .insert(**payout_response_data.model_dump())
+            .execute()
+        )
         return data
-
 
     # Retry transfer
     async def retry_transfer(self, transfer_id: int) -> dict[str, Any]:
@@ -469,7 +515,10 @@ class TransferService:
         if resp.status_code != 200 or data.get("status") != "success":
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
-                detail={"message": f"Failed to fetch transfer {transfer_id}", "response": data},
+                detail={
+                    "message": f"Failed to fetch transfer {transfer_id}",
+                    "response": data,
+                },
             )
 
         return data

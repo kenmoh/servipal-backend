@@ -6,7 +6,9 @@ from app.config.config import settings
 from app.config.logging import logger
 from app.database.supabase import get_supabase_admin_client
 from app.services.payment_idempotency import check_payment_already_processed
-from app.services.payment_queue_dispatcher import enqueue_successful_payment_for_processing
+from app.services.payment_queue_dispatcher import (
+    enqueue_successful_payment_for_processing,
+)
 from app.utils.webhook_validation import WebhookValidator
 
 
@@ -27,7 +29,9 @@ async def handle_flutterwave_webhook(
     - Checks idempotency and queues processing in configured backend(s).
     """
     secret_hash = settings.FLW_SECRET_HASH
-    signature = request.headers.get("verif-hash") or request.headers.get("x-flutterwave-signature")
+    signature = request.headers.get("verif-hash") or request.headers.get(
+        "x-flutterwave-signature"
+    )
 
     is_valid = WebhookValidator.validate_flutterwave_signature(
         signature_header=signature or "",
@@ -54,8 +58,8 @@ async def handle_flutterwave_webhook(
         )
         return PaymentWebhookResponse(status="error", message="Invalid JSON payload")
 
-    webhook_event = payload.get("event") or payload.get("event.type") or payload.get(
-        "type"
+    webhook_event = (
+        payload.get("event") or payload.get("event.type") or payload.get("type")
     )
     data = payload.get("data") if payload.get("data") else payload
 
@@ -140,4 +144,3 @@ async def handle_flutterwave_webhook(
         tx_ref=tx_ref,
         message="Payment processing queued",
     )
-

@@ -17,7 +17,7 @@ async def check_payment_already_processed(
     probes = (
         ("transaction_intents", "status"),
         ("transactions", "id"),
-        ("transfers", "id"),
+        # ("transfers", "id"),
     )
 
     for table, column in probes:

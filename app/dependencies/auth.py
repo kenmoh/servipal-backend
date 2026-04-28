@@ -159,7 +159,6 @@ async def get_customer_contact_info(
             "beneficiary_id": current_profile.get("beneficiary_id") or None,
         }
 
-
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

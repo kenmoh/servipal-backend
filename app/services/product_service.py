@@ -9,7 +9,7 @@ from app.schemas.product_schemas import (
     UpdateOrderStatusRequest,
     ProductVendorMarkReadyResponse,
 )
-from fastapi import HTTPException, status
+from fastapi import HTTPException, status, Request
 from supabase import AsyncClient
 from decimal import Decimal
 from typing import List
@@ -164,6 +164,7 @@ async def initiate_product_payment(
     data: ProductOrderCreate,
     customer_info: dict,
     supabase: AsyncClient,
+    request: "Request | None" = None,
 ) -> dict:
 
     try:
@@ -221,16 +222,44 @@ async def initiate_product_payment(
             },
         }
 
+        # Fraud / risk evaluation before persisting the intent (critical action).
+        try:
+            from app.schemas.fraud_schemas import FraudEvaluationEvent
+            from app.services.fraud import FraudService
+
+            fraud = FraudService(supabase)
+            assessment = await fraud.evaluate(
+                event=FraudEvaluationEvent.PAYMENT_INITIATION,
+                user_id=str(customer_info.get("id")),
+                vendor_id=str(item.get("vendor_id")),
+                amount=grand_total,
+                tx_ref=tx_ref,
+                order_type="PRODUCT",
+                request=request,
+                details={"delivery_option": data.delivery_option},
+            )
+            await fraud.enforce(assessment=assessment)
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error("fraud_eval_failed", event="PAYMENT_INITIATION", error=str(e))
+
         #  5. SAVE INTENT
-        await supabase.table("transaction_intents").insert({
-            "tx_ref": tx_ref,
-            "customer_id": str(customer_info.get("id")),
-            "amount": str(grand_total),
-            "currency": "NGN",
-            "service_type": "PRODUCT",
-            "status": "PENDING",
-            "payload": payload,
-        }).execute()
+        await (
+            supabase.table("transaction_intents")
+            .insert(
+                {
+                    "tx_ref": tx_ref,
+                    "customer_id": str(customer_info.get("id")),
+                    "amount": str(grand_total),
+                    "currency": "NGN",
+                    "service_type": "PRODUCT",
+                    "status": "PENDING",
+                    "payload": payload,
+                }
+            )
+            .execute()
+        )
 
         #  6. Return payment config
         return PaymentInitializationResponse(
@@ -253,7 +282,8 @@ async def initiate_product_payment(
 
     except Exception as e:
         raise HTTPException(500, f"Product initiation failed: {str(e)}")
-    
+
+
 # async def initiate_product_payment(
 #     data: ProductOrderCreate, customer_info: dict, supabase: AsyncClient
 # ) -> PaymentInitializationResponse:
@@ -354,7 +384,7 @@ async def customer_confirm_product_order(
             raise HTTPException(400, "Order not ready for confirmation")
 
         tx = (
-            await supabase.table("transfers")
+            await supabase.table("transactions")
             .select("id, amount, to_user_id, status")
             .eq("order_id", str(order_id))
             .single()
@@ -383,7 +413,7 @@ async def customer_confirm_product_order(
 
         # Update transaction
         await (
-            supabase.table("transfers")
+            supabase.table("transactions")
             .update({"status": "RELEASED"})
             .eq("id", tx.data["id"])
             .execute()

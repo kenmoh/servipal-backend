@@ -42,7 +42,9 @@ class _FakeSupabase:
 async def test_enqueue_successful_payment_dual_mode(monkeypatch):
     supabase = _FakeSupabase(queue_msg_id=42)
 
-    monkeypatch.setattr(payment_queue_dispatcher.settings, "PAYMENT_QUEUE_BACKEND", "dual")
+    monkeypatch.setattr(
+        payment_queue_dispatcher.settings, "PAYMENT_QUEUE_BACKEND", "dual"
+    )
     monkeypatch.setattr(
         payment_queue_dispatcher,
         "enqueue_payment_order_creation_task",
@@ -70,7 +72,9 @@ async def test_enqueue_successful_payment_dual_mode(monkeypatch):
 async def test_enqueue_successful_payment_dual_mode_partial_failure(monkeypatch):
     supabase = _FakeSupabase(queue_msg_id=77)
 
-    monkeypatch.setattr(payment_queue_dispatcher.settings, "PAYMENT_QUEUE_BACKEND", "dual")
+    monkeypatch.setattr(
+        payment_queue_dispatcher.settings, "PAYMENT_QUEUE_BACKEND", "dual"
+    )
 
     def _raise_celery_error(_message):
         raise RuntimeError("celery down")
@@ -99,7 +103,9 @@ async def test_enqueue_successful_payment_dual_mode_partial_failure(monkeypatch)
 async def test_enqueue_successful_payment_celery_only_failure_raises(monkeypatch):
     supabase = _FakeSupabase(queue_msg_id=5)
 
-    monkeypatch.setattr(payment_queue_dispatcher.settings, "PAYMENT_QUEUE_BACKEND", "celery")
+    monkeypatch.setattr(
+        payment_queue_dispatcher.settings, "PAYMENT_QUEUE_BACKEND", "celery"
+    )
 
     def _raise_celery_error(_message):
         raise RuntimeError("celery down")

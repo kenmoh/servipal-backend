@@ -428,6 +428,39 @@ async def withdraw_all_balance(
     tx_id = None
 
     try:
+        # Fraud / risk evaluation before withdrawal initiation (critical action).
+        try:
+            from app.schemas.fraud_schemas import FraudEvaluationEvent
+            from app.services.fraud import FraudService
+
+            # Best-effort current balance as the amount signal (withdraw-all).
+            wallet_row = (
+                await supabase.table("wallets")
+                .select("balance")
+                .eq("user_id", str(user_id))
+                .single()
+                .execute()
+            ).data or {}
+            current_balance = wallet_row.get("balance")
+
+            fraud = FraudService(supabase)
+            assessment = await fraud.evaluate(
+                event=FraudEvaluationEvent.PAYOUT_REQUEST,
+                user_id=str(user_id),
+                amount=current_balance,
+                order_type="WALLET_WITHDRAWAL",
+                request=request,
+            )
+            await fraud.enforce(
+                assessment=assessment,
+                block_message="Withdrawal blocked by risk controls",
+                review_message="Withdrawal requires manual review",
+            )
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error("fraud_eval_failed", event="PAYOUT_REQUEST", error=str(e))
+
         # 1. Withdrawal fee (flat ₦100)
         fee = Decimal("100.00")
 

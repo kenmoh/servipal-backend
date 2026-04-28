@@ -37,6 +37,7 @@ async def initiate_delivery_payment(
     description: Optional[str] = Form(...),
     delivery_type: DeliveryType = Form("STANDARD"),
     package_image: UploadFile = File(...),
+    request: Request = None,
     current_profile: dict = Depends(get_current_profile),
     supabase=Depends(get_supabase_admin_client),
     customer_info: dict = Depends(get_customer_contact_info),
@@ -84,7 +85,7 @@ async def initiate_delivery_payment(
     )
 
     return await delivery_service.initiate_delivery_payment(
-        data, current_profile["id"], supabase, customer_info
+        data, current_profile["id"], supabase, customer_info, request
     )
 
 

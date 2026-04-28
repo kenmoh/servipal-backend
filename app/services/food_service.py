@@ -17,6 +17,7 @@ from datetime import datetime
 from app.services.notification_service import notify_user
 from app.services.payments.flutterwave_service import FlutterwavePaymentsClient
 from app.services.vendors.payout_service import TransferService
+from app.config.config import settings
 
 
 # ───────────────────────────────────────────────
@@ -122,7 +123,7 @@ async def vendor_food_order_action(
 
             # Refund escrow → customer balance
             tx = (
-                await supabase.table("transfers")
+                await supabase.table("transactions")
                 .select("id, amount, from_user_id")
                 .eq("order_id", str(order_id))
                 .single()
@@ -151,7 +152,7 @@ async def vendor_food_order_action(
             ).execute()
 
             await (
-                supabase.table("transfers")
+                supabase.table("transactions")
                 .update({"status": "REFUNDED"})
                 .eq("id", tx.data["id"])
                 .execute()
@@ -297,7 +298,7 @@ async def customer_confirm_food_order(
             raise HTTPException(400, "Order not ready for confirmation yet")
 
         tx = (
-            await supabase.table("transfers")
+            await supabase.table("transactions")
             .select("id, amount, to_user_id, status")
             .eq("order_id", str(order_id))
             .single()
@@ -324,7 +325,7 @@ async def customer_confirm_food_order(
         ).execute()
 
         await (
-            supabase.table("transfers")
+            supabase.table("transactions")
             .update({"status": "RELEASED"})
             .eq("id", tx.data["id"])
             .execute()
@@ -609,7 +610,10 @@ async def delete_food_item(
 
 
 async def initiate_food_payment(
-    data: CheckoutRequest, supabase: AsyncClient, current_profile: dict
+    data: CheckoutRequest,
+    supabase: AsyncClient,
+    current_profile: dict,
+    request: "Request | None" = None,
 ) -> dict:
     """
     Validate items, calculate total, save pending state in Redis,
@@ -711,41 +715,64 @@ async def initiate_food_payment(
         # 4. Generate tx_ref
         tx_ref = f"FOOD-{uuid.uuid4().hex[:32].upper()}"
 
-
         payload = {
             "items": [item.model_dump(mode="json") for item in data.items],
-
             "pricing": {
                 "subtotal": str(Decimal(subtotal)),
                 "delivery_fee": str(Decimal(delivery_fee)),
                 "grand_total": str(Decimal(grand_total)),
             },
-
             "delivery": {
                 "option": data.delivery_option,
                 "address": data.delivery_address,
             },
-
             "instructions": data.instructions,
-
             "customer": {
                 "phone": current_profile.get("phone_number"),
-                'full_name': current_profile.get("full_name") or "N/A",
+                "full_name": current_profile.get("full_name") or "N/A",
                 "email": current_profile.get("email"),
-            }
+            },
         }
 
         tx_ref = f"FOOD-{uuid.uuid4().hex[:32].upper()}"
 
-        intent = await supabase.table("transaction_intents").insert({
-            "tx_ref": tx_ref,
-            "service_type": "FOOD",
-            "customer_id": str(current_profile.get("id")),
-            "vendor_id": str(data.vendor_id),
-            "amount": str(grand_total),
-            "currency": "NGN",
-            "payload": payload
-        }).execute()
+        # Fraud / risk evaluation before creating the intent (critical action).
+        try:
+            from app.schemas.fraud_schemas import FraudEvaluationEvent
+            from app.services.fraud import FraudService
+
+            fraud = FraudService(supabase)
+            assessment = await fraud.evaluate(
+                event=FraudEvaluationEvent.PAYMENT_INITIATION,
+                user_id=str(current_profile.get("id")),
+                vendor_id=str(data.vendor_id),
+                amount=grand_total,
+                tx_ref=tx_ref,
+                order_type="FOOD",
+                request=request,
+                details={"delivery_option": data.delivery_option},
+            )
+            await fraud.enforce(assessment=assessment)
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error("fraud_eval_failed", event="PAYMENT_INITIATION", error=str(e))
+
+        intent = (
+            await supabase.table("transaction_intents")
+            .insert(
+                {
+                    "tx_ref": tx_ref,
+                    "service_type": "FOOD",
+                    "customer_id": str(current_profile.get("id")),
+                    "vendor_id": str(data.vendor_id),
+                    "amount": str(grand_total),
+                    "currency": "NGN",
+                    "payload": payload,
+                }
+            )
+            .execute()
+        )
 
         if not intent.data:
             raise HTTPException(500, "Failed to create transaction intent")

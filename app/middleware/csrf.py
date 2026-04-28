@@ -28,7 +28,7 @@ class CSRFProtectionMiddleware(BaseHTTPMiddleware):
     # Paths exempt from CSRF protection (e.g., webhooks, public endpoints)
     EXEMPT_PATHS = {
         "/api/v1/payments/webhook",  # Canonical Flutterwave webhook endpoint
-        "/api/v1/payment/webhook",   # Backwards-compatible alias
+        "/api/v1/payment/webhook",  # Backwards-compatible alias
         "/api/v1/health",
         "/",
     }

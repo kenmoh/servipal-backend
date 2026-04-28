@@ -1,124 +1,153 @@
-services:
-  # --- BROKER ---
-  rabbitmq:
-    image: rabbitmq:3.13-management-alpine
-    hostname: rabbitmq
-    restart: unless-stopped
-    environment:
-      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:-servipal}
-      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:-change_me}
-      RABBITMQ_DEFAULT_VHOST: ${RABBITMQ_DEFAULT_VHOST:-servipal}
-      RABBITMQ_ERLANG_COOKIE: ${RABBITMQ_ERLANG_COOKIE:-replace_with_at_least_32_random_chars}
-    ports:
-      - "${RABBITMQ_MANAGEMENT_BIND_IP:-127.0.0.1}:${RABBITMQ_MANAGEMENT_PORT:-15672}:15672"
-      - "5672:5672"
-    volumes:
-      - rabbitmq_data:/var/lib/rabbitmq
-    networks:
-      - app_net
-    security_opt:
-      - no-new-privileges:true
-    cap_drop:
-      - ALL
-    healthcheck:
-      test: ["CMD-SHELL", "rabbitmq-diagnostics -q ping"]
-      interval: 10s
-      timeout: 10s
-      retries: 12
-      start_period: 20s
 
-  # --- FASTAPI APP ---
+
+version: "3.8"
+
+services:
   api:
     build:
       context: .
+    container_name: fastapi-api
     restart: unless-stopped
     ports:
-      - "8000:8080"
+      - "8000:8000"
     env_file:
       - .env
     environment:
-      - PAYMENT_QUEUE_BACKEND=celery
-      - CELERY_ENABLED=true
-      - CELERY_BROKER_URL=amqp://${RABBITMQ_DEFAULT_USER:-servipal}:${RABBITMQ_DEFAULT_PASS:-change_me}@rabbitmq:5672/${RABBITMQ_DEFAULT_VHOST:-servipal}
-      - CELERY_RESULT_BACKEND=rpc://
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
+      CELERY_BROKER_URL: amqp://${RABBITMQ_DEFAULT_USER:-servipal}:${RABBITMQ_DEFAULT_PASS}@rabbitmq:5672/${RABBITMQ_DEFAULT_VHOST:-servipal}
+      CELERY_RESULT_BACKEND: rpc://
     networks:
       - app_net
-
-  # --- CELERY WORKER ---
-  celery-worker:
-    build:
-      context: .
-    restart: unless-stopped
-    command: >
-      celery -A app.celery_queue.celery_app:celery_app worker
-      --loglevel=${CELERY_LOG_LEVEL:-INFO}
-      --queues=${CELERY_TASK_QUEUE:-payment_order_creation}
-      --concurrency=${CELERY_WORKER_CONCURRENCY:-4}
-      --hostname=payments@%h
-    env_file:
-      - .env
-    environment:
-      - PAYMENT_QUEUE_BACKEND=celery
-      - CELERY_ENABLED=true
-      - CELERY_BROKER_URL=amqp://${RABBITMQ_DEFAULT_USER:-servipal}:${RABBITMQ_DEFAULT_PASS:-change_me}@rabbitmq:5672/${RABBITMQ_DEFAULT_VHOST:-servipal}
-      - CELERY_RESULT_BACKEND=rpc://
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-    networks:
-      - app_net
-    security_opt:
-      - no-new-privileges:true
-    cap_drop:
-      - ALL
-    read_only: true
-    tmpfs:
-      - /tmp
-    healthcheck:
-      test: ["CMD-SHELL", "python -c \"from app.celery_queue.celery_app import celery_app; conn = celery_app.connection_for_read(); conn.ensure_connection(max_retries=1); print('ok')\""]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 30s
-
-  # --- DASHBOARD PROXY ---
-  rabbitmq-dashboard-proxy:
-    image: nginx:1.27-alpine
-    restart: unless-stopped
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-    ports:
-      - "${RABBITMQ_PROXY_BIND_IP:-0.0.0.0}:${RABBITMQ_PROXY_HTTP_PORT:-80}:80"
-      - "${RABBITMQ_PROXY_BIND_IP:-0.0.0.0}:${RABBITMQ_PROXY_HTTPS_PORT:-443}:443"
-    volumes:
-      - ${RABBITMQ_PROXY_NGINX_CONF_PATH:-./deploy/rabbitmq-proxy/nginx.conf}:/etc/nginx/conf.d/default.conf:ro
-      - ${RABBITMQ_PROXY_CERTS_DIR:-./deploy/rabbitmq-proxy/certs}:/etc/nginx/certs:ro
-      - ${RABBITMQ_PROXY_AUTH_DIR:-./deploy/rabbitmq-proxy/auth}:/etc/nginx/auth:ro
-    networks:
-      - app_net
-    security_opt:
-      - no-new-privileges:true
-    cap_drop:
-      - ALL
-    read_only: true
-    tmpfs:
-      - /tmp
-      - /var/cache/nginx
-      - /var/run
-    healthcheck:
-      test: ["CMD-SHELL", "wget --spider --quiet http://127.0.0.1 || exit 1"]
-      interval: 15s
-      timeout: 5s
-      retries: 8
-      start_period: 15s
-
-volumes:
-  rabbitmq_data:
 
 networks:
   app_net:
-    driver: bridge
+    driver: bridge 
+
+# services:
+#   # --- BROKER ---
+#   rabbitmq:
+#     image: rabbitmq:3.13-management-alpine
+#     hostname: rabbitmq
+#     restart: unless-stopped
+#     environment:
+#       RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:-servipal}
+#       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:-change_me}
+#       RABBITMQ_DEFAULT_VHOST: ${RABBITMQ_DEFAULT_VHOST:-servipal}
+#       RABBITMQ_ERLANG_COOKIE: ${RABBITMQ_ERLANG_COOKIE:-replace_with_at_least_32_random_chars}
+#     ports:
+#       - "${RABBITMQ_MANAGEMENT_BIND_IP:-127.0.0.1}:${RABBITMQ_MANAGEMENT_PORT:-15672}:15672"
+#       - "5672:5672"
+#     volumes:
+#       - rabbitmq_data:/var/lib/rabbitmq
+#     networks:
+#       - app_net
+#     security_opt:
+#       - no-new-privileges:true
+#     cap_drop:
+#       - ALL
+#     healthcheck:
+#       test: ["CMD-SHELL", "rabbitmq-diagnostics -q ping"]
+#       interval: 10s
+#       timeout: 10s
+#       retries: 12
+#       start_period: 20s
+
+#   # --- FASTAPI APP ---
+#   api:
+#     build:
+#       context: .
+#     restart: unless-stopped
+#     ports:
+#       - "8000:8080"
+#     env_file:
+#       - .env
+#     environment:
+#       - PAYMENT_QUEUE_BACKEND=celery
+#       - CELERY_ENABLED=true
+#       - CELERY_BROKER_URL=amqp://${RABBITMQ_DEFAULT_USER:-servipal}:${RABBITMQ_DEFAULT_PASS:-change_me}@rabbitmq:5672/${RABBITMQ_DEFAULT_VHOST:-servipal}
+#       - CELERY_RESULT_BACKEND=rpc://
+#     depends_on:
+#       rabbitmq:
+#         condition: service_healthy
+#     networks:
+#       - app_net
+
+#   # --- CELERY WORKER ---
+#   celery-worker:
+#     build:
+#       context: .
+#     restart: unless-stopped
+#     command: >
+#       celery -A app.celery_queue.celery_app:celery_app worker
+#       --loglevel=${CELERY_LOG_LEVEL:-INFO}
+#       --queues=${CELERY_TASK_QUEUE:-payment_order_creation}
+#       --concurrency=${CELERY_WORKER_CONCURRENCY:-4}
+#       --hostname=payments@%h
+#     env_file:
+#       - .env
+#     environment:
+#       - PAYMENT_QUEUE_BACKEND=celery
+#       - CELERY_ENABLED=true
+#       - CELERY_BROKER_URL=amqp://${RABBITMQ_DEFAULT_USER:-servipal}:${RABBITMQ_DEFAULT_PASS:-change_me}@rabbitmq:5672/${RABBITMQ_DEFAULT_VHOST:-servipal}
+#       - CELERY_RESULT_BACKEND=rpc://
+#     depends_on:
+#       rabbitmq:
+#         condition: service_healthy
+#     networks:
+#       - app_net
+#     security_opt:
+#       - no-new-privileges:true
+#     cap_drop:
+#       - ALL
+#     read_only: true
+#     tmpfs:
+#       - /tmp
+#     healthcheck:
+#       test: ["CMD-SHELL", "python -c \"from app.celery_queue.celery_app import celery_app; conn = celery_app.connection_for_read(); conn.ensure_connection(max_retries=1); print('ok')\""]
+#       interval: 30s
+#       timeout: 10s
+#       retries: 5
+#       start_period: 30s
+
+#   # --- DASHBOARD PROXY ---
+#   rabbitmq-dashboard-proxy:
+#     image: nginx:1.27-alpine
+#     restart: unless-stopped
+#     depends_on:
+#       rabbitmq:
+#         condition: service_healthy
+#     ports:
+#       - "${RABBITMQ_PROXY_BIND_IP:-0.0.0.0}:${RABBITMQ_PROXY_HTTP_PORT:-80}:80"
+#       - "${RABBITMQ_PROXY_BIND_IP:-0.0.0.0}:${RABBITMQ_PROXY_HTTPS_PORT:-443}:443"
+#     volumes:
+#       - ${RABBITMQ_PROXY_NGINX_CONF_PATH:-./deploy/rabbitmq-proxy/nginx.conf}:/etc/nginx/conf.d/default.conf:ro
+#       - ${RABBITMQ_PROXY_CERTS_DIR:-./deploy/rabbitmq-proxy/certs}:/etc/nginx/certs:ro
+#       - ${RABBITMQ_PROXY_AUTH_DIR:-./deploy/rabbitmq-proxy/auth}:/etc/nginx/auth:ro
+#     networks:
+#       - app_net
+#     security_opt:
+#       - no-new-privileges:true
+#     cap_drop:
+#       - ALL
+#     read_only: true
+#     tmpfs:
+#       - /tmp
+#       - /var/cache/nginx
+#       - /var/run
+#     healthcheck:
+#       test: ["CMD-SHELL", "wget --spider --quiet http://127.0.0.1 || exit 1"]
+#       interval: 15s
+#       timeout: 5s
+#       retries: 8
+#       start_period: 15s
+
+# volumes:
+#   rabbitmq_data:
+
+# networks:
+#   app_net:
+#     driver: bridge
+
+
+
+
+

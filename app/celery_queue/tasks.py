@@ -26,7 +26,9 @@ def normalize_payment_payload(payload: dict) -> ProcessPaymentRequest:
         raise ValueError("payload.payment_method is required")
 
     try:
-        paid_amount = float(Decimal(str(payload.get("paid_amount"))).quantize(Decimal("0.01")))
+        paid_amount = float(
+            Decimal(str(payload.get("paid_amount"))).quantize(Decimal("0.01"))
+        )
     except (InvalidOperation, TypeError):
         raise ValueError("payload.paid_amount must be a valid number")
 
@@ -39,6 +41,7 @@ def normalize_payment_payload(payload: dict) -> ProcessPaymentRequest:
         flw_ref=flw_ref,
         payment_method=payment_method,
     )
+
 
 def _is_duplicate_processing_error(error: object) -> bool:
     text = str(error).lower()

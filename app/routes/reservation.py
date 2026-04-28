@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from supabase import AsyncClient
 
 from app.database.supabase import get_supabase_client
@@ -13,6 +13,7 @@ router = APIRouter(prefix="/api/v1/reservations", tags=["Reservations"])
 @router.post("/initiate-payment")
 async def initiate_reservation_payment_endpoint(
     data: CreateBooking,
+    request: Request = None,
     current_profile: dict = Depends(get_current_profile),
     customer_info: dict = Depends(get_customer_contact_info),
     supabase: AsyncClient = Depends(get_supabase_client),
@@ -27,5 +28,5 @@ async def initiate_reservation_payment_endpoint(
         dict: Flutterwave RN SDK payments data.
     """
     return await reservation.initiate_reservation_payment(
-        data, current_profile["id"], customer_info, supabase
+        data, current_profile["id"], customer_info, supabase, request
     )

@@ -15,7 +15,9 @@ class _DuplicateAPIError(APIError):
 
 
 @pytest.mark.asyncio
-async def test_process_payment_returns_already_processed_when_handler_reports_it(monkeypatch):
+async def test_process_payment_returns_already_processed_when_handler_reports_it(
+    monkeypatch,
+):
     async def _handler(**_kwargs):
         return {"status": "already_processed"}
 
@@ -35,7 +37,9 @@ async def test_process_payment_returns_already_processed_when_handler_reports_it
 
 
 @pytest.mark.asyncio
-async def test_process_payment_returns_already_processed_for_duplicate_constraint(monkeypatch):
+async def test_process_payment_returns_already_processed_for_duplicate_constraint(
+    monkeypatch,
+):
     async def _handler(**_kwargs):
         raise _DuplicateAPIError("duplicate key value violates unique constraint")
 

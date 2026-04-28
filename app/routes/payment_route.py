@@ -22,7 +22,10 @@ from app.database.supabase import get_supabase_client, get_supabase_admin_client
 from app.common import order
 from app.services.payment_service import PaymentService
 from app.services.payment_service import process_pay_on_delivery
-from app.webhooks.flutterwave_webhook import PaymentWebhookResponse, handle_flutterwave_webhook
+from app.webhooks.flutterwave_webhook import (
+    PaymentWebhookResponse,
+    handle_flutterwave_webhook,
+)
 
 
 router = APIRouter(tags=["payments-webhook"], prefix="/api/v1/payments")
