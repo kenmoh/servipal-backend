@@ -59,6 +59,10 @@ celery_app.conf.update(
         "payments.process_order_creation": {
             "queue": settings.CELERY_TASK_QUEUE,
             "routing_key": settings.CELERY_TASK_QUEUE,
+        },
+        "payments.process_payout": {
+            "queue": settings.CELERY_TASK_QUEUE,
+            "routing_key": settings.CELERY_TASK_QUEUE,
         }
     },
     broker_transport_options=broker_transport_options,

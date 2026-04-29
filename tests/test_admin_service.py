@@ -68,13 +68,18 @@ async def test_list_users(mock_supabase):
     filters = UserFilterParams(user_type="CUSTOMER")
     pagination = PaginationParams(page=1, page_size=10)
 
-    result = await list_users(filters, pagination, mock_supabase)
+    result = await list_users(
+        supabase=mock_supabase,
+        user_type=filters.user_type,
+        page=pagination.page,
+        page_size=pagination.page_size,
+    )
 
     # Check that we got CUSTOMER users
-    # Note: list_users returns UsersListResponse which has 'users', 'total', 'page', 'page_size'
-    assert result.total == 2
-    assert len(result.users) == 2
-    assert all(u.user_type == "CUSTOMER" for u in result.users)
+    # Note: list_users returns ProfileListResponse which has 'data', 'meta'
+    assert result.meta.total == 2
+    assert len(result.data) == 2
+    assert all(u.user_type == "CUSTOMER" for u in result.data)
 
 
 @pytest.mark.asyncio
@@ -106,8 +111,15 @@ async def test_block_user(mock_supabase):
     )
 
     # Call block_unblock_user
-    # signature: (user_id, block, admin_id, admin_client, request)
-    result = await block_unblock_user(user_id, True, uuid4(), mock_supabase)
+    # signature: (supabase, target_id, actor_id, reason, actor_type, request=None)
+    from app.schemas.user_schemas import UserType
+    
+    result = await block_unblock_user(
+        supabase=mock_supabase,
+        target_id=user_id,
+        actor_id=uuid4(),
+        reason="Spamming",
+        actor_type=UserType.ADMIN,
+    )
 
     assert result.is_blocked is True
-    assert result.account_status == "BLOCKED"

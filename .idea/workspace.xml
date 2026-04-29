@@ -5,49 +5,8 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="7f9c968c-69e5-42c3-95ee-1d8b38e236ed" name="Changes" comment="">
-      <change beforePath="$PROJECT_DIR$/.idea/.gitignore" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/material_theme_project_new.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/material_theme_project_new.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/misc.xml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/servipal-backend.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/servipal-backend.iml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/celery_queue/celery_app.py" beforeDir="false" afterPath="$PROJECT_DIR$/app/celery_queue/celery_app.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/celery_queue/tasks.py" beforeDir="false" afterPath="$PROJECT_DIR$/app/celery_queue/tasks.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/common/order.py" beforeDir="false" afterPath="$PROJECT_DIR$/app/common/order.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/config/config.py" beforeDir="false" afterPath="$PROJECT_DIR$/app/config/config.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/dependencies/auth.py" beforeDir="false" afterPath="$PROJECT_DIR$/app/dependencies/auth.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/app/main.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/middleware/csrf.py" beforeDir="false" afterPath="$PROJECT_DIR$/app/middleware/csrf.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/routes/beneficiary_router.py" beforeDir="false" afterPath="$PROJECT_DIR$/app/routes/beneficiary_router.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/routes/delivery_route.py" beforeDir="false" afterPath="$PROJECT_DIR$/app/routes/delivery_route.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/routes/food_router.py" beforeDir="false" afterPath="$PROJECT_DIR$/app/routes/food_router.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/routes/laundry_route.py" beforeDir="false" afterPath="$PROJECT_DIR$/app/routes/laundry_route.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/routes/order_create.py" beforeDir="false" afterPath="$PROJECT_DIR$/app/routes/order_create.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/routes/payment_route.py" beforeDir="false" afterPath="$PROJECT_DIR$/app/routes/payment_route.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/routes/payment_webhook_route.py" beforeDir="false" afterPath="$PROJECT_DIR$/app/routes/payment_webhook_route.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/routes/product_route.py" beforeDir="false" afterPath="$PROJECT_DIR$/app/routes/product_route.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/routes/reservation.py" beforeDir="false" afterPath="$PROJECT_DIR$/app/routes/reservation.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/schemas/beneficiary_schema.py" beforeDir="false" afterPath="$PROJECT_DIR$/app/schemas/beneficiary_schema.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/schemas/reservation.py" beforeDir="false" afterPath="$PROJECT_DIR$/app/schemas/reservation.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/app/services/delivery_service.py" beforeDir="false" afterPath="$PROJECT_DIR$/app/services/delivery_service.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/services/dispute_service.py" beforeDir="false" afterPath="$PROJECT_DIR$/app/services/dispute_service.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/services/escrow_service.py" beforeDir="false" afterPath="$PROJECT_DIR$/app/services/escrow_service.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/services/food_service.py" beforeDir="false" afterPath="$PROJECT_DIR$/app/services/food_service.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/services/laundry_service.py" beforeDir="false" afterPath="$PROJECT_DIR$/app/services/laundry_service.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/services/payment_idempotency.py" beforeDir="false" afterPath="$PROJECT_DIR$/app/services/payment_idempotency.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/services/payment_service.py" beforeDir="false" afterPath="$PROJECT_DIR$/app/services/payment_service.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/services/payments/flutterwave_service.py" beforeDir="false" afterPath="$PROJECT_DIR$/app/services/payments/flutterwave_service.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/services/payments/intent_processor.py" beforeDir="false" afterPath="$PROJECT_DIR$/app/services/payments/intent_processor.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/services/product_service.py" beforeDir="false" afterPath="$PROJECT_DIR$/app/services/product_service.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/services/reservation.py" beforeDir="false" afterPath="$PROJECT_DIR$/app/services/reservation.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/services/vendors/payout_service.py" beforeDir="false" afterPath="$PROJECT_DIR$/app/services/vendors/payout_service.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/services/wallet_service.py" beforeDir="false" afterPath="$PROJECT_DIR$/app/services/wallet_service.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/webhooks/flutterwave_webhook.py" beforeDir="false" afterPath="$PROJECT_DIR$/app/webhooks/flutterwave_webhook.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/cloudbuild.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/cloudbuild.yaml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/compose.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/compose.yaml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/deploy/rabbitmq-proxy/auth/.gitkeep" beforeDir="false" afterPath="$PROJECT_DIR$/deploy/rabbitmq-proxy/auth/.gitkeep" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/tests/conftest.py" beforeDir="false" afterPath="$PROJECT_DIR$/tests/conftest.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/tests/test_celery_payment_tasks.py" beforeDir="false" afterPath="$PROJECT_DIR$/tests/test_celery_payment_tasks.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/tests/test_order_process_payment.py" beforeDir="false" afterPath="$PROJECT_DIR$/tests/test_order_process_payment.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/tests/test_payment_queue_dispatcher.py" beforeDir="false" afterPath="$PROJECT_DIR$/tests/test_payment_queue_dispatcher.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -73,26 +32,27 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent">{
-  &quot;keyToString&quot;: {
-    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.MCP Project settings loaded&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.typescript.service.memoryLimit.init&quot;: &quot;true&quot;,
-    &quot;codeWithMe.voiceChat.enabledByDefault&quot;: &quot;false&quot;,
-    &quot;com.intellij.ml.llm.matterhorn.ej.ui.settings.DefaultModelSelectionForGA.v1&quot;: &quot;true&quot;,
-    &quot;git-widget-placeholder&quot;: &quot;main&quot;,
-    &quot;junie.onboarding.icon.badge.shown&quot;: &quot;true&quot;,
-    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
-    &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
-    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
-    &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
-    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
-    &quot;to.speed.mode.migration.done&quot;: &quot;true&quot;,
-    &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "ModuleVcsDetector.initialDetectionPerformed": "true",
+    "RunOnceActivity.MCP Project settings loaded": "true",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252": "true",
+    "RunOnceActivity.git.unshallow": "true",
+    "RunOnceActivity.typescript.service.memoryLimit.init": "true",
+    "codeWithMe.voiceChat.enabledByDefault": "false",
+    "com.intellij.ml.llm.matterhorn.ej.ui.settings.DefaultModelSelectionForGA.v1": "true",
+    "git-widget-placeholder": "main",
+    "junie.onboarding.icon.badge.shown": "true",
+    "node.js.detected.package.eslint": "true",
+    "node.js.detected.package.tslint": "true",
+    "node.js.selected.package.eslint": "(autodetect)",
+    "node.js.selected.package.tslint": "(autodetect)",
+    "nodejs_package_manager_path": "npm",
+    "to.speed.mode.migration.done": "true",
+    "vue.rearranger.settings.migration": "true"
   }
-}</component>
+}]]></component>
   <component name="SharedIndexes">
     <attachedChunks>
       <set>
@@ -109,7 +69,7 @@
       <option name="presentableId" value="Default" />
       <updated>1777329879705</updated>
       <workItem from="1777329885630" duration="762000" />
-      <workItem from="1777354720318" duration="2554000" />
+      <workItem from="1777354720318" duration="3739000" />
     </task>
     <servers />
   </component>

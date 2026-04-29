@@ -13,7 +13,7 @@ from app.schemas.product_schemas import ProductItemCreate
 
 @pytest.mark.asyncio
 async def test_create_product_item(mock_supabase):
-    seller_id = uuid4()
+    vendor_id = uuid4()
 
     data = ProductItemCreate(
         name="T-Shirt",
@@ -24,11 +24,12 @@ async def test_create_product_item(mock_supabase):
         images=["url1"],
     )
 
-    result = await create_product_item(data, seller_id, mock_supabase)
+    result = await create_product_item(data, vendor_id, mock_supabase)
 
     assert result.name == "T-Shirt"
-    assert result.seller_id == str(seller_id)
+    assert str(result.vendor_id) == str(vendor_id)
     assert result.price == Decimal("5000.00")
+    assert result.stock == 10
 
     items = mock_supabase._data["product_items"]
     assert len(items) == 1
@@ -38,11 +39,19 @@ async def test_create_product_item(mock_supabase):
 @pytest.mark.asyncio
 async def test_get_product_item(mock_supabase):
     item_id = uuid4()
+    vendor_id = uuid4()
 
     await (
         mock_supabase.table("product_items")
         .insert(
-            {"id": str(item_id), "name": "Shoes", "price": 10000, "is_deleted": False}
+            {
+                "id": str(item_id),
+                "name": "Shoes",
+                "price": 10000,
+                "stock": 5,
+                "vendor_id": str(vendor_id),
+                "is_deleted": False,
+            }
         )
         .execute()
     )
@@ -50,20 +59,27 @@ async def test_get_product_item(mock_supabase):
     result = await get_product_item(item_id, mock_supabase)
 
     assert result.name == "Shoes"
+    assert result.stock == 5
 
 
 @pytest.mark.asyncio
 async def test_delete_product_item(mock_supabase):
     item_id = uuid4()
-    seller_id = uuid4()
+    vendor_id = uuid4()
 
     await (
         mock_supabase.table("product_items")
-        .insert({"id": str(item_id), "seller_id": str(seller_id), "is_deleted": False})
+        .insert(
+            {
+                "id": str(item_id),
+                "vendor_id": str(vendor_id),
+                "is_deleted": False,
+            }
+        )
         .execute()
     )
 
-    result = await delete_product_item(item_id, seller_id, mock_supabase)
+    result = await delete_product_item(item_id, vendor_id, mock_supabase)
 
     assert result["success"] is True
 

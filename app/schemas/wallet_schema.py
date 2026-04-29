@@ -157,27 +157,24 @@ class WalletPaymentRequest(BaseModel):
     order_type: OrderType
 
     # Shared
-    # grand_total: Decimal
+    grand_total: Decimal
     additional_info: Optional[str] = None
 
     # FOOD / LAUNDRY / PRODUCT shared
-    vendor_id: Optional[UUID4] = None
+    vendor_id: Optional[UUID] = None
     delivery_fee: Optional[Decimal] = None
     delivery_option: Optional[str] = None
     order_data: Optional[List[Any]] = None
     destination: Optional[str] = None
-
-    # FOOD specific
-    # total_price: Optional[Decimal] = None
-
-    # LAUNDRY specific
-    # subtotal: Optional[Decimal] = None
+    subtotal: Optional[Decimal] = None
+    total_price: Optional[Decimal] = None
+    customer_name: Optional[str] = None
 
     # PRODUCT specific
-    product_id: Optional[UUID4] = None
+    product_id: Optional[UUID] = None
     quantity: Optional[int] = None
     product_name: Optional[str] = None
-    price: Optional[Decimal] = None
+    unit_price: Optional[Decimal] = None
     shipping_cost: Optional[float] = None
     delivery_address: Optional[str] = None
     images: Optional[List[Any]] = None

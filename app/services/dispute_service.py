@@ -231,6 +231,11 @@ async def resolve_dispute(
             .single()
             .execute()
         )
+        if not tx.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Transaction not found for this dispute"
+            )
         amount = tx.data["amount"]
 
         if data.resolution == "BUYER_FAVOR":
@@ -460,4 +465,57 @@ async def get_dispute_detail(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to fetch dispute detail: {str(e)}",
+        )
+
+
+# ───────────────────────────────────────────────
+# Get User's Disputes
+# ───────────────────────────────────────────────
+async def get_my_disputes(user_id: UUID, supabase: AsyncClient) -> List[DisputeResponse]:
+    """Get all disputes where user is either initiator or respondent."""
+    try:
+        disputes_resp = await (
+            supabase.table("disputes")
+            .select("*")
+            .or_(f"initiator_id.eq.{str(user_id)},respondent_id.eq.{str(user_id)}")
+            .order("created_at", desc=True)
+            .execute()
+        )
+
+        disputes = []
+        for dispute in disputes_resp.data or []:
+            # Fetch messages for this dispute
+            messages_resp = await (
+                supabase.table("dispute_messages")
+                .select("*")
+                .eq("dispute_id", str(dispute["id"]))
+                .order("created_at", desc=True)
+                .execute()
+            )
+
+            messages = [DisputeMessageResponse(**msg) for msg in messages_resp.data or []]
+
+            dispute_obj = DisputeResponse(
+                id=dispute["id"],
+                order_id=dispute["order_id"],
+                order_type=dispute["order_type"],
+                initiator_id=dispute["initiator_id"],
+                respondent_id=dispute["respondent_id"],
+                reason=dispute["reason"],
+                status=dispute["status"],
+                resolution_notes=dispute.get("resolution_notes"),
+                resolved_by_id=dispute.get("resolved_by_id"),
+                resolved_at=dispute.get("resolved_at"),
+                created_at=dispute["created_at"],
+                updated_at=dispute["updated_at"],
+                messages=messages,
+            )
+            disputes.append(dispute_obj)
+
+        return disputes
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch disputes: {str(e)}",
         )

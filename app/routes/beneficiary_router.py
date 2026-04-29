@@ -8,7 +8,9 @@ from app.dependencies.auth import get_current_profile, get_customer_contact_info
 from app.database.supabase import get_supabase_client, get_supabase_admin_client
 from app.config.logging import logger
 from app.config.config import settings
+from app.services.vendors.payout_service import get_delivery_order_by_id_for_payout
 from app.dependencies.auth import require_admin
+from app.celery_queue.tasks import process_payout_task
 
 # ---------------------------------------------------------------------------
 # Routers
@@ -47,9 +49,7 @@ async def create_beneficiary(
 ) -> beneficiary_schema.CreateBeneficiaryResponse:
     """Create a new transfer beneficiary on Flutterwave and persist it locally."""
     response = await service.create_beneficiary(payload=data.model_dump())
-    print("=" * 100)
     logger.info(f"Beneficiary created on Flutterwave with response: {response}")
-    print("=" * 100)
     beneficiary_data = response.get("data", {})
     beneficiary_id = beneficiary_data.get("id")
 
@@ -195,11 +195,46 @@ async def create_vendor_payout(
     customer_contact_info: dict = Depends(get_customer_contact_info),
 ):
     """Create and execute a transfer for the given order, paying out to the vendor."""
-    return await payout_service.create_transfer(
-        order_id=order_id,
-        payout_to="VENDOR",
-        supabase=supabase,
-    )
+    # 1. Fetch order data to get amount and tx_ref
+    try:
+        order = await get_delivery_order_by_id_for_payout(
+            order_id=order_id, payout_to="VENDOR", supabase=supabase
+        )
+    except Exception as e:
+        logger.error(f"Failed to fetch order for payout: {order_id}. Error: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Order not found or not eligible for payout."
+        )
+
+    # 2. Insert a PENDING record into the payouts table
+    # This allows the UI to show progress immediately.
+    tx_ref = order.get("tx_ref")
+    amount = order.get("amount_due_vendor") or order.get("vendor_payout")
+    
+    try:
+        await supabase.table("payouts").upsert({
+            "reference": tx_ref,
+            "order_id": order_id,
+            "status": "PENDING",
+            "amount": amount,
+            "currency": "NGN",
+            "full_name": order.get("beneficiary_name") or "Vendor",
+            "narration": f"Payout for order {order_id}",
+        }, on_conflict="reference").execute()
+    except Exception as e:
+        logger.warning(f"Could not create initial payout record: {str(e)}")
+        # We continue anyway, the worker will try to create/update it
+
+    # 3. Enqueue the payout task for background processing
+    process_payout_task.delay(order_id, "VENDOR")
+
+    return {
+        "status": "success",
+        "message": "Payout initiated and enqueued for background processing.",
+        "order_id": order_id,
+        "reference": tx_ref
+    }
 
 
 @payout_router.post(

@@ -49,7 +49,7 @@ class ProductItemUpdate(BaseModel):
 
 class ProductItemResponse(ProductItemCreate):
     id: UUID
-    seller_id: UUID
+    vendor_id: UUID
     created_at: datetime
     updated_at: datetime
 

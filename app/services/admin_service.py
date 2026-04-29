@@ -127,7 +127,7 @@ async def toggle_block(
     old_row = await _fetch_profile_or_404(supabase, target_id)
     new_blocked = not old_row["is_blocked"]
 
-    result = (
+    result = await (
         supabase.table(PROFILES_TABLE)
         .update({"is_blocked": new_blocked, "reason": reason})
         .eq("id", str(target_id))

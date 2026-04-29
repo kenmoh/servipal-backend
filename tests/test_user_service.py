@@ -56,8 +56,8 @@ async def test_login_user(mock_supabase):
     login_data = LoginRequest(email=email, password="pwd")
     result = await login_user(login_data, mock_supabase)
 
-    assert result.access_token == "mock_access_token"
-    assert result.user.email == email
+    assert result["access_token"] == "mock_access_token"
+    assert result["user"].email == email
 
 
 @pytest.mark.asyncio

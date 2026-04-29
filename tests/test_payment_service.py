@@ -23,11 +23,17 @@ async def test_process_successful_topup_payment(mock_supabase):
         async def mock_delete(*args, **kwargs):
             return True
 
+        async def mock_verify(*args, **kwargs):
+            return {"status": "success"}
+
         m.setattr("app.services.payment_service.get_pending", mock_get)
         m.setattr("app.services.payment_service.delete_pending", mock_delete)
-        m.setattr(
-            "app.services.payment_service.log_audit_event", lambda *args, **kwargs: None
-        )
+        m.setattr("app.services.payment_service.verify_transaction_tx_ref", mock_verify)
+
+        async def mock_log(*args, **kwargs):
+            return True
+
+        m.setattr("app.services.payment_service.log_audit_event", mock_log)
 
         # Mock Wallet RPC for topup
         # `wallet_service.credit_wallet` calls `update_wallet_balance` RPC

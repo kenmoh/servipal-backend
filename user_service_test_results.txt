@@ -1,0 +1,207 @@
+============================= test session starts =============================
+platform win32 -- Python 3.12.12, pytest-9.0.2, pluggy-1.6.0 -- C:\Users\kenne\Desktop\servipal-backend\.venv\Scripts\python.exe
+cachedir: .pytest_cache
+rootdir: C:\Users\kenne\Desktop\servipal-backend
+configfile: pytest.ini
+plugins: anyio-4.12.1, logfire-4.19.0, asyncio-1.3.0
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=function, asyncio_default_test_loop_scope=function
+collecting ... collected 4 items
+
+tests/test_user_service.py::test_create_user_account PASSED              [ 25%]
+tests/test_user_service.py::test_login_user FAILED                       [ 50%]
+tests/test_user_service.py::test_update_user_profile PASSED              [ 75%]
+tests/test_user_service.py::test_create_rider_by_dispatch FAILED         [100%]
+
+================================== FAILURES ===================================
+_______________________________ test_login_user _______________________________
+
+mock_supabase = <tests.conftest.MockSupabaseClient object at 0x000001FB2C2B8140>
+
+    @pytest.mark.asyncio
+    async def test_login_user(mock_supabase):
+        email = "login_test@example.com"
+    
+        # Create user first via fake signup to populate Auth + Profile
+        fake_signup = {
+            "email": email,
+            "password": "pwd",
+            "options": {"data": {"full_name": "Login User", "user_type": "CUSTOMER"}},
+        }
+        await mock_supabase.auth.sign_up(fake_signup)
+    
+        # Now login
+        login_data = LoginRequest(email=email, password="pwd")
+        result = await login_user(login_data, mock_supabase)
+    
+>       assert result.access_token == "mock_access_token"
+               ^^^^^^^^^^^^^^^^^^^
+E       AttributeError: 'dict' object has no attribute 'access_token'
+
+tests\test_user_service.py:59: AttributeError
+---------------------------- Captured stdout call -----------------------------
+{"email": "login_test@example.com", "event": "login_attempt", "level": "info", "timestamp": "2026-04-28T10:30:39.408771Z"}
+{"user_id": "ef19ee17-f95c-4fcb-9e51-4faf37e593b6", "email": "login_test@example.com", "event": "login_success", "level": "info", "timestamp": "2026-04-28T10:30:41.454280Z"}
+________________________ test_create_rider_by_dispatch ________________________
+
+mock_supabase = <tests.conftest.MockSupabaseClient object at 0x000001FB2C4B88C0>
+
+    @pytest.mark.asyncio
+    async def test_create_rider_by_dispatch(mock_supabase):
+        dispatch_id = uuid4()
+    
+        # Setup Dispatch Profile
+        await (
+            mock_supabase.table("profiles")
+            .insert(
+                {
+                    "id": str(dispatch_id),
+                    "user_type": "DISPATCH",
+                    "business_name": "Fast Delivery",
+                    "business_address": "123 St",
+                    "state": "Lagos",
+                }
+            )
+            .execute()
+        )
+    
+        data = RiderCreateByDispatch(
+            full_name="Rider 1",
+            email="rider@fast.com",
+            phone="+2348098765432",
+            password="securepwd",
+            bike_number="BK-123",
+        )
+    
+        # We need to act as admin client
+        # The service uses `supabase_admin.auth.admin.create_user`
+        # And then upserts profile.
+    
+        current_profile = type("Profile", (), {"id": str(dispatch_id)})()
+        result = await create_rider_by_dispatch(data, current_profile, mock_supabase)
+    
+        assert result.full_name == "Rider 1"
+>       assert result.bike_number == "BK-123"
+               ^^^^^^^^^^^^^^^^^^
+
+tests\test_user_service.py:127: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = UserProfileResponse(id=UUID('a0cccbc0-6c12-41c8-8c59-c06a84880feb'), email=None, phone_number='+2348098765432', user_t...cked=False, account_status='PENDING', created_at=datetime.datetime(2026, 4, 28, 11, 30, 46, 322335), last_seen_at=None)
+item = 'bike_number'
+
+    def __getattr__(self, item: str) -> Any:
+        private_attributes = object.__getattribute__(self, '__private_attributes__')
+        if item in private_attributes:
+            attribute = private_attributes[item]
+            if hasattr(attribute, '__get__'):
+                return attribute.__get__(self, type(self))  # type: ignore
+    
+            try:
+                # Note: self.__pydantic_private__ cannot be None if self.__private_attributes__ has items
+                return self.__pydantic_private__[item]  # type: ignore
+            except KeyError as exc:
+                raise AttributeError(f'{type(self).__name__!r} object has no attribute {item!r}') from exc
+        else:
+            # `__pydantic_extra__` can fail to be set if the model is not yet fully initialized.
+            # See `BaseModel.__repr_args__` for more details
+            try:
+                pydantic_extra = object.__getattribute__(self, '__pydantic_extra__')
+            except AttributeError:
+                pydantic_extra = None
+    
+            if pydantic_extra and item in pydantic_extra:
+                return pydantic_extra[item]
+            else:
+                if hasattr(self.__class__, item):
+                    return super().__getattribute__(item)  # Raises AttributeError if appropriate
+                else:
+                    # this is the current error
+>                   raise AttributeError(f'{type(self).__name__!r} object has no attribute {item!r}')
+E                   AttributeError: 'UserProfileResponse' object has no attribute 'bike_number'. Did you mean: 'phone_number'?
+
+.venv\Lib\site-packages\pydantic\main.py:1026: AttributeError
+---------------------------- Captured stdout call -----------------------------
+{"dispatch_id": "6f271528-9a49-44b0-9a5b-7aeba96382f0", "rider_phone": "+2348098765432", "event": "create_rider_attempt", "level": "info", "timestamp": "2026-04-28T10:30:46.322335Z"}
+{"dispatch_id": "6f271528-9a49-44b0-9a5b-7aeba96382f0", "rider_id": "a0cccbc0-6c12-41c8-8c59-c06a84880feb", "rider_phone": "+2348098765432", "event": "rider_created_success", "level": "info", "timestamp": "2026-04-28T10:30:46.323332Z"}
+============================== warnings summary ===============================
+app\schemas\user_schemas.py:80
+  C:\Users\kenne\Desktop\servipal-backend\app\schemas\user_schemas.py:80: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class UserProfileResponse(BaseModel):
+
+app\schemas\user_schemas.py:114
+  C:\Users\kenne\Desktop\servipal-backend\app\schemas\user_schemas.py:114: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class AvailableRiderResponse(BaseModel):
+
+.venv\Lib\site-packages\pydantic\_internal\_generate_schema.py:319
+.venv\Lib\site-packages\pydantic\_internal\_generate_schema.py:319
+.venv\Lib\site-packages\pydantic\_internal\_generate_schema.py:319
+.venv\Lib\site-packages\pydantic\_internal\_generate_schema.py:319
+.venv\Lib\site-packages\pydantic\_internal\_generate_schema.py:319
+  C:\Users\kenne\Desktop\servipal-backend\.venv\Lib\site-packages\pydantic\_internal\_generate_schema.py:319: PydanticDeprecatedSince20: `json_encoders` is deprecated. See https://docs.pydantic.dev/2.12/concepts/serialization/#custom-serializers for alternatives. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    warnings.warn(
+
+app\schemas\user_schemas.py:151
+  C:\Users\kenne\Desktop\servipal-backend\app\schemas\user_schemas.py:151: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class RiderDetailResponse(BaseModel):
+
+app\schemas\user_schemas.py:178
+  C:\Users\kenne\Desktop\servipal-backend\app\schemas\user_schemas.py:178: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class DispatchRiderResponse(BaseModel):
+
+app\schemas\user_schemas.py:243
+  C:\Users\kenne\Desktop\servipal-backend\app\schemas\user_schemas.py:243: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class DetailedRiderResponse(BaseModel):
+
+.venv\Lib\site-packages\pyiceberg\expressions\parser.py:72
+  C:\Users\kenne\Desktop\servipal-backend\.venv\Lib\site-packages\pyiceberg\expressions\parser.py:72: DeprecationWarning: 'enablePackrat' deprecated - use 'enable_packrat'
+    ParserElement.enablePackrat()
+
+.venv\Lib\site-packages\pyiceberg\expressions\parser.py:85
+  C:\Users\kenne\Desktop\servipal-backend\.venv\Lib\site-packages\pyiceberg\expressions\parser.py:85: DeprecationWarning: 'escChar' argument is deprecated, use 'esc_char'
+    quoted_identifier = QuotedString('"', escChar="\\", unquoteResults=True)
+
+.venv\Lib\site-packages\pyiceberg\expressions\parser.py:85
+  C:\Users\kenne\Desktop\servipal-backend\.venv\Lib\site-packages\pyiceberg\expressions\parser.py:85: DeprecationWarning: 'unquoteResults' argument is deprecated, use 'unquote_results'
+    quoted_identifier = QuotedString('"', escChar="\\", unquoteResults=True)
+
+.venv\Lib\site-packages\pyiceberg\table\metadata.py:365
+  C:\Users\kenne\Desktop\servipal-backend\.venv\Lib\site-packages\pyiceberg\table\metadata.py:365: PydanticDeprecatedSince212: Using `@model_validator` with mode='after' on a classmethod is deprecated. Instead, use an instance method. See the documentation at https://docs.pydantic.dev/2.12/concepts/validators/#model-after-validator. Deprecated in Pydantic V2.12 to be removed in V3.0.
+    @model_validator(mode="after")
+
+.venv\Lib\site-packages\pyiceberg\table\metadata.py:494
+  C:\Users\kenne\Desktop\servipal-backend\.venv\Lib\site-packages\pyiceberg\table\metadata.py:494: PydanticDeprecatedSince212: Using `@model_validator` with mode='after' on a classmethod is deprecated. Instead, use an instance method. See the documentation at https://docs.pydantic.dev/2.12/concepts/validators/#model-after-validator. Deprecated in Pydantic V2.12 to be removed in V3.0.
+    @model_validator(mode="after")
+
+.venv\Lib\site-packages\pyiceberg\table\metadata.py:498
+  C:\Users\kenne\Desktop\servipal-backend\.venv\Lib\site-packages\pyiceberg\table\metadata.py:498: PydanticDeprecatedSince212: Using `@model_validator` with mode='after' on a classmethod is deprecated. Instead, use an instance method. See the documentation at https://docs.pydantic.dev/2.12/concepts/validators/#model-after-validator. Deprecated in Pydantic V2.12 to be removed in V3.0.
+    @model_validator(mode="after")
+
+.venv\Lib\site-packages\pyiceberg\table\metadata.py:502
+  C:\Users\kenne\Desktop\servipal-backend\.venv\Lib\site-packages\pyiceberg\table\metadata.py:502: PydanticDeprecatedSince212: Using `@model_validator` with mode='after' on a classmethod is deprecated. Instead, use an instance method. See the documentation at https://docs.pydantic.dev/2.12/concepts/validators/#model-after-validator. Deprecated in Pydantic V2.12 to be removed in V3.0.
+    @model_validator(mode="after")
+
+.venv\Lib\site-packages\pyiceberg\table\metadata.py:506
+  C:\Users\kenne\Desktop\servipal-backend\.venv\Lib\site-packages\pyiceberg\table\metadata.py:506: PydanticDeprecatedSince212: Using `@model_validator` with mode='after' on a classmethod is deprecated. Instead, use an instance method. See the documentation at https://docs.pydantic.dev/2.12/concepts/validators/#model-after-validator. Deprecated in Pydantic V2.12 to be removed in V3.0.
+    @model_validator(mode="after")
+
+.venv\Lib\site-packages\pyiceberg\table\metadata.py:538
+  C:\Users\kenne\Desktop\servipal-backend\.venv\Lib\site-packages\pyiceberg\table\metadata.py:538: PydanticDeprecatedSince212: Using `@model_validator` with mode='after' on a classmethod is deprecated. Instead, use an instance method. See the documentation at https://docs.pydantic.dev/2.12/concepts/validators/#model-after-validator. Deprecated in Pydantic V2.12 to be removed in V3.0.
+    @model_validator(mode="after")
+
+.venv\Lib\site-packages\pyiceberg\table\metadata.py:542
+  C:\Users\kenne\Desktop\servipal-backend\.venv\Lib\site-packages\pyiceberg\table\metadata.py:542: PydanticDeprecatedSince212: Using `@model_validator` with mode='after' on a classmethod is deprecated. Instead, use an instance method. See the documentation at https://docs.pydantic.dev/2.12/concepts/validators/#model-after-validator. Deprecated in Pydantic V2.12 to be removed in V3.0.
+    @model_validator(mode="after")
+
+.venv\Lib\site-packages\pyiceberg\table\metadata.py:546
+  C:\Users\kenne\Desktop\servipal-backend\.venv\Lib\site-packages\pyiceberg\table\metadata.py:546: PydanticDeprecatedSince212: Using `@model_validator` with mode='after' on a classmethod is deprecated. Instead, use an instance method. See the documentation at https://docs.pydantic.dev/2.12/concepts/validators/#model-after-validator. Deprecated in Pydantic V2.12 to be removed in V3.0.
+    @model_validator(mode="after")
+
+.venv\Lib\site-packages\pyiceberg\table\metadata.py:550
+  C:\Users\kenne\Desktop\servipal-backend\.venv\Lib\site-packages\pyiceberg\table\metadata.py:550: PydanticDeprecatedSince212: Using `@model_validator` with mode='after' on a classmethod is deprecated. Instead, use an instance method. See the documentation at https://docs.pydantic.dev/2.12/concepts/validators/#model-after-validator. Deprecated in Pydantic V2.12 to be removed in V3.0.
+    @model_validator(mode="after")
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+FAILED tests/test_user_service.py::test_login_user - AttributeError: 'dict' object has no attribute 'access_token'
+FAILED tests/test_user_service.py::test_create_rider_by_dispatch - AttributeError: 'UserProfileResponse' object has no attribute 'bike_number'. Did you mean: 'phone_number'?
+================== 2 failed, 2 passed, 22 warnings in 11.35s ==================

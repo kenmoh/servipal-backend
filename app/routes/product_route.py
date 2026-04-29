@@ -96,7 +96,7 @@ async def create_product_item(
     )
     return await product_service.create_product_item(
         data=data,
-        seller_id=current_profile["id"],
+        vendor_id=current_profile["id"],
         supabase=supabase,
     )
 

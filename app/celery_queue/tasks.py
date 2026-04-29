@@ -177,3 +177,68 @@ def process_order_creation_task(self, payload: dict) -> dict:
                 exc_info=True,
             )
             raise
+
+async def _process_payout_async(order_id: str, payout_to: str) -> dict:
+    from app.services.vendors.payout_service import TransferService
+
+    supabase = await create_supabase_admin_client()
+    try:
+        service = TransferService(
+            base_url=settings.FLUTTERWAVE_BASE_URL,
+            secret_key=settings.FLW_SECRET_KEY,
+        )
+        return await service.create_transfer(
+            order_id=order_id,
+            payout_to=payout_to,
+            supabase=supabase,
+        )
+    finally:
+        close_method = getattr(supabase, "aclose", None)
+        if callable(close_method):
+            await close_method()
+
+
+@celery_app.task(
+    bind=True,
+    name="payments.process_payout",
+    acks_late=True,
+    reject_on_worker_lost=True,
+    max_retries=settings.CELERY_TASK_MAX_RETRIES,
+)
+def process_payout_task(self, order_id: str, payout_to: str) -> dict:
+    try:
+        result = asyncio.run(_process_payout_async(order_id, payout_to))
+        logger.info(
+            "celery_payout_processed",
+            order_id=order_id,
+            task_id=self.request.id,
+        )
+        return result
+    except Exception as exc:
+        if isinstance(exc, HTTPException) and exc.status_code < 500:
+            logger.warning(
+                "celery_payout_non_retryable_error",
+                order_id=order_id,
+                status_code=exc.status_code,
+                error=str(exc.detail),
+            )
+            raise Ignore()
+
+        delay = _retry_delay_seconds(self.request.retries)
+        logger.error(
+            "celery_payout_retry_error",
+            order_id=order_id,
+            retry_in_seconds=delay,
+            retries=self.request.retries,
+            error=str(exc),
+        )
+        try:
+            raise self.retry(exc=exc, countdown=delay)
+        except MaxRetriesExceededError:
+            logger.error(
+                "celery_payout_max_retries_exceeded",
+                order_id=order_id,
+                error=str(exc),
+                exc_info=True,
+            )
+            raise

@@ -12,8 +12,18 @@ async def test_get_food_vendors(mock_supabase):
         mock_supabase.table("profiles")
         .insert(
             [
-                {"id": str(uuid4()), "full_name": "Vendor A", "user_type": "VENDOR"},
-                {"id": str(uuid4()), "full_name": "Vendor B", "user_type": "VENDOR"},
+                {
+                    "id": str(uuid4()),
+                    "full_name": "Vendor A",
+                    "store_name": "Store A",
+                    "user_type": "RESTAURANT_VENDOR",
+                },
+                {
+                    "id": str(uuid4()),
+                    "full_name": "Vendor B",
+                    "store_name": "Store B",
+                    "user_type": "RESTAURANT_VENDOR",
+                },
             ]
         )
         .execute()
@@ -38,7 +48,7 @@ async def test_initiate_food_payment(mock_supabase):
 
     # Mock Vendor Menu Item
     await (
-        mock_supabase.table("menu_items")
+        mock_supabase.table("food_items")
         .insert(
             {
                 "id": str(item_id),
@@ -54,7 +64,14 @@ async def test_initiate_food_payment(mock_supabase):
     await (
         mock_supabase.table("profiles")
         .insert(
-            {"id": str(vendor_id), "full_name": "Burger Shop", "user_type": "VENDOR"}
+            {
+                "id": str(vendor_id),
+                "full_name": "Burger Shop",
+                "store_name": "Burger Shop",
+                "user_type": "RESTAURANT_VENDOR",
+                "can_pickup_and_dropoff": True,
+                "pickup_and_delivery_charge": 500,
+            }
         )
         .execute()
     )
@@ -75,11 +92,14 @@ async def test_initiate_food_payment(mock_supabase):
 
         m.setattr("app.services.food_service.save_pending", mock_save)
 
-        # Dispatch calls get_customer_contact_info if not provided?
-        # Actually initiate_food_payment takes (data, customer_id, supabase, request)
+        current_profile = {
+            "id": str(user_id),
+            "email": "test@user.com",
+            "phone_number": "+2348000000000",
+            "full_name": "Test User",
+        }
+        result = await initiate_food_payment(data, mock_supabase, current_profile)
 
-        result = await initiate_food_payment(data, user_id, mock_supabase)
-
-        assert result.amount == Decimal("3000")  # 1500 * 2
-        assert result.currency == "NGN"
-        assert result.tx_ref is not None
+        assert result["amount"] == Decimal("3000")  # 1500 * 2
+        assert result["currency"] == "NGN"
+        assert result["tx_ref"].startswith("FOOD-")

@@ -33,7 +33,7 @@ class BeneficiaryService:
         self._base_url = base_url or settings.FLUTTERWAVE_BASE_URL
         self._secret_key = secret_key or settings.FLW_SECRET_KEY
         # `httpx.AsyncClient(timeout=...)` expects seconds (float) or httpx.Timeout.
-        self._timeout = timeout_in_sec
+        self._timeout_in_sec = timeout_in_sec
 
         if not self._secret_key:
             raise HTTPException(
@@ -60,7 +60,7 @@ class BeneficiaryService:
 
         for attempt in range(1, max_retries + 1):
             try:
-                async with httpx.AsyncClient(timeout=self._timeout) as client:
+                async with httpx.AsyncClient(timeout=self._timeout_in_sec) as client:
                     resp = await client.post(url, headers=self._headers(), json=body)
 
                     logger.info(
@@ -85,8 +85,11 @@ class BeneficiaryService:
                     logger.error(
                         f"Logical failure on attempt {attempt}: {resp.status_code}. Response: {data}"
                     )
+                    # If it's a 4xx error, it's likely a client error (e.g. invalid account)
+                    # We should return a 400 instead of masking it as a 502
+                    status_code = status.HTTP_400_BAD_REQUEST if 400 <= resp.status_code < 500 else status.HTTP_502_BAD_GATEWAY
                     raise HTTPException(
-                        status_code=status.HTTP_502_BAD_GATEWAY,
+                        status_code=status_code,
                         detail={
                             "message": "Flutterwave beneficiary creation failed",
                             "response": data,
@@ -95,6 +98,8 @@ class BeneficiaryService:
 
                 return data
 
+            except HTTPException:
+                raise
             except (
                 httpx.TimeoutException,
                 httpx.RequestError,
@@ -121,7 +126,7 @@ class BeneficiaryService:
         url = f"{self._base_url}/beneficiaries?page={page}"
 
         try:
-            async with httpx.AsyncClient(timeout=self._timeout) as client:
+            async with httpx.AsyncClient(timeout=self._timeout_in_sec) as client:
                 resp = await client.get(url, headers=self._headers())
             data = resp.json()
         except httpx.TimeoutException:
@@ -157,7 +162,7 @@ class BeneficiaryService:
         url = f"{self._base_url}/beneficiaries/{beneficiary_id}"
 
         try:
-            async with httpx.AsyncClient(timeout=self._timeout) as client:
+            async with httpx.AsyncClient(timeout=self._timeout_in_sec) as client:
                 resp = await client.get(url, headers=self._headers())
             data = resp.json()
         except httpx.TimeoutException:
@@ -360,6 +365,8 @@ class TransferService:
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail=f"Could not reach Flutterwave: {str(e)}",
             )
+        except HTTPException:
+            raise
         except Exception as e:
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
@@ -367,10 +374,15 @@ class TransferService:
             )
 
         if resp.status_code != 200 or data.get("status") != "success":
+            logger.error(
+                f"Payout logical failure: {resp.status_code}. Response: {data}"
+            )
+            # Use 400 for client errors, 502 for provider errors
+            status_code = status.HTTP_400_BAD_REQUEST if 400 <= resp.status_code < 500 else status.HTTP_502_BAD_GATEWAY
             raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
+                status_code=status_code,
                 detail={
-                    "message": "Flutterwave beneficiary creation failed",
+                    "message": "Flutterwave payout initiation failed",
                     "response": data,
                 },
             )
@@ -397,7 +409,7 @@ class TransferService:
         )
         await (
             supabase.table("payouts")
-            .insert(**payout_response_data.model_dump())
+            .upsert(payout_response_data.model_dump(), on_conflict="reference")
             .execute()
         )
         return data

@@ -13,58 +13,51 @@ async def test_delivery_payment_precision_tolerance(mock_supabase):
     paid_amount = Decimal("2818.19000000000005456968210637569427490234375")
     expected_fee = 2818.19
 
+    # Setup transaction intent
+    await mock_supabase.table("transaction_intents").insert({
+        "tx_ref": tx_ref,
+        "service_type": "DELIVERY",
+        "customer_id": "user-123",
+        "vendor_id": "user-123",
+        "amount": expected_fee,
+        "currency": "NGN",
+        "status": "PENDING",
+        "payload": {
+            "pricing": {"total": expected_fee, "distance_km": 5},
+            "delivery": {
+                "notes": "Test",
+                "dropoff": "B",
+                "dropoff_coordinates": [0,0],
+                "pickup": "A",
+                "pickup_coordinates": [0,0],
+                "receiver_phone": "123"
+            },
+            "package": {"duration": "10m", "name": "Box"}
+        }
+    }).execute()
+
     with (
         patch(
             "app.services.payment_service.verify_transaction_tx_ref",
             new_callable=AsyncMock,
         ) as mock_verify,
-        patch(
-            "app.services.payment_service.get_pending", new_callable=AsyncMock
-        ) as mock_get_pending,
-        patch(
-            "app.services.payment_service.delete_pending", new_callable=AsyncMock
-        ) as mock_delete_pending,
-        patch(
-            "app.services.payment_service.get_commission_rate", new_callable=AsyncMock
-        ) as mock_comm,
     ):
         mock_verify.return_value = {"status": "success"}
-        mock_get_pending.return_value = {
-            "delivery_fee": expected_fee,
-            "sender_id": "user-123",
-            "delivery_data": {
-                "receiver_phone": "123456",
-                "pickup_location": "A",
-                "destination": "B",
-                "pickup_coordinates": [0, 0],
-                "dropoff_coordinates": [1, 1],
-                "delivery_type": "BIKE",
-            },
-        }
-        mock_comm.return_value = 0.2
 
         # We don't need to mock the entire supabase interaction if we just want to see if it passes the comparison
-        # But to avoid actual DB calls, we mock the table insert
-        mock_supabase.table.return_value.insert.return_value.execute = AsyncMock(
-            return_value=AsyncMock(data=[{"id": "order-123"}])
-        )
-        mock_supabase.rpc.return_value.execute = AsyncMock()
+        # mock_supabase handles the table updates and rpc calls.
 
         await process_successful_delivery_payment(
             tx_ref=tx_ref,
             paid_amount=paid_amount,
             flw_ref="flw-123",
             supabase=mock_supabase,
+            payment_method="CARD"
         )
 
-        # If it reached here without returning early at line 47 (mismatch), it's a success
-        # The delete_pending should be called at the end of successful processing
-        mock_delete_pending.assert_called()
-
-        # Verify that mismatch warning was NOT triggered (or rather, verify logic continued)
-        # We can also check if table("delivery_orders") was called
-        mock_supabase.table.assert_any_call("delivery_orders")
-
+        # Check that intent is completed
+        intent = await mock_supabase.table("transaction_intents").select("*").eq("tx_ref", tx_ref).single().execute()
+        assert intent.data["status"] == "COMPLETED"
 
 @pytest.mark.asyncio
 async def test_delivery_payment_actual_mismatch(mock_supabase):
@@ -73,34 +66,41 @@ async def test_delivery_payment_actual_mismatch(mock_supabase):
     paid_amount = Decimal("2818.20")
     expected_fee = 2818.19
 
+    # Setup transaction intent
+    await mock_supabase.table("transaction_intents").insert({
+        "tx_ref": tx_ref,
+        "service_type": "DELIVERY",
+        "customer_id": "user-123",
+        "vendor_id": "user-123",
+        "amount": expected_fee,
+        "currency": "NGN",
+        "status": "PENDING",
+        "payload": {
+            "pricing": {"total": expected_fee},
+            "delivery": {},
+            "package": {}
+        }
+    }).execute()
+
     with (
         patch(
             "app.services.payment_service.verify_transaction_tx_ref",
             new_callable=AsyncMock,
         ) as mock_verify,
-        patch(
-            "app.services.payment_service.get_pending", new_callable=AsyncMock
-        ) as mock_get_pending,
-        patch(
-            "app.services.payment_service.delete_pending", new_callable=AsyncMock
-        ) as mock_delete_pending,
     ):
         mock_verify.return_value = {"status": "success"}
-        mock_get_pending.return_value = {
-            "delivery_fee": expected_fee,
-            "sender_id": "user-123",
-            "delivery_data": {},
-        }
 
         await process_successful_delivery_payment(
             tx_ref=tx_ref,
             paid_amount=paid_amount,
             flw_ref="flw-123",
             supabase=mock_supabase,
+            payment_method="CARD"
         )
 
-        # Should have returned early and deleted pending
-        mock_delete_pending.assert_called_once()
+        # Should have returned early and completed intent
+        intent = await mock_supabase.table("transaction_intents").select("*").eq("tx_ref", tx_ref).single().execute()
+        assert intent.data["status"] == "COMPLETED"
         # Should NOT have tried to insert into delivery_orders
         try:
             mock_supabase.table.assert_any_call("delivery_orders")

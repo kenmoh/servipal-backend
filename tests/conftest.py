@@ -91,6 +91,95 @@ class MockRPCBuilder:
                 }
             )
 
+        if self.name == "get_vendor_with_availability":
+            return MockResponse(
+                {
+                    "id": self.params.get("p_vendor_id"),
+                    "can_pickup_and_dropoff": True,
+                    "pickup_and_delivery_charge": 500,
+                    "business_name": "Test Vendor",
+                }
+            )
+
+        if self.name == "process_delivery_payment":
+            return MockResponse(
+                {
+                    "status": "success",
+                    "order_id": str(uuid4()),
+                    "delivery_fee": 2000,
+                }
+            )
+
+        if self.name == "process_food_payment":
+            return MockResponse(
+                {
+                    "status": "success",
+                    "order_id": str(uuid4()),
+                    "vendor_id": self.params.get("p_vendor_id"),
+                    "customer_id": self.params.get("p_customer_id"),
+                    "grand_total": self.params.get("p_grand_total"),
+                }
+            )
+
+        if self.name == "process_topup_payment":
+            user_id = self.params.get("p_user_id")
+            paid_amount = float(self.params.get("p_paid_amount", 0))
+            wallets = self.db.get("wallets", [])
+            wallet = next(
+                (w for w in wallets if str(w["user_id"]) == str(user_id)), None
+            )
+            old_balance = 0
+            new_balance = paid_amount
+            if wallet:
+                old_balance = float(wallet.get("balance", 0))
+                wallet["balance"] = old_balance + paid_amount
+                new_balance = wallet["balance"]
+            return MockResponse(
+                {
+                    "status": "success",
+                    "old_balance": old_balance,
+                    "new_balance": new_balance,
+                }
+            )
+
+        if self.name == "pay_with_wallet":
+            user_id = self.params.get("p_customer_id")
+            grand_total = float(self.params.get("p_grand_total", 0))
+            wallets = self.db.get("wallets", [])
+            wallet = next(
+                (w for w in wallets if str(w["user_id"]) == str(user_id)), None
+            )
+            if wallet:
+                wallet["balance"] = float(wallet.get("balance", 0)) - grand_total
+
+            return MockResponse(
+                {
+                    "status": "success",
+                    "success": True,
+                    "order_id": str(uuid4()),
+                    "tx_ref": f"WALLET-{uuid4().hex[:8].upper()}",
+                    "grand_total": grand_total,
+                    "message": "Payment successful from wallet",
+                }
+            )
+
+        if self.name == "create_dispute":
+            dispute_id = str(uuid4())
+            dispute = {
+                "id": dispute_id,
+                "order_id": str(self.params.get("p_order_id")),
+                "order_type": self.params.get("p_order_type"),
+                "initiator_id": str(self.params.get("p_initiator_id")),
+                "respondent_id": str(self.params.get("p_respondent_id")),
+                "reason": self.params.get("p_reason"),
+                "status": "OPEN",
+                "created_at": datetime.now().isoformat(),
+                "updated_at": datetime.now().isoformat(),
+            }
+            # Also store it in the mock database
+            self.db["disputes"].append(dispute)
+            return MockResponse([dispute])
+
         return MockResponse([])
 
 
@@ -199,6 +288,7 @@ class MockQueryBuilder:
                 "dispatcher_id": None,
                 "bike_number": None,
                 "business_address": None,
+                "business_registration_number": None,
                 "state": None,
                 "can_pickup_and_dropoff": False,
                 "pickup_and_delivery_charge": 0.0,
@@ -217,6 +307,21 @@ class MockQueryBuilder:
                 "resolved_at": None,
                 "created_at": datetime.now().isoformat(),
                 "updated_at": datetime.now().isoformat(),
+            }
+        elif self.table_name == "product_items":
+            defaults = {
+                "name": None,
+                "description": None,
+                "price": 0.0,
+                "stock": 0,
+                "product_type": "PHYSICAL",
+                "category": None,
+                "images": [],
+                "seller_id": None,
+                "is_deleted": False,
+                "created_at": datetime.now().isoformat(),
+                "updated_at": datetime.now().isoformat(),
+                "total_sold": 0,
             }
         else:
             defaults = {
@@ -407,6 +512,9 @@ class MockSupabaseAuth:
             builder._add_defaults(profile_data)
             self.db["profiles"].append(profile_data)
         return MockAuthResponse(self.users[email], MockSession(self.users[email]))
+
+    async def sign_out(self):
+        return True
 
     class Admin:
         def __init__(self, parent):

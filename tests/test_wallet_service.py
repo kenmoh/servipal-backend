@@ -7,7 +7,7 @@ from app.services.wallet_service import (
     initiate_wallet_top_up,
     pay_with_wallet,
 )
-from app.schemas.wallet_schema import TopUpRequest, PayWithWalletRequest
+from app.schemas.wallet_schema import TopUpRequest, PayWithWalletRequest, WalletPaymentRequest, OrderType
 
 
 @pytest.mark.asyncio
@@ -42,48 +42,26 @@ async def test_initiate_wallet_top_up(mock_supabase):
 
     data = TopUpRequest(amount=Decimal("2000.00"), payment_method="FLUTTERWAVE")
 
-    # We need to mock redis `save_pending`?
-    # `initiate_wallet_top_up` calls `save_pending` from `app.utils.redis_utils`.
-    # This will fail unless we mock `app.utils.redis_utils.save_pending`.
-    # We can use unittest.mock.patch
     with pytest.MonkeyPatch.context() as m:
-        m.setattr(
-            "app.services.wallet_service.save_pending",
-            lambda key, value, expire=None: None,
-        )  # Mock sync/async?
-
-        # Wait, save_pending is async. lambda returns None, which is not awaitable.
         async def mock_save(*args, **kwargs):
             return True
 
         m.setattr("app.services.wallet_service.save_pending", mock_save)
 
-        # Also need to mock get_customer_contact_info dependency?
-        # No, it's a dependency but usually passed by FastAPI.
-        # BUT the service calls it?
-        # Line 21: from app.dependencies.auth import get_customer_contact_info
-        # Line 154: customer_info = await get_customer_contact_info()
-        # This dependency likely depends on Request context which makes it hard to test pure service.
-        # We should patch it.
-        async def mock_get_contact():
-            return {"email": "test@test.com", "phone": "123"}
-
-        m.setattr(
-            "app.services.wallet_service.get_customer_contact_info", mock_get_contact
-        )
-
         # Mock settings.FLUTTERWAVE_PUBLIC_KEY
-        m.setattr(
-            "app.services.wallet_service.settings.FLUTTERWAVE_PUBLIC_KEY",
-            "FLWPUBK-TEST",
-        )
         m.setattr("app.config.config.settings.FLUTTERWAVE_PUBLIC_KEY", "FLWPUBK-TEST")
 
-        result = await initiate_wallet_top_up(data, user_id, mock_supabase)
+        customer_info = {
+            "email": "test@test.com",
+            "phone_number": "+2348000000000",
+            "full_name": "Test User",
+        }
 
-        assert result.amount == 2000.0
-        assert result.currency == "NGN"
-        assert result.tx_ref.startswith("TOPUP-")
+        result = await initiate_wallet_top_up(data, user_id, mock_supabase, customer_info)
+
+        assert result["amount"] == Decimal("2000.00")
+        assert result["currency"] == "NGN"
+        assert result["tx_ref"].startswith("TOPUP-")
 
 
 @pytest.mark.asyncio
@@ -97,18 +75,24 @@ async def test_pay_with_wallet_success(mock_supabase):
         .execute()
     )
 
-    data = PayWithWalletRequest(
-        amount=Decimal("1000.00"),
-        transaction_type="ORDER",
-        to_user_id=uuid4(),
-        order_id=uuid4(),
+    data = WalletPaymentRequest(
+        order_type=OrderType.PRODUCT,
+        grand_total=Decimal("1000.00"),
+        product_id=uuid4(),
+        vendor_id=uuid4(),
+        distance=5.0,
+        quantity=1,
+        product_name="T-Shirt",
+        unit_price=Decimal("1000.00"),
+        subtotal=Decimal("1000.00"),
     )
 
-    result = await pay_with_wallet(user_id, data, mock_supabase)
+    current_profile = {"id": str(user_id), "full_name": "Test User"}
+    result = await pay_with_wallet(data, current_profile, mock_supabase)
 
-    assert result.success is True
+    assert result["success"] is True
 
-    # Verify balance update (mock rpc handles update)
+    # Verify balance update
     wallets = mock_supabase._data["wallets"]
     assert wallets[0]["balance"] == 4000.00
 
@@ -123,11 +107,19 @@ async def test_pay_with_wallet_insufficient_funds(mock_supabase):
         .execute()
     )
 
-    data = PayWithWalletRequest(
-        amount=Decimal("1000.00"), to_user_id=uuid4(), order_id=uuid4()
+    data = WalletPaymentRequest(
+        order_type=OrderType.FOOD,
+        grand_total=Decimal("1000.00"),
+        vendor_id=uuid4(),
+        distance=5.0,
+        total_price=Decimal("1000.00"),
+        delivery_option="PICKUP",
+        order_data=[{"item_id": str(uuid4()), "quantity": 1}],
     )
 
+    current_profile = {"id": str(user_id)}
+
     with pytest.raises(HTTPException) as exc:
-        await pay_with_wallet(user_id, data, mock_supabase)
+        await pay_with_wallet(data, current_profile, mock_supabase)
 
     assert exc.value.status_code == 400

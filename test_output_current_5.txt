@@ -1,0 +1,195 @@
+============================= test session starts =============================
+platform win32 -- Python 3.12.12, pytest-9.0.2, pluggy-1.6.0 -- C:\Users\kenne\Desktop\servipal-backend\.venv\Scripts\python.exe
+cachedir: .pytest_cache
+rootdir: C:\Users\kenne\Desktop\servipal-backend
+configfile: pytest.ini
+testpaths: tests
+plugins: anyio-4.12.1, logfire-4.19.0, asyncio-1.3.0
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=function, asyncio_default_test_loop_scope=function
+collecting ... collected 49 items
+
+tests/test_admin_service.py::test_list_users PASSED                      [  2%]
+tests/test_admin_service.py::test_block_user PASSED                      [  4%]
+tests/test_celery_payment_tasks.py::test_normalize_payment_payload_success PASSED [  6%]
+tests/test_celery_payment_tasks.py::test_normalize_payment_payload_validation_errors[payload0] PASSED [  8%]
+tests/test_celery_payment_tasks.py::test_normalize_payment_payload_validation_errors[payload1] PASSED [ 10%]
+tests/test_celery_payment_tasks.py::test_normalize_payment_payload_validation_errors[payload2] PASSED [ 12%]
+tests/test_celery_payment_tasks.py::test_normalize_payment_payload_validation_errors[payload3] PASSED [ 14%]
+tests/test_delivery_service.py::test_initiate_delivery_payment PASSED    [ 16%]
+tests/test_delivery_service.py::test_assign_rider_to_order_success PASSED [ 18%]
+tests/test_dispute_service.py::test_create_dispute PASSED                [ 20%]
+tests/test_dispute_service.py::test_get_my_disputes PASSED               [ 22%]
+tests/test_dispute_service.py::test_post_dispute_message PASSED          [ 24%]
+tests/test_dispute_service.py::test_get_dispute_detail PASSED            [ 26%]
+tests/test_dispute_service.py::test_resolve_dispute PASSED               [ 28%]
+tests/test_flutterwave_v4_charge.py::test_flutterwave_v4_create_charge_builds_headers_and_payload PASSED [ 30%]
+tests/test_food_service.py::test_get_food_vendors PASSED                 [ 32%]
+tests/test_food_service.py::test_initiate_food_payment PASSED            [ 34%]
+tests/test_fraud_engine.py::test_risk_engine_finalize_thresholds PASSED  [ 36%]
+tests/test_fraud_engine.py::test_rules_new_account_and_unverified PASSED [ 38%]
+tests/test_fraud_engine.py::test_rules_vendor_new_and_unverified PASSED  [ 40%]
+tests/test_fraud_engine.py::test_rule_velocity PASSED                    [ 42%]
+tests/test_fraud_engine.py::test_rule_completion_too_fast_parses_iso_strings PASSED [ 44%]
+tests/test_fraud_service_logging.py::test_fraud_service_logs_decision PASSED [ 46%]
+tests/test_laundry_service.py::test_get_laundry_vendors PASSED           [ 48%]
+tests/test_laundry_service.py::test_initiate_laundry_payment FAILED      [ 51%]
+tests/test_order_process_payment.py::test_process_payment_returns_already_processed_when_handler_reports_it PASSED [ 53%]
+tests/test_order_process_payment.py::test_process_payment_returns_already_processed_for_duplicate_constraint PASSED [ 55%]
+tests/test_order_process_payment.py::test_process_payment_rejects_unknown_prefix PASSED [ 57%]
+tests/test_payment_idempotency.py::test_idempotency_detects_completed_intent PASSED [ 59%]
+tests/test_payment_idempotency.py::test_idempotency_detects_transfer_or_transaction_records PASSED [ 61%]
+tests/test_payment_idempotency.py::test_idempotency_returns_false_for_new_tx_ref PASSED [ 63%]
+tests/test_payment_precision.py::test_delivery_payment_precision_tolerance PASSED [ 65%]
+tests/test_payment_precision.py::test_delivery_payment_actual_mismatch PASSED [ 67%]
+tests/test_payment_queue_dispatcher.py::test_enqueue_successful_payment_dual_mode PASSED [ 69%]
+tests/test_payment_queue_dispatcher.py::test_enqueue_successful_payment_dual_mode_partial_failure PASSED [ 71%]
+tests/test_payment_queue_dispatcher.py::test_enqueue_successful_payment_celery_only_failure_raises PASSED [ 73%]
+tests/test_payment_service.py::test_process_successful_topup_payment PASSED [ 75%]
+tests/test_product_service.py::test_create_product_item FAILED           [ 77%]
+tests/test_product_service.py::test_get_product_item PASSED              [ 79%]
+tests/test_product_service.py::test_delete_product_item PASSED           [ 81%]
+tests/test_review_service.py::test_create_review PASSED                  [ 83%]
+tests/test_user_service.py::test_create_user_account PASSED              [ 85%]
+tests/test_user_service.py::test_login_user PASSED                       [ 87%]
+tests/test_user_service.py::test_update_user_profile PASSED              [ 89%]
+tests/test_user_service.py::test_create_rider_by_dispatch PASSED         [ 91%]
+tests/test_wallet_service.py::test_get_wallet_details PASSED             [ 93%]
+tests/test_wallet_service.py::test_initiate_wallet_top_up PASSED         [ 95%]
+tests/test_wallet_service.py::test_pay_with_wallet_success FAILED        [ 97%]
+tests/test_wallet_service.py::test_pay_with_wallet_insufficient_funds PASSED [100%]
+
+================================== FAILURES ===================================
+________________________ test_initiate_laundry_payment ________________________
+app\services\laundry_service.py:568: in initiate_laundry_payment
+    "vendor": {"id": str(data.vendor_id), "name": vendor["business_name"]},
+                                                  ^^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'business_name'
+
+During handling of the above exception, another exception occurred:
+tests\test_laundry_service.py:77: in test_initiate_laundry_payment
+    result = await initiate_laundry_payment(
+app\services\laundry_service.py:644: in initiate_laundry_payment
+    raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, f"Laundry initiation failed: {str(e)}")
+E   fastapi.exceptions.HTTPException: 500: Laundry initiation failed: 'business_name'
+---------------------------- Captured stdout call -----------------------------
+{"customer_id": "b8de31de-5025-4091-9eeb-71e5809cb624", "vendor_id": "e083ac8a-b0c9-429c-944f-83adfff3c434", "error": "'business_name'", "exc_info": true, "event": "laundry_initiation_failed", "level": "error", "timestamp": "2026-04-28T11:03:58.692909Z"}
+__________________________ test_create_product_item ___________________________
+tests\test_product_service.py:30: in test_create_product_item
+    assert result.vendor_id == str(vendor_id)
+E   AssertionError: assert UUID('7969501c-608f-4187-bdb2-ca9252bec990') == '7969501c-608f-4187-bdb2-ca9252bec990'
+E    +  where UUID('7969501c-608f-4187-bdb2-ca9252bec990') = ProductItemResponse(name='T-Shirt', description='Cotton', price=Decimal('5000.00'), product_type=<ProductType.PHYSICAL: 'PHYSICAL'>, stock=10, sizes=None, colors=None, category_id=None, warranty=None, shipping_cost=None, return_days=0, images=['url1'], id=UUID('606144df-e22a-4c1a-a654-cc68f1983e76'), vendor_id=UUID('7969501c-608f-4187-bdb2-ca9252bec990'), created_at=datetime.datetime(2026, 4, 28, 12, 4, 3, 637785), updated_at=datetime.datetime(2026, 4, 28, 12, 4, 3, 637785)).vendor_id
+E    +  and   '7969501c-608f-4187-bdb2-ca9252bec990' = str(UUID('7969501c-608f-4187-bdb2-ca9252bec990'))
+________________________ test_pay_with_wallet_success _________________________
+tests\test_wallet_service.py:87: in test_pay_with_wallet_success
+    result = await pay_with_wallet(data, current_profile, mock_supabase)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app\services\wallet_service.py:194: in pay_with_wallet
+    rpc_params = await validate_payload(data, customer_id, supabase)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app\services\wallet_service.py:756: in validate_payload
+    data.unit_price is not None,
+    ^^^^^^^^^^^^^^^
+.venv\Lib\site-packages\pydantic\main.py:1026: in __getattr__
+    raise AttributeError(f'{type(self).__name__!r} object has no attribute {item!r}')
+E   AttributeError: 'WalletPaymentRequest' object has no attribute 'unit_price'
+---------------------------- Captured stdout call -----------------------------
+{"customer_id": "6ba7de2b-43d2-4541-b593-b6d33a920427", "order_type": "PRODUCT", "grand_total": "Decimal('1000.00')", "event": "wallet_payment_initiated", "level": "info", "timestamp": "2026-04-28T11:04:04.708176Z"}
+============================== warnings summary ===============================
+.venv\Lib\site-packages\pyiceberg\expressions\parser.py:72
+  C:\Users\kenne\Desktop\servipal-backend\.venv\Lib\site-packages\pyiceberg\expressions\parser.py:72: DeprecationWarning: 'enablePackrat' deprecated - use 'enable_packrat'
+    ParserElement.enablePackrat()
+
+.venv\Lib\site-packages\pyiceberg\expressions\parser.py:85
+  C:\Users\kenne\Desktop\servipal-backend\.venv\Lib\site-packages\pyiceberg\expressions\parser.py:85: DeprecationWarning: 'escChar' argument is deprecated, use 'esc_char'
+    quoted_identifier = QuotedString('"', escChar="\\", unquoteResults=True)
+
+.venv\Lib\site-packages\pyiceberg\expressions\parser.py:85
+  C:\Users\kenne\Desktop\servipal-backend\.venv\Lib\site-packages\pyiceberg\expressions\parser.py:85: DeprecationWarning: 'unquoteResults' argument is deprecated, use 'unquote_results'
+    quoted_identifier = QuotedString('"', escChar="\\", unquoteResults=True)
+
+.venv\Lib\site-packages\pyiceberg\table\metadata.py:365
+  C:\Users\kenne\Desktop\servipal-backend\.venv\Lib\site-packages\pyiceberg\table\metadata.py:365: PydanticDeprecatedSince212: Using `@model_validator` with mode='after' on a classmethod is deprecated. Instead, use an instance method. See the documentation at https://docs.pydantic.dev/2.12/concepts/validators/#model-after-validator. Deprecated in Pydantic V2.12 to be removed in V3.0.
+    @model_validator(mode="after")
+
+.venv\Lib\site-packages\pyiceberg\table\metadata.py:494
+  C:\Users\kenne\Desktop\servipal-backend\.venv\Lib\site-packages\pyiceberg\table\metadata.py:494: PydanticDeprecatedSince212: Using `@model_validator` with mode='after' on a classmethod is deprecated. Instead, use an instance method. See the documentation at https://docs.pydantic.dev/2.12/concepts/validators/#model-after-validator. Deprecated in Pydantic V2.12 to be removed in V3.0.
+    @model_validator(mode="after")
+
+.venv\Lib\site-packages\pyiceberg\table\metadata.py:498
+  C:\Users\kenne\Desktop\servipal-backend\.venv\Lib\site-packages\pyiceberg\table\metadata.py:498: PydanticDeprecatedSince212: Using `@model_validator` with mode='after' on a classmethod is deprecated. Instead, use an instance method. See the documentation at https://docs.pydantic.dev/2.12/concepts/validators/#model-after-validator. Deprecated in Pydantic V2.12 to be removed in V3.0.
+    @model_validator(mode="after")
+
+.venv\Lib\site-packages\pyiceberg\table\metadata.py:502
+  C:\Users\kenne\Desktop\servipal-backend\.venv\Lib\site-packages\pyiceberg\table\metadata.py:502: PydanticDeprecatedSince212: Using `@model_validator` with mode='after' on a classmethod is deprecated. Instead, use an instance method. See the documentation at https://docs.pydantic.dev/2.12/concepts/validators/#model-after-validator. Deprecated in Pydantic V2.12 to be removed in V3.0.
+    @model_validator(mode="after")
+
+.venv\Lib\site-packages\pyiceberg\table\metadata.py:506
+  C:\Users\kenne\Desktop\servipal-backend\.venv\Lib\site-packages\pyiceberg\table\metadata.py:506: PydanticDeprecatedSince212: Using `@model_validator` with mode='after' on a classmethod is deprecated. Instead, use an instance method. See the documentation at https://docs.pydantic.dev/2.12/concepts/validators/#model-after-validator. Deprecated in Pydantic V2.12 to be removed in V3.0.
+    @model_validator(mode="after")
+
+.venv\Lib\site-packages\pyiceberg\table\metadata.py:538
+  C:\Users\kenne\Desktop\servipal-backend\.venv\Lib\site-packages\pyiceberg\table\metadata.py:538: PydanticDeprecatedSince212: Using `@model_validator` with mode='after' on a classmethod is deprecated. Instead, use an instance method. See the documentation at https://docs.pydantic.dev/2.12/concepts/validators/#model-after-validator. Deprecated in Pydantic V2.12 to be removed in V3.0.
+    @model_validator(mode="after")
+
+.venv\Lib\site-packages\pyiceberg\table\metadata.py:542
+  C:\Users\kenne\Desktop\servipal-backend\.venv\Lib\site-packages\pyiceberg\table\metadata.py:542: PydanticDeprecatedSince212: Using `@model_validator` with mode='after' on a classmethod is deprecated. Instead, use an instance method. See the documentation at https://docs.pydantic.dev/2.12/concepts/validators/#model-after-validator. Deprecated in Pydantic V2.12 to be removed in V3.0.
+    @model_validator(mode="after")
+
+.venv\Lib\site-packages\pyiceberg\table\metadata.py:546
+  C:\Users\kenne\Desktop\servipal-backend\.venv\Lib\site-packages\pyiceberg\table\metadata.py:546: PydanticDeprecatedSince212: Using `@model_validator` with mode='after' on a classmethod is deprecated. Instead, use an instance method. See the documentation at https://docs.pydantic.dev/2.12/concepts/validators/#model-after-validator. Deprecated in Pydantic V2.12 to be removed in V3.0.
+    @model_validator(mode="after")
+
+.venv\Lib\site-packages\pyiceberg\table\metadata.py:550
+  C:\Users\kenne\Desktop\servipal-backend\.venv\Lib\site-packages\pyiceberg\table\metadata.py:550: PydanticDeprecatedSince212: Using `@model_validator` with mode='after' on a classmethod is deprecated. Instead, use an instance method. See the documentation at https://docs.pydantic.dev/2.12/concepts/validators/#model-after-validator. Deprecated in Pydantic V2.12 to be removed in V3.0.
+    @model_validator(mode="after")
+
+app\schemas\user_schemas.py:80
+  C:\Users\kenne\Desktop\servipal-backend\app\schemas\user_schemas.py:80: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class UserProfileResponse(BaseModel):
+
+app\schemas\user_schemas.py:120
+  C:\Users\kenne\Desktop\servipal-backend\app\schemas\user_schemas.py:120: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class AvailableRiderResponse(BaseModel):
+
+.venv\Lib\site-packages\pydantic\_internal\_generate_schema.py:319
+.venv\Lib\site-packages\pydantic\_internal\_generate_schema.py:319
+.venv\Lib\site-packages\pydantic\_internal\_generate_schema.py:319
+.venv\Lib\site-packages\pydantic\_internal\_generate_schema.py:319
+.venv\Lib\site-packages\pydantic\_internal\_generate_schema.py:319
+  C:\Users\kenne\Desktop\servipal-backend\.venv\Lib\site-packages\pydantic\_internal\_generate_schema.py:319: PydanticDeprecatedSince20: `json_encoders` is deprecated. See https://docs.pydantic.dev/2.12/concepts/serialization/#custom-serializers for alternatives. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    warnings.warn(
+
+app\schemas\user_schemas.py:157
+  C:\Users\kenne\Desktop\servipal-backend\app\schemas\user_schemas.py:157: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class RiderDetailResponse(BaseModel):
+
+app\schemas\user_schemas.py:184
+  C:\Users\kenne\Desktop\servipal-backend\app\schemas\user_schemas.py:184: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class DispatchRiderResponse(BaseModel):
+
+app\schemas\user_schemas.py:249
+  C:\Users\kenne\Desktop\servipal-backend\app\schemas\user_schemas.py:249: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class DetailedRiderResponse(BaseModel):
+
+app\schemas\food_schemas.py:118
+  C:\Users\kenne\Desktop\servipal-backend\app\schemas\food_schemas.py:118: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class VendorOrderResponse(BaseModel):
+
+app\schemas\laundry_schemas.py:85
+  C:\Users\kenne\Desktop\servipal-backend\app\schemas\laundry_schemas.py:85: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class LaundryVendorOrderResponse(BaseModel):
+
+app\schemas\review_schemas.py:15
+  C:\Users\kenne\Desktop\servipal-backend\app\schemas\review_schemas.py:15: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class ReviewResponse(BaseModel):
+
+app\schemas\wallet_schema.py:33
+  C:\Users\kenne\Desktop\servipal-backend\app\schemas\wallet_schema.py:33: PydanticDeprecatedSince20: Using extra keyword arguments on `Field` is deprecated and will be removed. Use `json_schema_extra` instead. (Extra keys: 'min', 'max'). Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    amount: Decimal = Field(
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+FAILED tests/test_laundry_service.py::test_initiate_laundry_payment - fastapi...
+FAILED tests/test_product_service.py::test_create_product_item - AssertionErr...
+FAILED tests/test_wallet_service.py::test_pay_with_wallet_success - Attribute...
+================= 3 failed, 46 passed, 26 warnings in 11.78s ==================

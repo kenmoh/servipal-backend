@@ -50,6 +50,21 @@ class ManagementUserCreate(BaseModel):
         return v
 
 
+# ── Filters & Pagination ────────────────────────────────────────────────────
+class UserFilterParams(BaseModel):
+    """Filters for listing users."""
+    user_type: UserType | None = None
+    account_status: AccountStatus | None = None
+    is_blocked: bool | None = None
+    search: str | None = None
+
+
+class PaginationParams(BaseModel):
+    """Pagination parameters."""
+    page: int = Field(default=1, ge=1)
+    page_size: int = Field(default=25, ge=1, le=100)
+
+
 # ── Block / Unblock ──────────────────────────────────────────────────────────
 class BlockUserRequest(BaseModel):
     reason: str = Field(..., min_length=3, max_length=500)

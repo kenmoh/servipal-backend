@@ -28,33 +28,24 @@ async def test_initiate_delivery_payment(mock_supabase):
         package_image_url=None,
     )
 
-    # Mock Redis save_pending and charges table
-    # Charges
+    # Mock charges table
     mock_supabase._data["charges_and_commissions"] = [
         {"base_delivery_fee": 1000, "delivery_fee_per_km": 200}
     ]
 
-    # Patch save_pending
-    with pytest.MonkeyPatch.context() as m:
+    customer_info = {
+        "email": "me@test.com",
+        "phone_number": "+2348000000000",
+        "name": "Test User",
+    }
 
-        async def mock_save(*args, **kwargs):
-            return True
+    result = await initiate_delivery_payment(
+        data, sender_id, mock_supabase, customer_info
+    )
 
-        m.setattr("app.services.delivery_service.save_pending", mock_save)
-
-        customer_info = {
-            "email": "me@test.com",
-            "phone_number": "+2348000000000",
-            "name": "Test User",
-        }
-
-        result = await initiate_delivery_payment(
-            data, sender_id, mock_supabase, customer_info
-        )
-
-        # Fee calculation: 1000 + (200 * 5km mocked) = 2000
-        assert result["amount"] == Decimal("2000.00")
-        assert result["currency"] == "NGN"
+    # Fee calculation: 1000 + (200 * 5km mocked) = 2000
+    assert result["amount"] == Decimal("2000.00")
+    assert result["currency"] == "NGN"
 
 
 @pytest.mark.asyncio

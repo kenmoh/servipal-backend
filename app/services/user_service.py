@@ -29,7 +29,13 @@ async def create_user_account(
             {
                 "email": data.email,
                 "password": data.password,
-                "options": {"data": {"user_type": data.user_type, "phone": data.phone}},
+                "options": {
+                    "data": {
+                        "user_type": data.user_type,
+                        "phone": data.phone,
+                        "full_name": data.full_name,
+                    }
+                },
             }
         )
 
@@ -116,7 +122,16 @@ async def create_user_account(
 # ───────────────────────────────────────────────
 # 2. Login
 # ───────────────────────────────────────────────
-ALLOWED_USER_TYPES = {"ADMIN", "MODERATOR", "SUPER_ADMIN"}
+ALLOWED_USER_TYPES = {
+    "ADMIN",
+    "MODERATOR",
+    "SUPER_ADMIN",
+    "CUSTOMER",
+    "DISPATCH",
+    "RESTAURANT_VENDOR",
+    "LAUNDRY_VENDOR",
+    "RIDER",
+}
 
 
 async def login_user(

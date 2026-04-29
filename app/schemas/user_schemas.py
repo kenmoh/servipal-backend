@@ -23,7 +23,8 @@ class UserCreate(BaseModel):
     email: Optional[EmailStr] = None
     phone: str = Field(..., pattern=r"^\+234\d{10,15}$")
     password: str = Field(..., min_length=8)
-    user_type: Literal["CUSTOMER", "DISPATCH", "RESTAURANT_VENDOR", "LAUNDRY_VENDOR"]
+    user_type: UserType
+    full_name: str
 
     @field_validator("phone")
     @classmethod
@@ -92,6 +93,12 @@ class UserProfileResponse(BaseModel):
     account_status: str
     created_at: datetime
     last_seen_at: Optional[datetime]
+    bike_number: Optional[str] = None
+    dispatcher_id: Optional[UUID] = None
+    business_address: Optional[str] = None
+    state: Optional[str] = None
+    can_pickup_and_dropoff: bool = False
+    pickup_and_delivery_charge: Decimal = Decimal("0.00")
 
     class Config:
         from_attributes = True
