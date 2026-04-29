@@ -31,3 +31,23 @@ def enqueue_payment_order_creation_task(message: dict) -> str:
         queue=settings.CELERY_TASK_QUEUE,
     )
     return async_result.id
+
+def enqueue_payout_task(order_id: str, payout_to: str) -> str:
+    from app.celery_queue.tasks import process_payout_task
+    
+    if not settings.CELERY_ENABLED:
+        raise RuntimeError("Celery enqueue is disabled. Set CELERY_ENABLED=true.")
+    
+    async_result = process_payout_task.apply_async(
+        args=[order_id, payout_to],
+        queue=settings.CELERY_TASK_QUEUE,
+        expires=settings.CELERY_TASK_EXPIRES_SECONDS,
+        retry=True,
+    )
+
+    logger.info(
+        "celery_payout_enqueued",
+        order_id=order_id,
+        task_id=async_result.id,
+    )
+    return async_result.id

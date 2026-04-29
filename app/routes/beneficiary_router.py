@@ -9,8 +9,8 @@ from app.database.supabase import get_supabase_client, get_supabase_admin_client
 from app.config.logging import logger
 from app.config.config import settings
 from app.services.vendors.payout_service import get_delivery_order_by_id_for_payout
+from app.services.payout_queue_dispatcher import enqueue_payout_for_processing
 from app.dependencies.auth import require_admin
-from app.celery_queue.tasks import process_payout_task
 
 # ---------------------------------------------------------------------------
 # Routers
@@ -226,8 +226,12 @@ async def create_vendor_payout(
         logger.warning(f"Could not create initial payout record: {str(e)}")
         # We continue anyway, the worker will try to create/update it
 
-    # 3. Enqueue the payout task for background processing
-    process_payout_task.delay(order_id, "VENDOR")
+    # 3. Enqueue the payout task using the dispatcher
+    await enqueue_payout_for_processing(
+        supabase=supabase,
+        order_id=order_id,
+        payout_to="VENDOR"
+    )
 
     return {
         "status": "success",
