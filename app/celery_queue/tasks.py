@@ -198,6 +198,20 @@ async def _process_payout_async(order_id: str, payout_to: str) -> dict:
             await close_method()
 
 
+async def _update_payout_status(order_id: str, status: str, error_message: str = None):
+    from app.database.supabase import create_supabase_admin_client
+    supabase = await create_supabase_admin_client()
+    try:
+        update_data = {"status": status}
+        if error_message:
+            update_data["complete_message"] = error_message
+            
+        await supabase.table("payouts").update(update_data).eq("order_id", order_id).execute()
+    finally:
+        close_method = getattr(supabase, "aclose", None)
+        if callable(close_method):
+            await close_method()
+
 @celery_app.task(
     bind=True,
     name="payments.process_payout",
@@ -222,6 +236,9 @@ def process_payout_task(self, order_id: str, payout_to: str) -> dict:
                 status_code=exc.status_code,
                 error=str(exc.detail),
             )
+            # Mark as FAILED in the database
+            error_msg = str(exc.detail)
+            asyncio.run(_update_payout_status(order_id, "FAILED", error_msg))
             raise Ignore()
 
         delay = _retry_delay_seconds(self.request.retries)
@@ -241,4 +258,6 @@ def process_payout_task(self, order_id: str, payout_to: str) -> dict:
                 error=str(exc),
                 exc_info=True,
             )
+            # Mark as FAILED after max retries
+            asyncio.run(_update_payout_status(order_id, "FAILED", f"Max retries exceeded: {str(exc)}"))
             raise

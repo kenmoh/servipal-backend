@@ -34,11 +34,14 @@ class RateLimitConfig:
         "/api/v1/charge-manager": 30,
         # Moderate: General endpoints
         "default": 100,
+        # Payment initiation (prevent spamming Flutterwave)
+        "initiate-payment": 5,
+        "initiate-wallet-topup": 10,
     }
 
     # Routes to exempt from rate limiting (e.g., payments processing)
     EXEMPT_PATHS = {
-        "/api/v1/payments",  # All payments routes
+        "/api/v1/payments/webhook",  # Only exempt the webhook
         "/api/v1/health",  # Health checks
         "/",  # Root endpoint
     }

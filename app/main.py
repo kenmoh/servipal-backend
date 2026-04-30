@@ -42,6 +42,7 @@ from app.utils.payment import (
 from app.schemas.bank_schema import AccountDetailResponse, AccountDetails, BankSchema
 from app.config.config import settings
 from app.middleware.rate_limiter import RateLimiterMiddleware
+from app.middleware.idempotency import IdempotencyMiddleware
 from app.middleware.cors import CORS_CONFIG
 from app.middleware.security_headers import SecurityHeadersMiddleware
 from app.middleware.csrf import CSRFProtectionMiddleware
@@ -59,7 +60,6 @@ except Exception as e:
     logfire = None
 
 import sentry_sdk
-# from prometheus_fastapi_instrumentator import Instrumentator
 
 if settings.SENTRY_DSN:
     sentry_sdk.init(dsn=settings.SENTRY_DSN, send_default_pii=True, enable_logs=True)
@@ -67,49 +67,15 @@ else:
     logger.info("Sentry DSN not found, sentry disabled")
 
 
-# def run_worker():
-#     """Run the RQ worker"""
-#     if not sync_redis_client:
-#         logger.error("RQ worker cannot start: Redis client not initialized")
-#         return
-#     try:
-#         logger.info("Starting RQ worker")
-#         worker = Worker(["default"], connection=sync_redis_client)
-#         worker.work()
-#     except Exception as e:
-#         logger.error("RQ worker failed to start", error=str(e))
-
-
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     """Handle application lifespan events"""
     # Startup
     logger.info("Servipal Application Started", version="1.0.0")
-
-    # Start worker in a separate process
-    # if os.getenv("ENABLE_WORKER", "true").lower() == "true":
-    #     logger.info("Starting RQ worker process")
-    #     try:
-    #         worker_process = multiprocessing.Process(target=run_worker)
-    #         worker_process.start()
-    #     except Exception as e:
-    #         logger.error("Failed to fork worker process", error=str(e))
-    # else:
-    #     logger.info("RQ worker is disabled")
-
     yield
 
     # Shutdown
     logger.info("Servipal Application Shutdown")
-
-    # Stop worker
-    # if worker_process.is_alive():
-    #     logger.info("Stopping RQ worker")
-    #     worker_process.terminate()
-    #     worker_process.join(timeout=5)
-    #     if worker_process.is_alive():
-    #         worker_process.kill()
-    #     logger.info("RQ worker stopped")
 
 
 app = FastAPI(
@@ -142,8 +108,6 @@ else:
     if not settings.LOGFIRE_TOKEN:
         logger.debug("Logfire disabled (token not configured)")
 
-# Instrumentator().instrument(app).expose(app)
-
 FAVICON_URL = "https://mohdelivery.s3.us-east-1.amazonaws.com/favion/favicon.ico"
 
 # Security headers middleware (applied first)
@@ -157,6 +121,9 @@ app.add_middleware(CSRFProtectionMiddleware)
 
 # Rate limiter middleware
 app.add_middleware(RateLimiterMiddleware)
+
+# Idempotency middleware (prevent double-submit)
+app.add_middleware(IdempotencyMiddleware)
 
 # CORS middleware with security-conscious configuration
 app.add_middleware(CORSMiddleware, **CORS_CONFIG)
